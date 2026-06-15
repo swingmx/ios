@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+        <key>CFBundleIdentifier</key>
+        <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+        <key>CFBundleExecutable</key>
+        <string>$(EXECUTABLE_NAME)</string>
+        <key>CFBundleName</key>
+        <string>$(PRODUCT_NAME)</string>
+        <key>CFBundleDisplayName</key>
+        <string>Swing Music Client</string>
+        <key>CFBundleVersion</key>
+        <string>$(CURRENT_PROJECT_VERSION)</string>
+        <key>CFBundleShortVersionString</key>
+        <string>$(MARKETING_VERSION)</string>
+        <key>CFBundlePackageType</key>
+        <string>APPL</string>
+        <key>SMReleaseChannel</key>
+        <string>Beta</string>
+        <key>NSSupportsLiveActivities</key>
+        <true/>
+        <key>UIBackgroundModes</key>
+        <array>
+                <string>audio</string>
+        </array>
+        <key>UILaunchScreen</key>
+        <dict/>
+        <key>UISupportedInterfaceOrientations</key>
+        <array>
+                <string>UIInterfaceOrientationPortrait</string>
+        </array>
+        <key>UIRequiresFullScreen</key>
+        <true/>
+        <key>NSCameraUsageDescription</key>
+        <string>Access is required to scan the SwingMusic QR pairing codes for instant login.</string>
+        <key>NSAppleMusicUsageDescription</key>
+        <string>This allows the app to show your music metadata and playback info.</string>
+        <key>ITSAppUsesNonExemptEncryption</key>
+        <false/>
+</dict>
+</plist>
