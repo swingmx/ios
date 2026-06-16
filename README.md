@@ -6,6 +6,7 @@
 <div align="center"><b><sub><code>v1.0.0 (Beta 1)</code></sub></b></div>
 
 <div align="center" style="padding-top: 1rem">
+<br>
 
 [![Download on TestFlight](https://img.shields.io/badge/Download_on-TestFlight-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/68bWKBss)
 
