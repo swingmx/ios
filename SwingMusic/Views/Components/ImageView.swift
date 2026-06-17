@@ -4,16 +4,31 @@ struct Img: View {
 
     static var cache: [String: UIImage] = [:]
 
-    let url: URL?
+    let urls: [URL]
     var radius: CGFloat = 8
+
+    var blurhash: String? = nil
+    var placeholderColor: String? = nil
 
     @State private var img: UIImage?
     @State private var loading = true
 
-    init(url: URL?, radius: CGFloat = 8) {
-        self.url = url
+    private var primaryKey: String? { urls.first?.absoluteString }
+
+    init(url: URL?, radius: CGFloat = 8, blurhash: String? = nil, placeholderColor: String? = nil) {
+        self.urls = [url].compactMap { $0 }
         self.radius = radius
+        self.blurhash = blurhash
+        self.placeholderColor = placeholderColor
         _img = State(initialValue: url.flatMap { Img.cache[$0.absoluteString] })
+    }
+
+    init(urls: [URL], radius: CGFloat = 8, blurhash: String? = nil, placeholderColor: String? = nil) {
+        self.urls = urls
+        self.radius = radius
+        self.blurhash = blurhash
+        self.placeholderColor = placeholderColor
+        _img = State(initialValue: urls.first.flatMap { Img.cache[$0.absoluteString] })
     }
 
     var body: some View {
@@ -22,27 +37,43 @@ struct Img: View {
                 if let img {
                     Image(uiImage: img).resizable().scaledToFill()
                         .transition(.opacity.animation(.easeIn(duration: 0.25)))
-                } else if loading {
-                    Rectangle().fill(.white.opacity(0.06))
                 } else {
-                    Rectangle().fill(.white.opacity(0.06))
-                        .overlay { Image(systemName: "music.note").foregroundStyle(.white.opacity(0.2)) }
+                    placeholder
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .task(id: url) { await load() }
+            .task(id: primaryKey) { await load() }
+    }
+
+    @ViewBuilder
+    private var placeholder: some View {
+        if let bh = blurhash, let blur = BlurHash.image(bh) {
+            Image(uiImage: blur).resizable().scaledToFill()
+        } else if let c = placeholderColor.flatMap({ Color(rgbString: $0) }) {
+            c.opacity(0.55)
+        } else {
+            Rectangle().fill(.white.opacity(0.06))
+                .overlay { if !loading { Image(systemName: "music.note").foregroundStyle(.white.opacity(0.2)) } }
+        }
     }
 
     private func load() async {
-        guard let url else { loading = false; return }
-        if let cached = Img.cache[url.absoluteString] { img = cached; loading = false; return }
+        guard let key = primaryKey else { loading = false; return }
+        if let cached = Img.cache[key] { img = cached; loading = false; return }
         loading = true
-        var req = URLRequest(url: url)
-        if let t = API.shared.token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
-        guard let (data, _) = try? await URLSession.shared.data(for: req),
-              let ui = UIImage(data: data) else { loading = false; return }
-        Img.cache[url.absoluteString] = ui
-        withAnimation { img = ui; loading = false }
+
+        var token: String? { API.shared.token }
+        for url in urls {
+            var req = URLRequest(url: url)
+            if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+            guard let (data, resp) = try? await URLSession.shared.data(for: req) else { continue }
+            if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) { continue }
+            guard let ui = UIImage(data: data) else { continue }
+            Img.cache[key] = ui
+            withAnimation { img = ui; loading = false }
+            return
+        }
+        loading = false
     }
 }
 
@@ -50,7 +81,12 @@ struct AlbumArt: View {
     let track: Track
     var size: CGFloat = 48
     var body: some View {
-        Img(url: API.shared.img(track.image, size: size > 200 ? "" : "medium"), radius: size > 100 ? 12 : 6)
+
+        let sizes = size > 200 ? ["original", "", "medium"] : ["medium", "small"]
+        Img(urls: sizes.compactMap { API.shared.img(track.image, size: $0) },
+            radius: size > 100 ? 12 : 6,
+            blurhash: track.blurhash,
+            placeholderColor: track.color)
             .frame(width: size, height: size)
     }
 }
@@ -59,7 +95,11 @@ struct AlbumCover: View {
     let album: Album
     var size: CGFloat = 160
     var body: some View {
-        Img(url: API.shared.img(album.image, size: size > 200 ? "" : size > 100 ? "medium" : "small"), radius: size > 100 ? 12 : 8)
+        let sizes = size > 200 ? ["original", "", "medium"] : size > 100 ? ["medium", "small"] : ["small", "medium"]
+        Img(urls: sizes.compactMap { API.shared.img(album.image, size: $0) },
+            radius: size > 100 ? 12 : 8,
+            blurhash: album.blurhash,
+            placeholderColor: album.color)
             .frame(width: size, height: size)
     }
 }
@@ -68,7 +108,8 @@ struct ArtistAvatar: View {
     let artist: Artist
     var size: CGFloat = 100
     var body: some View {
-        Img(url: API.shared.artistImg(artist.image, size: size > 100 ? "" : "medium"), radius: size / 2)
+        let sizes = size > 100 ? ["", "medium"] : ["medium", "small"]
+        Img(urls: sizes.compactMap { API.shared.artistImg(artist.image, size: $0) }, radius: size / 2)
             .frame(width: size, height: size).clipShape(Circle())
     }
 }

@@ -6,7 +6,7 @@ struct LibraryView: View {
     @State private var newPlaylistName = ""
     @State private var showSettings = false
 
-    private let menu: [LibItem] = [.artists, .albums, .favoriteSongs, .downloads]
+    private let menu: [LibItem] = [.folders, .artists, .albums, .favorites, .downloads]
 
     var body: some View {
         NavigationStack {
@@ -106,6 +106,8 @@ struct LibraryView: View {
             }
             .navigationDestination(for: LibItem.self) { item in
                 switch item {
+                case .folders: FolderBrowserView()
+                case .favorites: FavoritesView()
                 case .favoriteArtists: ArtistsGridView()
                 case .artists: ArtistsGridView()
                 case .favoriteAlbums: AlbumsGridView()
@@ -188,6 +190,8 @@ struct PlaylistsListView: View {
 }
 
 enum LibItem: String, CaseIterable, Identifiable, Hashable {
+    case folders = "Folders"
+    case favorites = "Favorites"
     case favoriteArtists = "Favorite Artists"
     case artists = "Artists"
     case favoriteAlbums = "Favorite Albums"
@@ -202,6 +206,8 @@ enum LibItem: String, CaseIterable, Identifiable, Hashable {
 
     var icon: String {
         switch self {
+        case .folders: "folder.fill"
+        case .favorites: "heart.fill"
         case .favoriteArtists: "heart.fill"
         case .artists: "music.mic"
         case .favoriteAlbums: "heart.fill"
@@ -216,7 +222,8 @@ enum LibItem: String, CaseIterable, Identifiable, Hashable {
 
     var tintColor: Color {
         switch self {
-        case .favoriteArtists, .favoriteAlbums, .favoriteSongs: .pink
+        case .folders: .blue
+        case .favorites, .favoriteArtists, .favoriteAlbums, .favoriteSongs: .pink
         case .artists: .blue
         case .albums: .blue
         case .newestAlbums: .orange

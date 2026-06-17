@@ -49,7 +49,7 @@ struct SearchView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if query.isEmpty && result == nil {
-                    genreGrid
+                    idleView
                 } else if searching {
                     VStack { Spacer(); ProgressView(); Spacer() }
                 } else if let r = result {
@@ -77,7 +77,58 @@ struct SearchView: View {
             .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
             .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
         }
-        .task { await loadGenreImages() }
+    }
+
+    private var idleView: some View {
+        let recents = SearchHistory.load()
+        return ScrollView(.vertical, showsIndicators: false) {
+            if recents.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.secondary)
+                    Text("Search your library")
+                        .font(.system(size: 17, weight: .semibold))
+                    Text("Find songs, albums and artists.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 420)
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Recent Searches")
+                            .font(.system(size: 20, weight: .bold))
+                        Spacer()
+                        Button("Clear") { SearchHistory.clear(); query = "" }
+                            .font(.system(size: 14))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 6)
+
+                    ForEach(recents, id: \.self) { term in
+                        Button { query = term } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 24)
+                                Text(term).foregroundStyle(.primary)
+                                Spacer()
+                                Image(systemName: "arrow.up.left")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 8)
+            }
+        }
     }
 
     private var genreGrid: some View {
@@ -159,7 +210,7 @@ struct SearchView: View {
                     VStack(spacing: 0) {
                         ForEach(Array(tracks.prefix(8).enumerated()), id: \.element.id) { _, t in
                             TrackRow(track: t, active: state.player.current == t) {
-                                state.player.play(t, from: tracks)
+                                state.player.play(t, from: tracks, source: .search(query))
                             }
                         }
                     }

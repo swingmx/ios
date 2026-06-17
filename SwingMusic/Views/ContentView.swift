@@ -3,22 +3,28 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var state: AppState
 
+    @State private var hasTrack = AudioPlayer.shared.current != nil
+
     var body: some View {
-        TabView(selection: $state.tab) {
-            Tab("Listening Now", systemImage: "house.fill", value: AppState.Tab.home) {
-                HomeView()
-            }
-            Tab("Library", systemImage: "music.note.list", value: AppState.Tab.library) {
-                LibraryView()
-            }
-            Tab(value: AppState.Tab.search, role: .search) {
-                SearchView()
+        Group {
+            if #available(iOS 26.0, *) {
+                if hasTrack {
+                    tabView
+                        .tabViewBottomAccessory {
+                            NowPlayingAccessory(expanded: $state.showPlayer)
+                        }
+                        .tabBarMinimizeBehavior(.onScrollDown)
+                } else {
+                    tabView
+                }
+            } else {
+                tabView
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        MiniPlayerView(expanded: $state.showPlayer)
+                    }
             }
         }
-        .tint(.blue)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            MiniPlayerView(expanded: $state.showPlayer)
-        }
+        .onReceive(AudioPlayer.shared.$current) { hasTrack = ($0 != nil) }
         .fullScreenCover(isPresented: $state.showPlayer, onDismiss: onPlayerDismissed) {
             FullPlayerView(show: $state.showPlayer)
                 .environmentObject(state)
@@ -32,9 +38,28 @@ struct ContentView: View {
             state.scrollOffset = 0
         }
         .onChange(of: state.navigationTarget) { _, target in
-            guard let target, !state.showPlayer else { return }
-            navigateToTarget(target)
+            guard target != nil else { return }
+            if state.showPlayer {
+                state.showPlayer = false
+            } else {
+                navigateToTarget(target!)
+            }
         }
+    }
+
+    private var tabView: some View {
+        TabView(selection: $state.tab) {
+            Tab("Listening Now", systemImage: "house.fill", value: AppState.Tab.home) {
+                HomeView()
+            }
+            Tab("Library", systemImage: "music.note.list", value: AppState.Tab.library) {
+                LibraryView()
+            }
+            Tab(value: AppState.Tab.search, role: .search) {
+                SearchView()
+            }
+        }
+        .tint(.blue)
     }
 
     private func onPlayerDismissed() {

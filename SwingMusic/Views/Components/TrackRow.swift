@@ -69,8 +69,8 @@ struct TrackRow: View {
                     .onTapGesture(perform: onTap)
 
                 Menu {
-                    Button { state.navigationTarget = .album(Album(albumhash: track.albumhash, title: track.album, image: track.image, date: track.date, duration: nil, trackcount: nil, albumartists: track.albumartists)) } label: { Label("View Album", systemImage: "square.stack") }
-                    Button { state.navigationTarget = .artist(Artist(artisthash: track.artisthash, name: track.artist, image: track.image, trackcount: nil, albumcount: nil, duration: nil)) } label: { Label("View Artist", systemImage: "music.mic") }
+                    Button { state.navigationTarget = .album(Album(stub: track.albumhash, title: track.album, image: track.image, date: track.date, albumartists: track.albumartists)) } label: { Label("View Album", systemImage: "square.stack") }
+                    Button { state.navigationTarget = .artist(Artist(stub: track.artisthash, name: track.artist, image: track.image)) } label: { Label("View Artist", systemImage: "music.mic") }
                     Button { state.requestedTrackForPlaylist = track } label: { Label("Add to Playlist", systemImage: "text.badge.plus") }
                     Divider()
                     if DownloadManager.shared.isDownloaded(track) {
@@ -88,6 +88,8 @@ struct TrackRow: View {
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
         .background(active ? .white.opacity(0.05) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onSwipeRight {
             AudioPlayer.shared.addLast(track)

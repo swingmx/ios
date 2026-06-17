@@ -14,6 +14,16 @@ extension Color {
         )
     }
 
+    init?(rgbString: String) {
+        let nums = rgbString
+            .replacingOccurrences(of: "rgb(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+            .split(separator: ",")
+            .compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        guard nums.count == 3 else { return nil }
+        self.init(red: nums[0] / 255, green: nums[1] / 255, blue: nums[2] / 255)
+    }
+
     func adjust(brightness: Double) -> Color {
         var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         UIColor(self).getHue(&h, saturation: &s, brightness: &b, alpha: &a)

@@ -35,6 +35,10 @@ final class API {
     func artistImg(_ path: String, size: String = "medium") -> URL? {
         mediaImageURL(kind: "artist", path: path, size: size)
     }
+
+    func mixImg(_ path: String, size: String = "medium") -> URL? {
+        mediaImageURL(kind: "mix", path: path, size: size)
+    }
     func stream(_ hash: String) -> URL? {
         streamURLs(hash).first
     }
@@ -98,15 +102,31 @@ final class API {
     }
 
     private func exec<T: Decodable>(_ r: URLRequest) async throws -> T {
+        let method = r.httpMethod ?? "GET"
+        let path = r.url.map { $0.path + ($0.query.map { "?\($0)" } ?? "") } ?? "?"
+        let start = Date()
+
         let (data, resp): (Data, URLResponse)
         do { (data, resp) = try await session.data(for: r) }
-        catch { throw APIError.network(error) }
+        catch {
+            Log.error("net", "\(method) \(path) — network failure: \(error.localizedDescription)")
+            throw APIError.network(error)
+        }
+        let ms = Int(Date().timeIntervalSince(start) * 1000)
         if let h = resp as? HTTPURLResponse {
+            if h.statusCode >= 400 {
+                Log.error("net", "\(method) \(path) → \(h.statusCode) (\(ms)ms, \(data.count)B)")
+            } else {
+                Log.debug("net", "\(method) \(path) → \(h.statusCode) (\(ms)ms, \(data.count)B)")
+            }
             if h.statusCode == 401 { throw APIError.unauthorized }
             if h.statusCode >= 400 { throw APIError.server(h.statusCode) }
         }
         do { return try JSONDecoder().decode(T.self, from: data) }
-        catch { throw APIError.decode(error) }
+        catch {
+            Log.error("net", "\(method) \(path) — decode \(T.self) failed: \(error)")
+            throw APIError.decode(error)
+        }
     }
 
     private func mediaImageURL(kind: String, path: String, size: String) -> URL? {

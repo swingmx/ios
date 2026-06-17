@@ -14,6 +14,8 @@ final class AppState: ObservableObject {
     @Published var allArtists: [Artist] = []
     @Published var allPlaylists: [Playlist] = []
     @Published var favTracks: [Track] = []
+    @Published var favAlbums: [Album] = []
+    @Published var favArtists: [Artist] = []
 
     @Published var showPlayer = false
     @Published var showLyrics = false
@@ -60,6 +62,23 @@ final class AppState: ObservableObject {
     @Published var keyboardVisible = false
     private var lastScrollOffset: CGFloat = 0
 
+    @Published var showBugReport = false
+    @Published var currentBugReport: BugReport?
+
+    func beginBugReport() {
+        currentBugReport = BugReport.generate()
+        Log.info("report", "Bug report opened — \(currentBugReport?.id ?? "?")")
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        if showPlayer {
+            showPlayer = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                self?.showBugReport = true
+            }
+        } else {
+            showBugReport = true
+        }
+    }
+
     func updateScroll(_ offset: CGFloat) {
         let delta = offset - lastScrollOffset
 
@@ -88,7 +107,13 @@ final class AppState: ObservableObject {
     }
 
     func login(server: String, user: String, pass: String) async throws {
-        try await API.shared.login(server: server, user: user, pass: pass)
+        do {
+            try await API.shared.login(server: server, user: user, pass: pass)
+        } catch {
+            Log.error("auth", "Login failed for \(server): \(error.localizedDescription)")
+            throw error
+        }
+        Log.info("auth", "Logged in to \(API.shared.base)")
         authed = true
         await loadHome()
     }
@@ -131,8 +156,52 @@ final class AppState: ObservableObject {
         allArtists = (try? await API.shared.artists(limit: 300))?.items ?? []
     }
 
+    @Published var homeSections: [HomeSection] = []
+
+    func loadHomeSections() async {
+        guard let data = try? await API.shared.homeData(),
+              let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
+
+        var result: [HomeSection] = []
+        for entry in arr {
+            guard let key = entry.keys.first,
+                  let sec = entry[key] as? [String: Any] else { continue }
+            let title = (sec["title"] as? String) ?? key.replacingOccurrences(of: "_", with: " ").capitalized
+            let rawItems = (sec["items"] as? [[String: Any]]) ?? []
+
+            var items: [HomeItem] = []
+            for raw in rawItems {
+                guard let type = raw["type"] as? String,
+                      let itemObj = raw["item"],
+                      let itemData = try? JSONSerialization.data(withJSONObject: itemObj) else { continue }
+                switch type {
+                case "album":
+                    if let a = try? JSONDecoder().decode(Album.self, from: itemData) { items.append(.album(a)) }
+                case "artist":
+                    if let a = try? JSONDecoder().decode(Artist.self, from: itemData) { items.append(.artist(a)) }
+                case "track":
+                    if let t = try? JSONDecoder().decode(Track.self, from: itemData) { items.append(.track(t)) }
+                case "playlist":
+                    if let p = try? JSONDecoder().decode(Playlist.self, from: itemData) { items.append(.playlist(p)) }
+                case "mix":
+                    if let m = try? JSONDecoder().decode(Mix.self, from: itemData) { items.append(.mix(m)) }
+                default:
+                    break
+                }
+            }
+            if !items.isEmpty { result.append(HomeSection(id: key, title: title, items: items)) }
+        }
+        homeSections = result
+    }
+
     func loadFavorites() async {
-        favTracks = (try? await API.shared.favoriteTracks()) ?? []
+
+        async let tracks = API.shared.favoriteTracks()
+        async let albums = API.shared.favoriteAlbums()
+        async let artists = API.shared.favoriteArtists()
+        favTracks = (try? await tracks) ?? []
+        favAlbums = (try? await albums) ?? []
+        favArtists = (try? await artists) ?? []
     }
 
     func loadPlaylists() async {

@@ -29,6 +29,23 @@ struct HomeView: View {
 
                     if isLoading {
                         skeleton
+                    } else if !state.homeSections.isEmpty {
+
+                        if !heroes.isEmpty { heroCarousel }
+                        if !state.topTracks.isEmpty {
+                            section("Top Songs", subtitle: "Your most played this month") { topSongsChart }
+                        }
+                        ForEach(state.homeSections) { serverSection($0) }
+                        if !state.favTracks.isEmpty {
+                            section("Favorites") { favoritesGrid }
+                        }
+
+                        if !state.allArtists.isEmpty {
+                            section("Artists", seeAll: .allArtists) { artistRail }
+                        }
+                        if !state.allPlaylists.isEmpty {
+                            section("Playlists") { playlistRail }
+                        }
                     } else {
                         if !heroes.isEmpty {
                             heroCarousel
@@ -62,6 +79,7 @@ struct HomeView: View {
             .background { AmbientBackground() }
             .navigationTitle("Listening Now")
             .refreshable {
+                await state.loadHomeSections()
                 await state.loadHome()
                 await state.loadFavorites()
                 heroes = pickHeroes()
@@ -88,13 +106,15 @@ struct HomeView: View {
             .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
             .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
             .navigationDestination(for: Playlist.self) { PlaylistDetailView(id: $0.id, name: $0.name) }
+            .navigationDestination(for: Mix.self) { MixDetailView(mix: $0) }
         }
         .task {
+            async let sections: Void = state.loadHomeSections()
             if state.recentAdded.isEmpty { await state.loadHome() }
             if heroes.isEmpty { heroes = pickHeroes() }
             async let artists: Void = state.loadArtists()
             async let favs: Void = state.loadFavorites()
-            _ = await (artists, favs)
+            _ = await (sections, artists, favs)
         }
     }
 
@@ -313,6 +333,82 @@ struct HomeView: View {
         .buttonStyle(PressableCardStyle())
         .contextMenu { trackMenuItems(track) }
         .accessibilityLabel("Play \(track.title) by \(track.artist)")
+    }
+
+    @ViewBuilder
+    private func serverSection(_ s: HomeSection) -> some View {
+        section(s.title) {
+            ScrollView(.horizontal, showsIndicators: false) {
+
+                LazyHStack(alignment: .top, spacing: 14) {
+                    ForEach(s.items) { item in
+                        homeItemCard(item)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .scrollClipDisabled()
+        }
+    }
+
+    @ViewBuilder
+    private func homeItemCard(_ item: HomeItem) -> some View {
+        switch item {
+        case .album(let a):
+            NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
+                .buttonStyle(PressableCardStyle())
+                .contextMenu { albumMenuItems(a) }
+        case .artist(let a):
+            NavigationLink(value: a) { ArtistCard(artist: a, size: 110) }
+                .buttonStyle(PressableCardStyle())
+        case .playlist(let pl):
+            NavigationLink(value: pl) {
+                VStack(alignment: .leading, spacing: 10) {
+                    PlaylistImageGrid(playlist: pl, size: 150)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(pl.name).font(.system(size: 15, weight: .bold)).foregroundStyle(.primary).lineLimit(1)
+                        Text("\(pl.trackcount) songs").font(.system(size: 13)).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(width: 150)
+            }
+            .buttonStyle(PressableCardStyle())
+        case .track(let t):
+            Button { playTrack(t, from: [t]) } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    AlbumArt(track: t, size: 150)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(t.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
+                        Text(t.artist).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    .frame(width: 150, alignment: .leading)
+                }
+            }
+            .buttonStyle(PressableCardStyle())
+            .contextMenu { trackMenuItems(t) }
+        case .mix(let m):
+            NavigationLink(value: m) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Img(urls: mixImageURLs(m), radius: 12,
+                        placeholderColor: m.extra.images?.first?.color ?? m.extra.image?.color)
+                        .frame(width: 150, height: 150)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(m.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
+                        Text(m.extra.type.map { "\($0.capitalized) mix" } ?? "Mix").font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    .frame(width: 150, alignment: .leading)
+                }
+            }
+            .buttonStyle(PressableCardStyle())
+        }
+    }
+
+    private func mixImageURLs(_ m: Mix) -> [URL] {
+        guard let file = m.imageFile else { return [] }
+        return [API.shared.mixImg(file, size: "medium"), API.shared.img(file, size: "medium")].compactMap { $0 }
     }
 
     private func albumRail(_ albums: [Album]) -> some View {

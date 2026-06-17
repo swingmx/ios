@@ -24,6 +24,10 @@ struct ArtistDetailView: View {
                         similarArtistsSection
                     }
 
+                    if let stats = d.stats, !stats.isEmpty {
+                        statsSection(stats, color: d.artist.color)
+                    }
+
                     Color.clear.frame(height: 110)
                 }
             } else {
@@ -61,10 +65,28 @@ struct ArtistDetailView: View {
                     if let ac = d.artist.albumcount {
                         statBadge("\(ac) Albums")
                     }
+                    if let dur = d.artist.duration, dur > 0 {
+                        statBadge(dur.mmss)
+                    }
+                }
+
+                if let genres = d.artist.genres, !genres.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(genres, id: \.genrehash) { g in
+                                Text(g.name.capitalized)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.85))
+                                    .padding(.horizontal, 12).padding(.vertical, 6)
+                                    .background(.white.opacity(0.12), in: Capsule())
+                            }
+                        }
+                        .padding(.horizontal, 18)
+                    }
                 }
 
                 HStack(spacing: 12) {
-                    Button { state.player.playAll(d.tracks) } label: {
+                    Button { state.player.playAll(d.tracks, source: .artist(hash)) } label: {
                         Label("Play", systemImage: "play.fill")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.black)
@@ -73,7 +95,7 @@ struct ArtistDetailView: View {
                     }
                     .buttonStyle(Pressed())
 
-                    Button { state.player.playAll(d.tracks, shuffled: true) } label: {
+                    Button { state.player.playAll(d.tracks, shuffled: true, source: .artist(hash)) } label: {
                         Label("Shuffle", systemImage: "shuffle")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
@@ -97,7 +119,7 @@ struct ArtistDetailView: View {
                 HStack(spacing: 10) {
                     ForEach(Array(d.tracks.prefix(10).enumerated()), id: \.element.id) { i, t in
                         Button {
-                            state.player.play(t, from: d.tracks)
+                            state.player.play(t, from: d.tracks, source: .artist(hash))
                         } label: {
                             songCard(track: t, rank: i + 1, active: state.player.current == t)
                         }
@@ -148,7 +170,7 @@ struct ArtistDetailView: View {
                     .foregroundStyle(.white)
                 Spacer()
                 Button {
-                    state.player.playAll(Array(d.tracks.prefix(10)))
+                    state.player.playAll(Array(d.tracks.prefix(10)), source: .artist(hash))
                 } label: {
                     Text("Play Top 10")
                         .font(.system(size: 12, weight: .semibold))
@@ -164,7 +186,7 @@ struct ArtistDetailView: View {
             VStack(spacing: 0) {
                 ForEach(Array(d.tracks.prefix(10).enumerated()), id: \.element.id) { i, t in
                     TrackRow(track: t, num: i + 1, active: state.player.current == t) {
-                        state.player.play(t, from: d.tracks)
+                        state.player.play(t, from: d.tracks, source: .artist(hash))
                     }
                 }
             }
@@ -206,6 +228,66 @@ struct ArtistDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func statsSection(_ stats: [ArtistStat], color: String?) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Stats")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(stats, id: \.self) { stat in
+                        statCard(stat, color: color)
+                    }
+                }
+                .padding(.horizontal, 18)
+            }
+        }
+    }
+
+    private func statCard(_ stat: ArtistStat, color: String?) -> some View {
+        let base = color.flatMap { Color(rgbString: $0) } ?? .blue
+        return VStack(alignment: .leading, spacing: 8) {
+            if let image = stat.image, !image.isEmpty {
+                Img(url: API.shared.img(image, size: "small"), radius: 8)
+                    .frame(width: 40, height: 40)
+            } else {
+                Image(systemName: statIcon(stat.cssclass))
+                    .font(.system(size: 20))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .frame(width: 40, height: 40)
+            }
+            Text(stat.value)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            Text(stat.text)
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(2)
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .frame(width: 160, height: 160, alignment: .topLeading)
+        .background(base)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+        )
+    }
+
+    private func statIcon(_ cssclass: String) -> String {
+        switch cssclass {
+        case "play_duration": "clock.fill"
+        case "played": "play.circle.fill"
+        case "toptrack": "music.note"
+        case "topalbum": "square.stack.fill"
+        default: "chart.bar.fill"
         }
     }
 

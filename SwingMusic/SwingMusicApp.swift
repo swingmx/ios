@@ -15,6 +15,12 @@ struct SwingMusicApp: App {
             }
             .environmentObject(state)
             .preferredColorScheme(state.appearanceMode.colorScheme)
+            .onShake { state.beginBugReport() }
+            .sheet(isPresented: $state.showBugReport) {
+                if let report = state.currentBugReport {
+                    BugReportSheet(report: report)
+                }
+            }
         }
     }
 }

@@ -24,6 +24,8 @@ struct FullPlayerView: View {
     @State private var controlsHeight: CGFloat = 250
     @ObservedObject var sleepTimer = SleepTimer.shared
 
+    @AppStorage("albumArtTapAction") private var albumArtTapAction = "album"
+
     var body: some View {
         GeometryReader { geo in
             let width = min(max(geo.size.width - 56, 280), 336)
@@ -47,50 +49,33 @@ struct FullPlayerView: View {
             .offset(y: drag)
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: drag)
             .animation(.interactiveSpring(response: 0.45, dampingFraction: 0.88, blendDuration: 0.15), value: showLyrics)
+
             .simultaneousGesture(
                 DragGesture(minimumDistance: 30)
                     .onChanged { value in
+                        guard !showLyrics else { return }
                         let h = value.translation.width
                         let v = value.translation.height
-                        if !showLyrics && abs(h) > abs(v) * 1.2 {
-                            hDrag = h
-                        } else if v > 0 {
-                            drag = v
-                        }
+                        if v > 0 && abs(v) > abs(h) { drag = v }
                     }
                     .onEnded { value in
                         let h = value.translation.width
                         let v = value.translation.height
 
-                        if !showLyrics && abs(h) > 60 && abs(h) > abs(v) * 1.2 {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-
-                            let screenW: CGFloat = 400
-                            withAnimation(.easeIn(duration: 0.15)) {
-                                hDrag = h < 0 ? -screenW : screenW
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                if h < 0 { player.next() } else { player.prev() }
-                                hDrag = h < 0 ? screenW : -screenW
-                                withAnimation(.easeOut(duration: 0.2)) { hDrag = 0 }
+                        if showLyrics {
+                            if abs(h) > 60 && abs(h) > abs(v) * 1.5 {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                withAnimation { showLyrics = false }
                             }
                             drag = 0
                             return
                         }
 
-                        if showLyrics && abs(h) > 50 && abs(h) > abs(v) * 1.5 {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            withAnimation { showLyrics = false }
-                            hDrag = 0; drag = 0
-                            return
-                        }
-
-                        if v > 120 {
+                        if v > 120 && abs(v) > abs(h) {
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                             show = false
                         }
-                        withAnimation(.spring(response: 0.3)) { hDrag = 0 }
-                        drag = 0
+                        withAnimation(.spring(response: 0.3)) { drag = 0 }
                     }
             )
         }
@@ -224,7 +209,8 @@ struct FullPlayerView: View {
                                         .offset(x: hDrag * 0.6)
                                         .opacity(1 - min(abs(hDrag) / 300, 0.5))
                                         .contentShape(Rectangle())
-                                        .onTapGesture { toggleLyrics() }
+                                        .gesture(artSwipeGesture)
+                                        .onTapGesture { albumArtTapped(t) }
                                         .padding(.top, 20)
                                 }
                             }
@@ -262,6 +248,48 @@ struct FullPlayerView: View {
             }
         }
     }
+
+    private var artSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 18)
+            .onChanged { value in
+                guard !showLyrics else { return }
+                let h = value.translation.width
+                guard abs(h) > abs(value.translation.height) else { return }
+
+                hDrag = h * (abs(h) > 140 ? 0.75 : 1)
+            }
+            .onEnded { value in
+                guard !showLyrics else { return }
+                let h = value.translation.width
+                let v = value.translation.height
+                let velocity = value.predictedEndTranslation.width - value.translation.width
+                let commit = (abs(h) > 60 || abs(velocity) > 120) && abs(h) > abs(v)
+                guard commit else {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) { hDrag = 0 }
+                    return
+                }
+                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+                let dir: CGFloat = h < 0 ? -1 : 1
+
+                withAnimation(.easeOut(duration: 0.2)) { hDrag = dir * 620 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                    if dir < 0 { player.next() } else { player.prev() }
+                    hDrag = -dir * 620
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { hDrag = 0 }
+                }
+            }
+    }
+
+    private func albumArtTapped(_ t: Track) {
+        if albumArtTapAction == "lyrics" {
+            toggleLyrics()
+        } else {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            let album = Album(stub: t.albumhash, title: t.album, image: t.image, date: t.date, albumartists: t.albumartists)
+            state.navigationTarget = .album(album)
+        }
+    }
+
     private func toggleLyrics() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         withAnimation(.spring(response: 0.55, dampingFraction: 0.86)) { showLyrics.toggle() }

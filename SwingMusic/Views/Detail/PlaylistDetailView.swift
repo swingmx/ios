@@ -17,7 +17,7 @@ struct PlaylistDetailView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
                         TrackRow(track: t, num: i + 1, active: state.player.current == t) {
-                            state.player.play(t, from: tracks)
+                            state.player.play(t, from: tracks, source: .playlist(id))
                         }
                     }
                 }
@@ -50,7 +50,7 @@ struct PlaylistDetailView: View {
                 .font(.system(size: 13)).foregroundStyle(.secondary)
 
             HStack(spacing: 12) {
-                Button { state.player.playAll(tracks) } label: {
+                Button { state.player.playAll(tracks, source: .playlist(id)) } label: {
                     Label("Play", systemImage: "play.fill")
                         .font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
                         .frame(maxWidth: .infinity).frame(height: 46)
@@ -58,7 +58,7 @@ struct PlaylistDetailView: View {
                 }
                 .buttonStyle(Pressed())
 
-                Button { state.player.playAll(tracks, shuffled: true) } label: {
+                Button { state.player.playAll(tracks, shuffled: true, source: .playlist(id)) } label: {
                     Label("Shuffle", systemImage: "shuffle")
                         .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).frame(height: 46)
@@ -67,14 +67,7 @@ struct PlaylistDetailView: View {
                 }
                 .buttonStyle(Pressed())
 
-                Button { DownloadManager.shared.downloadAll(tracks) } label: {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
-                        .frame(width: 46, height: 46)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
-                }
-                .buttonStyle(Pressed())
+                DownloadControl(tracks: tracks)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 8)

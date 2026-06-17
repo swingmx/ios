@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
+    @AppStorage("albumArtTapAction") private var albumArtTapAction = "album"
 
     var body: some View {
         List {
@@ -90,6 +91,18 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+
+                Picker(selection: $albumArtTapAction) {
+                    Text("Open Album").tag("album")
+                    Text("Show Lyrics").tag("lyrics")
+                } label: {
+                    HStack {
+                        Image(systemName: "hand.tap")
+                            .foregroundStyle(.blue)
+                            .frame(width: 28)
+                        Text("Tap Artwork")
+                    }
+                }
             }
 
             Section(header: Text("Storage")) {
@@ -129,6 +142,20 @@ struct SettingsView: View {
                             .frame(width: 28)
                         Text("Log Out")
                             .foregroundColor(.red)
+                    }
+                }
+            }
+
+            Section(header: Text("Support"), footer: Text("Tip: shake your device anywhere in the app to report a problem.")) {
+                Button {
+                    state.beginBugReport()
+                } label: {
+                    HStack {
+                        Image(systemName: "ladybug.fill")
+                            .foregroundStyle(.orange)
+                            .frame(width: 28)
+                        Text("Report a Problem")
+                            .foregroundStyle(.primary)
                     }
                 }
             }

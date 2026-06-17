@@ -30,13 +30,24 @@ extension API {
     }
 
     func artist(_ hash: String) async throws -> ArtistDetail {
-        try await get("/artist/\(hash)", q: ["limit": "20", "albumlimit": "30"])
+        try await get("/artist/\(hash)", q: ["tracklimit": "20", "albumlimit": "30"])
     }
 
     func artistAlbums(_ hash: String) async throws -> [ArtistAlbumSection] {
-        struct R: Decodable { let albums: [ArtistAlbumSection] }
-        let r: R = try await get("/artist/\(hash)/albums", q: ["limit": "100"])
-        return r.albums
+
+        struct R: Decodable {
+            let albums: [Album]?
+            let singles_and_eps: [Album]?
+            let appearances: [Album]?
+            let compilations: [Album]?
+        }
+        let r: R = try await get("/artist/\(hash)/albums", q: ["limit": "100", "all": "true"])
+        var sections: [ArtistAlbumSection] = []
+        if let a = r.albums, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Albums", albums: a)) }
+        if let a = r.singles_and_eps, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Singles & EPs", albums: a)) }
+        if let a = r.appearances, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Appearances", albums: a)) }
+        if let a = r.compilations, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Compilations", albums: a)) }
+        return sections
     }
 
     func similarArtists(_ hash: String, limit: Int = 12) async throws -> [Artist] {
@@ -137,14 +148,14 @@ extension API {
     }
 
     func toggleFavorite(hash: String, type: String, add: Bool) async throws {
-        struct B: Encodable { let itemhash: String; let itemtype: String }
+        struct B: Encodable { let hash: String; let type: String }
         struct E: Decodable {}
         let _: E = try await post(add ? "/favorites/add" : "/favorites/remove",
-                                  body: B(itemhash: hash, itemtype: type))
+                                  body: B(hash: hash, type: type))
     }
 
     func checkFavorite(hash: String, type: String) async throws -> Bool {
-        (try await get("/favorites/check", q: ["hash": hash, "type": type]) as FavoriteCheckResponse).is_fav
+        (try await get("/favorites/check", q: ["hash": hash, "type": type]) as FavoriteCheckResponse).is_favorite
     }
 
     func topTracks(_ period: String = "month", limit: Int = 25) async throws -> [Track] {
@@ -152,15 +163,52 @@ extension API {
         return try await (get("/logger/top-tracks", q: ["duration": period, "limit": "\(limit)"]) as R).tracks
     }
 
-    func logPlay(hash: String, ts: Int, dur: Int) async throws {
+    func logPlay(hash: String, ts: Int, dur: Int, source: String) async throws {
         struct B: Encodable { let trackhash: String; let timestamp: Int; let duration: Int; let source: String }
         struct E: Decodable {}
-        let _: E = try await post("/logger/track/log", body: B(trackhash: hash, timestamp: ts, duration: dur, source: "ios"))
+        let _: E = try await post("/logger/track/log", body: B(trackhash: hash, timestamp: ts, duration: dur, source: source))
     }
 
     func favoriteTracks() async throws -> [Track] {
         struct R: Decodable { let tracks: [Track] }
         return try await (get("/favorites/tracks", q: ["limit": "200"]) as R).tracks
+    }
+
+    func favoriteAlbums() async throws -> [Album] {
+        struct R: Decodable { let albums: [Album] }
+        return try await (get("/favorites/albums", q: ["limit": "100"]) as R).albums
+    }
+
+    func favoriteArtists() async throws -> [Artist] {
+        struct R: Decodable { let artists: [Artist] }
+        return try await (get("/favorites/artists", q: ["limit": "100"]) as R).artists
+    }
+
+    func folder(_ path: String, limit: Int = 500) async throws -> FolderResponse {
+        struct B: Encodable { let folder: String; let limit: Int; let start: Int; let tracks_only: Bool }
+        return try await post("/folder", body: B(folder: path, limit: limit, start: 0, tracks_only: false))
+    }
+
+    func folderTracks(_ path: String) async throws -> [Track] {
+        struct R: Decodable { let tracks: [Track] }
+        return try await (get("/folder/tracks/all", q: ["path": path]) as R).tracks
+    }
+
+    func mixTracks(id: String, sourcehash: String, ogSourcehash: String) async throws -> [Track] {
+        struct R: Decodable { let tracks: [Track] }
+        return try await (get("/plugins/mixes/", q: [
+            "mixid": id, "sourcehash": sourcehash, "og_sourcehash": ogSourcehash
+        ]) as R).tracks
+    }
+
+    func homeData(limit: Int = 12) async throws -> Data {
+        var c = URLComponents(string: base + "/nothome/")!
+        c.queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
+        var r = URLRequest(url: c.url!)
+        if let t = token { r.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+        let (data, resp) = try await URLSession.shared.data(for: r)
+        if let h = resp as? HTTPURLResponse, h.statusCode >= 400 { throw APIError.server(h.statusCode) }
+        return data
     }
 
 }

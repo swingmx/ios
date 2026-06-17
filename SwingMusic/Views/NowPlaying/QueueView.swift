@@ -6,12 +6,29 @@ struct QueueView: View {
     var backgroundImage: UIImage? = nil
     @State private var editMode: EditMode = .inactive
 
+    private var previousIndices: [Int] {
+        player.queue.indices.filter { $0 < player.index }
+    }
+
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             List {
+
+                if !previousIndices.isEmpty {
+                    Section(header: Text("Previously Played")) {
+                        ForEach(previousIndices, id: \.self) { i in
+                            QueueRow(track: player.queue[i], active: false)
+                                .contentShape(Rectangle())
+                                .onTapGesture { player.play(player.queue[i], from: player.queue) }
+                        }
+                    }
+                }
+
                 if let current = player.current {
                     Section(header: Text("Currently Playing")) {
                         QueueRow(track: current, active: true)
+                            .id("current")
                     }
                 }
 
@@ -75,6 +92,15 @@ struct QueueView: View {
                     }
                     .accessibilityLabel("Close")
                 }
+            }
+            .onAppear {
+
+                if !previousIndices.isEmpty {
+                    DispatchQueue.main.async {
+                        proxy.scrollTo("current", anchor: .top)
+                    }
+                }
+            }
             }
         }
     }

@@ -29,7 +29,7 @@ struct PlayerOptionsSheet: View {
                     Section {
                         Button {
                             dismiss()
-                            state.navigationTarget = .album(Album(albumhash: t.albumhash, title: t.album, image: t.image, date: t.date, duration: nil, trackcount: nil, albumartists: t.albumartists))
+                            state.navigationTarget = .album(Album(stub: t.albumhash, title: t.album, image: t.image, date: t.date, albumartists: t.albumartists))
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { state.showPlayer = false }
                         } label: {
                             Label("View Album", systemImage: "square.stack")
@@ -37,7 +37,7 @@ struct PlayerOptionsSheet: View {
 
                         Button {
                             dismiss()
-                            state.navigationTarget = .artist(Artist(artisthash: t.artisthash, name: t.artist, image: t.image, trackcount: nil, albumcount: nil, duration: nil))
+                            state.navigationTarget = .artist(Artist(stub: t.artisthash, name: t.artist, image: t.image))
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { state.showPlayer = false }
                         } label: {
                             Label("View Artist", systemImage: "music.mic")
@@ -76,6 +76,16 @@ struct PlayerOptionsSheet: View {
                     }
 
                     Section {
+                        Toggle(isOn: $player.shuffle) {
+                            HStack {
+                                Image(systemName: "shuffle")
+                                    .foregroundStyle(.blue)
+                                Text("Shuffle")
+                                    .foregroundStyle(.primary)
+                            }
+                        }
+                        .tint(.blue)
+
                         Picker(selection: Binding(
                             get: { player.audioQuality },
                             set: { player.audioQuality = $0 }

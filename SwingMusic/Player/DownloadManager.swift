@@ -53,6 +53,14 @@ final class DownloadManager: ObservableObject {
         downloadsDir.appendingPathComponent("\(track.trackhash).lrc")
     }
 
+    static func lrcTimestamp(_ seconds: Double) -> String {
+        let t = max(0, seconds)
+        let m = Int(t) / 60
+        let s = Int(t) % 60
+        let cs = Int((t - floor(t)) * 100)
+        return String(format: "[%02d:%02d.%02d]", m, s, cs)
+    }
+
     func download(_ track: Track) {
         guard downloads[track.trackhash] == nil || downloads[track.trackhash] == .failed else { return }
         downloads[track.trackhash] = .queued
@@ -101,9 +109,11 @@ final class DownloadManager: ObservableObject {
     private func performDownload(_ track: Track) async {
         let urls = API.shared.streamURLs(track.trackhash, filepath: track.filepath)
         guard let url = urls.first else {
+            Log.error("download", "No stream URL for \(track.title)")
             downloads[track.trackhash] = .failed
             return
         }
+        Log.info("download", "Starting \(track.title)")
 
         var req = URLRequest(url: url)
         if let tk = API.shared.token {
@@ -113,9 +123,19 @@ final class DownloadManager: ObservableObject {
         downloads[track.trackhash] = .downloading(progress: 0)
 
         do {
-            let (localURLTemp, response) = try await URLSession.shared.download(for: req)
+            let hash = track.trackhash
+            let progressDelegate = DownloadProgressDelegate { [weak self] p in
+                Task { @MainActor in
+                    if case .downloading = self?.downloads[hash] {
+                        self?.downloads[hash] = .downloading(progress: p)
+                    }
+                }
+            }
+            let (localURLTemp, response) = try await URLSession.shared.download(for: req, delegate: progressDelegate)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                Log.error("download", "Audio failed for \(track.title) → HTTP \(code)")
                 downloads[track.trackhash] = .failed
                 return
             }
@@ -131,18 +151,19 @@ final class DownloadManager: ObservableObject {
                 if let content = response.lyrics {
                     let text: String
                     switch content {
-                    case .string(let s): text = s
+                    case .string(let s):
+                        text = s
                     case .lines(let l):
-
-                        text = l.map { $0.text }.joined(separator: "\n")
+                        text = l.map { Self.lrcTimestamp($0.time) + $0.text }.joined(separator: "\n")
                     }
                     try text.write(to: localLyricsURL(for: track), atomically: true, encoding: .utf8)
                 }
             } catch {
-                print("Lyrics download failed (optional): \(error)")
+                Log.warn("download", "Lyrics unavailable for \(track.title): \(error.localizedDescription)")
             }
 
             downloads[track.trackhash] = .completed
+            Log.info("download", "Completed \(track.title)")
 
             if !downloadedTracks.contains(where: { $0.trackhash == track.trackhash }) {
                 downloadedTracks.append(track)
@@ -150,7 +171,7 @@ final class DownloadManager: ObservableObject {
             }
             saveMetadata()
         } catch {
-            print("Download error: \(error)")
+            Log.error("download", "Failed \(track.title): \(error.localizedDescription)")
             downloads[track.trackhash] = .failed
         }
     }
@@ -175,4 +196,23 @@ final class DownloadManager: ObservableObject {
             downloads[track.trackhash] = .completed
         }
     }
+}
+
+final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
+    private let onProgress: (Double) -> Void
+
+    init(onProgress: @escaping (Double) -> Void) {
+        self.onProgress = onProgress
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
+                    didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
+                    totalBytesExpectedToWrite: Int64) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        let p = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        onProgress(min(max(p, 0), 1))
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
+                    didFinishDownloadingTo location: URL) {}
 }

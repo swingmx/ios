@@ -116,7 +116,7 @@ struct FavoriteTracksView: View {
             VStack(spacing: 0) {
                 ForEach(Array(state.favTracks.enumerated()), id: \.element.id) { i, t in
                     TrackRow(track: t, num: i + 1, active: state.player.current == t) {
-                        state.player.play(t, from: state.favTracks)
+                        state.player.play(t, from: state.favTracks, source: .favorite)
                     }
                 }
             }

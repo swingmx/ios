@@ -12,6 +12,33 @@ final class AudioPlayer: ObservableObject {
     @Published var current: Track?
     @Published var queue: [Track] = []
     @Published var index: Int = 0
+
+    @Published var source: PlaySource = .none
+
+    enum PlaySource: Equatable {
+        case album(String)
+        case artist(String)
+        case playlist(String)
+        case folder(String)
+        case search(String)
+        case favorite
+        case mix(id: String, sourcehash: String)
+        case none
+
+        var token: String {
+            switch self {
+            case .album(let h): "al:\(h)"
+            case .artist(let h): "ar:\(h)"
+            case .playlist(let id): "pl:\(id)"
+            case .folder(let p): "fo:\(p)"
+            case .search(let q): "q:\(q)"
+            case .favorite: "favorite"
+            case .mix(let id, let sh): "mix:\(id).\(sh)"
+            case .none: ""
+            }
+        }
+    }
+
     @Published var playing = false
     @Published var time: Double = 0
     @Published var total: Double = 0
@@ -125,14 +152,18 @@ final class AudioPlayer: ObservableObject {
         }
     }
 
-    func play(_ track: Track, from list: [Track]? = nil) {
+    func play(_ track: Track, from list: [Track]? = nil, source: PlaySource = .none) {
+        log()
+        if source != .none { self.source = source }
         if let list { queue = list; index = list.firstIndex(of: track) ?? 0 }
         current = track
         load(track)
     }
 
-    func playAll(_ tracks: [Track], shuffled: Bool = false) {
+    func playAll(_ tracks: [Track], shuffled: Bool = false, source: PlaySource = .none) {
         guard !tracks.isEmpty else { return }
+        log()
+        self.source = source
         queue = shuffled ? tracks.shuffled() : tracks
         index = 0
         current = queue[0]
@@ -425,7 +456,8 @@ final class AudioPlayer: ObservableObject {
     private func log() {
         guard let t = current, let s = started else { return }
         let d = Int(Date().timeIntervalSince(s))
-        if d >= 5 { Task { try? await API.shared.logPlay(hash: t.trackhash, ts: startTS, dur: d) } }
+        let src = source.token
+        if d >= 5 { Task { try? await API.shared.logPlay(hash: t.trackhash, ts: startTS, dur: d, source: src) } }
         started = nil
     }
 

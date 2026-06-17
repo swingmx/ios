@@ -68,28 +68,32 @@ struct SyncedLyricsView: View {
                                 let isPast = i < index
 
                                 let isBg = line.text.hasPrefix("(")
-                                ZStack(alignment: isBg ? .trailing : .leading) {
-                                    composedText(for: line, isActive: isActive, isPast: isPast, isBg: isBg)
-                                        .font(.system(size: isBg ? 26 : 34, weight: .bold, design: .default))
-                                }
 
-                                .compositingGroup()
-                                .scaleEffect(isActive ? 1.0 : 0.92, anchor: isBg ? .trailing : .leading)
-                                .blur(radius: isActive ? 0 : (abs(i - index) > 2 ? 2.5 : 1.5))
-                                .opacity(isActive ? 1.0 : (abs(i - index) > 2 ? 0.3 : 0.5))
-
-                                .geometryGroup()
-                                .frame(width: geo.size.width - 48, alignment: isBg ? .trailing : .leading)
-                                .padding(.vertical, isBg ? 6 : 10)
-                                .padding(.horizontal, 24)
-                                .id(i)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
+                                Button {
                                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                     onSeek(line.time)
                                     autoScrollEnabled = true
                                     userScrolledAway = false
+                                } label: {
+                                    ZStack(alignment: isBg ? .trailing : .leading) {
+                                        composedText(for: line, isActive: isActive, isPast: isPast, isBg: isBg)
+                                            .font(.system(size: isBg ? 26 : 34, weight: .bold, design: .default))
+                                    }
+
+                                    .compositingGroup()
+                                    .scaleEffect(isActive ? 1.0 : 0.92, anchor: isBg ? .trailing : .leading)
+
+                                    .blur(radius: isActive || userScrolledAway ? 0 : (abs(i - index) > 2 ? 2.5 : 1.5))
+                                    .opacity(isActive ? 1.0 : (userScrolledAway ? 0.8 : (abs(i - index) > 2 ? 0.3 : 0.5)))
+
+                                    .geometryGroup()
+                                    .frame(width: geo.size.width - 48, alignment: isBg ? .trailing : .leading)
+                                    .padding(.vertical, isBg ? 6 : 10)
+                                    .padding(.horizontal, 24)
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
+                                .id(i)
 
                                 .animation(
                                     .spring(response: 0.6, dampingFraction: 1.0)
@@ -143,6 +147,8 @@ struct SyncedLyricsView: View {
                             .padding(.vertical, 14)
                             .padding(.horizontal, 22)
                             .modifier(AccentLiquidGlassBackground())
+
+                            .contentShape(Capsule(style: .continuous))
                         }
 
                         .buttonStyle(.plain)
@@ -406,17 +412,15 @@ struct StaticLyricsView: View {
 }
 
 private struct AccentLiquidGlassBackground: ViewModifier {
-    private let accent = Color(red: 1.0, green: 0.216, blue: 0.373)
-
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.glassEffect(.regular.tint(accent).interactive(), in: Capsule(style: .continuous))
+            content.glassEffect(.regular.interactive(), in: Capsule(style: .continuous))
         } else {
             content
-                .background(accent, in: Capsule(style: .continuous))
+                .background(.ultraThinMaterial, in: Capsule(style: .continuous))
                 .overlay(
                     Capsule(style: .continuous)
-                        .strokeBorder(.white.opacity(0.22), lineWidth: 0.6)
+                        .strokeBorder(.white.opacity(0.25), lineWidth: 0.6)
                 )
         }
     }

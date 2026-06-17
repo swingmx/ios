@@ -13,6 +13,14 @@ struct AlbumDetailView: View {
                 VStack(spacing: 0) {
                     header(d)
                     trackList(d)
+                    if let cr = d.info.copyright, !cr.trimmingCharacters(in: .whitespaces).isEmpty {
+                        Text(cr.uppercased())
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 24)
+                    }
                     Color.clear.frame(height: 100)
                 }
             } else {
@@ -55,35 +63,70 @@ struct AlbumDetailView: View {
             }
 
             HStack(spacing: 12) {
-                Button { state.player.playAll(d.tracks) } label: {
+                Button { state.player.playAll(sortedTracks(d.tracks), source: .album(hash)) } label: {
                     Label("Play", systemImage: "play.fill")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.black)
-                        .frame(width: 150, height: 46)
+                        .frame(maxWidth: .infinity).frame(height: 46)
                         .background(.white, in: Capsule())
                 }
                 .buttonStyle(Pressed())
 
-                Button { state.player.playAll(d.tracks, shuffled: true) } label: {
+                Button { state.player.playAll(sortedTracks(d.tracks), shuffled: true, source: .album(hash)) } label: {
                     Label("Shuffle", systemImage: "shuffle")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.white)
-                        .frame(width: 150, height: 46)
+                        .frame(maxWidth: .infinity).frame(height: 46)
                         .background(.ultraThinMaterial, in: Capsule())
                         .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
                 }
                 .buttonStyle(Pressed())
+
+                DownloadControl(tracks: d.tracks)
             }
             .padding(.top, 4).padding(.bottom, 8)
         }
         .padding(.horizontal, 20)
     }
 
+    private func sortedTracks(_ tracks: [Track]) -> [Track] {
+        tracks.sorted { a, b in
+            let da = a.disc ?? 1, db = b.disc ?? 1
+            if da != db { return da < db }
+            return (a.trackno ?? 0) < (b.trackno ?? 0)
+        }
+    }
+
+    @ViewBuilder
     private func trackList(_ d: AlbumDetail) -> some View {
+        let ordered = sortedTracks(d.tracks)
+        let discs = Set(ordered.map { $0.disc ?? 1 }).sorted()
         VStack(spacing: 0) {
-            ForEach(Array(d.tracks.enumerated()), id: \.element.id) { i, t in
-                TrackRow(track: t, num: t.trackno ?? (i + 1), active: state.player.current == t, showArt: false) {
-                    state.player.play(t, from: d.tracks)
+            if discs.count > 1 {
+                ForEach(discs, id: \.self) { disc in
+                    HStack(spacing: 8) {
+                        Image(systemName: "opticaldisc")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Disc \(disc)")
+                            .font(.system(size: 14, weight: .semibold))
+                        Spacer()
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.top, disc == discs.first ? 4 : 18)
+                    .padding(.bottom, 4)
+
+                    ForEach(ordered.filter { ($0.disc ?? 1) == disc }) { t in
+                        TrackRow(track: t, num: t.trackno ?? 1, active: state.player.current == t, showArt: false) {
+                            state.player.play(t, from: ordered, source: .album(hash))
+                        }
+                    }
+                }
+            } else {
+                ForEach(Array(ordered.enumerated()), id: \.element.id) { i, t in
+                    TrackRow(track: t, num: t.trackno ?? (i + 1), active: state.player.current == t, showArt: false) {
+                        state.player.play(t, from: ordered, source: .album(hash))
+                    }
                 }
             }
         }

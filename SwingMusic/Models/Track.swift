@@ -16,6 +16,8 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
     let artists: [TrackArtist]?
     let albumartists: [TrackArtist]?
     let artisthashes: [String]?
+    let color: String?
+    let blurhash: String?
 
     var artist: String { artists?.first?.name ?? "Unknown Artist" }
     var artisthash: String { artisthashes?.first ?? artists?.first?.artisthash ?? "" }
@@ -43,6 +45,9 @@ struct Album: Codable, Identifiable, Hashable {
     let duration: Int?
     let trackcount: Int?
     let albumartists: [TrackArtist]?
+    let color: String?
+    let blurhash: String?
+    let copyright: String?
 
     var artist: String { albumartists?.first?.name ?? "Unknown Artist" }
     var artisthash: String { albumartists?.first?.artisthash ?? "" }
@@ -59,9 +64,28 @@ struct Artist: Codable, Identifiable, Hashable {
     let trackcount: Int?
     let albumcount: Int?
     let duration: Int?
+    let genres: [Genre]?
+    let color: String?
     var id: String { artisthash }
     static func == (lhs: Artist, rhs: Artist) -> Bool { lhs.artisthash == rhs.artisthash }
     func hash(into hasher: inout Hasher) { hasher.combine(artisthash) }
+}
+
+extension Artist {
+
+    init(stub hash: String, name: String, image: String) {
+        self.init(artisthash: hash, name: name, image: image,
+                  trackcount: nil, albumcount: nil, duration: nil, genres: nil, color: nil)
+    }
+}
+
+extension Album {
+
+    init(stub hash: String, title: String, image: String, date: Int?, albumartists: [TrackArtist]?) {
+        self.init(albumhash: hash, title: title, image: image, date: date,
+                  duration: nil, trackcount: nil, albumartists: albumartists,
+                  color: nil, blurhash: nil, copyright: nil)
+    }
 }
 
 struct PlaylistImage: Codable, Hashable {
@@ -116,9 +140,25 @@ struct AlbumDetail: Codable {
     let tracks: [Track]
 }
 
-struct ArtistDetail: Codable {
+struct ArtistStat: Decodable, Hashable {
+    let cssclass: String
+    let value: String
+    let text: String
+    let image: String?
+}
+
+struct ArtistDetail: Decodable {
     let artist: Artist
     let tracks: [Track]
+    let stats: [ArtistStat]?
+
+    enum CodingKeys: String, CodingKey { case artist, tracks, stats }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        artist = try c.decode(Artist.self, forKey: .artist)
+        tracks = (try? c.decode([Track].self, forKey: .tracks)) ?? []
+        stats = try? c.decode([ArtistStat].self, forKey: .stats)
+    }
 }
 
 struct PlaylistDetail: Codable {
@@ -152,10 +192,102 @@ struct ColorResponse: Codable {
 }
 
 struct FavoriteCheckResponse: Codable {
-    let is_fav: Bool
+    let is_favorite: Bool
 }
 
 struct ArtistAlbumSection: Decodable, Hashable {
     let title: String
     let albums: [Album]
+}
+
+struct Folder: Decodable, Identifiable, Hashable {
+    let name: String
+    let path: String
+    let trackcount: Int?
+    let foldercount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case name, path, foldercount
+        case trackcount, count
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        path = (try? c.decode(String.self, forKey: .path)) ?? ""
+        trackcount = (try? c.decode(Int.self, forKey: .trackcount)) ?? (try? c.decode(Int.self, forKey: .count))
+        foldercount = try? c.decode(Int.self, forKey: .foldercount)
+    }
+
+    var id: String { path }
+    static func == (lhs: Folder, rhs: Folder) -> Bool { lhs.path == rhs.path }
+    func hash(into hasher: inout Hasher) { hasher.combine(path) }
+}
+
+struct FolderResponse: Decodable {
+    let folders: [Folder]
+    let tracks: [Track]
+    let path: String?
+}
+
+struct Mix: Decodable, Identifiable, Hashable {
+    let id: String
+    let title: String
+    let sourcehash: String
+    let trackcount: Int?
+    let extra: Extra
+
+    struct Extra: Decodable, Hashable {
+        let type: String?
+        let og_sourcehash: String?
+        let image: MixImageRef?
+        let images: [MixImageRef]?
+    }
+    struct MixImageRef: Decodable, Hashable {
+        let image: String?
+        let color: String?
+    }
+
+    var imageFile: String? { extra.image?.image ?? extra.images?.first?.image }
+
+    var ogSourcehash: String { extra.og_sourcehash ?? sourcehash }
+
+    enum CodingKeys: String, CodingKey { case id, title, sourcehash, trackcount, extra }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let s = try? c.decode(String.self, forKey: .id) { id = s }
+        else { id = String(try c.decode(Int.self, forKey: .id)) }
+        title = (try? c.decode(String.self, forKey: .title)) ?? "Mix"
+        sourcehash = (try? c.decode(String.self, forKey: .sourcehash)) ?? ""
+        trackcount = try? c.decode(Int.self, forKey: .trackcount)
+        extra = (try? c.decode(Extra.self, forKey: .extra)) ?? Extra(type: nil, og_sourcehash: nil, image: nil, images: nil)
+    }
+
+    static func == (lhs: Mix, rhs: Mix) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
+enum HomeItem: Identifiable, Hashable {
+    case album(Album)
+    case artist(Artist)
+    case track(Track)
+    case playlist(Playlist)
+    case mix(Mix)
+
+    var id: String {
+        switch self {
+        case .album(let a): "al:\(a.albumhash)"
+        case .artist(let a): "ar:\(a.artisthash)"
+        case .track(let t): "tr:\(t.trackhash)"
+        case .playlist(let p): "pl:\(p.id)"
+        case .mix(let m): "mix:\(m.id)"
+        }
+    }
+}
+
+struct HomeSection: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let items: [HomeItem]
 }
