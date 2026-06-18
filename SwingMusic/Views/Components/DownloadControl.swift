@@ -3,6 +3,7 @@ import SwiftUI
 struct DownloadControl: View {
     let tracks: [Track]
     var size: CGFloat = 46
+    var group: DownloadManager.DownloadGroup? = nil
     @ObservedObject private var dm = DownloadManager.shared
 
     private var total: Int { tracks.count }
@@ -72,11 +73,11 @@ struct DownloadControl: View {
     private func tap() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         if allDone {
-            for t in tracks { dm.removeDownload(t) }
+            if let group { dm.removeGroup(group) } else { for t in tracks { dm.removeDownload(t) } }
         } else if isActive {
             return
         } else {
-            dm.downloadAll(tracks)
+            dm.downloadAll(tracks, group: group)
         }
     }
 }

@@ -6,25 +6,7 @@ struct ContentView: View {
     @State private var hasTrack = AudioPlayer.shared.current != nil
 
     var body: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                if hasTrack {
-                    tabView
-                        .tabViewBottomAccessory {
-                            NowPlayingAccessory(expanded: $state.showPlayer)
-                        }
-                        .tabBarMinimizeBehavior(.onScrollDown)
-                } else {
-                    tabView
-                }
-            } else {
-                tabView
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        MiniPlayerView(expanded: $state.showPlayer)
-                    }
-            }
-        }
-        .onReceive(AudioPlayer.shared.$current) { hasTrack = ($0 != nil) }
+        nativeTabView
         .fullScreenCover(isPresented: $state.showPlayer, onDismiss: onPlayerDismissed) {
             FullPlayerView(show: $state.showPlayer)
                 .environmentObject(state)
@@ -44,6 +26,27 @@ struct ContentView: View {
             } else {
                 navigateToTarget(target!)
             }
+        }
+        .onReceive(AudioPlayer.shared.$current) { hasTrack = $0 != nil }
+    }
+
+    @ViewBuilder
+    private var nativeTabView: some View {
+        if #available(iOS 26.0, *) {
+            if hasTrack {
+                tabView
+                    .tabBarMinimizeBehavior(.onScrollDown)
+                    .tabViewBottomAccessory {
+                        NowPlayingAccessory(expanded: $state.showPlayer)
+                    }
+            } else {
+                tabView
+            }
+        } else {
+            tabView
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    MiniPlayerView(expanded: $state.showPlayer)
+                }
         }
     }
 

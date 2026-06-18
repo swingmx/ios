@@ -186,7 +186,6 @@ enum AppInfo {
     static var build: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
     }
-
     static var releaseChannel: String? {
         let c = Bundle.main.object(forInfoDictionaryKey: "SMReleaseChannel") as? String
         return (c?.isEmpty == false) ? c : nil

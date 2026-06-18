@@ -4,6 +4,14 @@ struct FavoritesView: View {
     @EnvironmentObject var state: AppState
     @State private var loading = true
 
+    private var breakdown: String {
+        var parts: [String] = []
+        if !state.favTracks.isEmpty { parts.append("\(state.favTracks.count) Tracks") }
+        if !state.favAlbums.isEmpty { parts.append("\(state.favAlbums.count) Albums") }
+        if !state.favArtists.isEmpty { parts.append("\(state.favArtists.count) Artists") }
+        return parts.joined(separator: " • ")
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             if loading && state.favTracks.isEmpty && state.favAlbums.isEmpty && state.favArtists.isEmpty {
@@ -12,7 +20,13 @@ struct FavoritesView: View {
             } else if state.favTracks.isEmpty && state.favAlbums.isEmpty && state.favArtists.isEmpty {
                 emptyState
             } else {
-                VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 40) {
+                    if !breakdown.isEmpty {
+                        Text(breakdown)
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 16)
+                    }
                     if !state.favArtists.isEmpty { artistsSection }
                     if !state.favAlbums.isEmpty { albumsSection }
                     if !state.favTracks.isEmpty { tracksSection }

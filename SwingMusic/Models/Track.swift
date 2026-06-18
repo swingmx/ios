@@ -21,10 +21,41 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
 
     var artist: String { artists?.first?.name ?? "Unknown Artist" }
     var artisthash: String { artisthashes?.first ?? artists?.first?.artisthash ?? "" }
+    var allArtists: String {
+        let names = (artists ?? []).map { $0.name }
+        return names.isEmpty ? "Unknown Artist" : names.joined(separator: ", ")
+    }
 
     var id: String { trackhash }
     static func == (lhs: Track, rhs: Track) -> Bool { lhs.trackhash == rhs.trackhash }
     func hash(into hasher: inout Hasher) { hasher.combine(trackhash) }
+
+    enum CodingKeys: String, CodingKey {
+        case trackhash, title, album, albumhash, duration, filepath, image
+        case trackno = "track"
+        case disc, date, bitrate, genres, artists, albumartists, artisthashes, color, blurhash
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        trackhash = (try? c.decode(String.self, forKey: .trackhash)) ?? ""
+        title = (try? c.decode(String.self, forKey: .title)) ?? ""
+        album = (try? c.decode(String.self, forKey: .album)) ?? ""
+        albumhash = (try? c.decode(String.self, forKey: .albumhash)) ?? ""
+        duration = (try? c.decode(Int.self, forKey: .duration)) ?? 0
+        filepath = (try? c.decode(String.self, forKey: .filepath)) ?? ""
+        image = (try? c.decode(String.self, forKey: .image)) ?? ""
+        trackno = try? c.decode(Int.self, forKey: .trackno)
+        disc = try? c.decode(Int.self, forKey: .disc)
+        date = try? c.decode(Int.self, forKey: .date)
+        bitrate = try? c.decode(Int.self, forKey: .bitrate)
+        genres = try? c.decode([Genre].self, forKey: .genres)
+        artists = try? c.decode([TrackArtist].self, forKey: .artists)
+        albumartists = try? c.decode([TrackArtist].self, forKey: .albumartists)
+        artisthashes = try? c.decode([String].self, forKey: .artisthashes)
+        color = try? c.decode(String.self, forKey: .color)
+        blurhash = try? c.decode(String.self, forKey: .blurhash)
+    }
 }
 
 struct Genre: Codable, Hashable {
@@ -180,6 +211,21 @@ struct SearchResult: Codable {
     let tracks: [Track]?
     let albums: [Album]?
     let artists: [Artist]?
+    let top_result: TopResult?
+}
+
+struct TopResult: Codable, Hashable {
+    let type: String
+    let artisthash: String?
+    let albumhash: String?
+    let trackhash: String?
+    let name: String?
+    let title: String?
+    let image: String?
+    let color: String?
+
+    var displayName: String { name ?? title ?? "" }
+    var subtitle: String { type.capitalized }
 }
 
 struct AuthResponse: Codable {
@@ -289,5 +335,6 @@ enum HomeItem: Identifiable, Hashable {
 struct HomeSection: Identifiable, Hashable {
     let id: String
     let title: String
+    let description: String?
     let items: [HomeItem]
 }

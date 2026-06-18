@@ -79,6 +79,12 @@ struct MixDetailView: View {
                 }
                 .buttonStyle(Pressed())
                 .disabled(tracks.isEmpty)
+
+                if !tracks.isEmpty {
+                    DownloadControl(tracks: tracks, group: DownloadManager.DownloadGroup(
+                        id: "mix:\(mix.id)", kind: .mix, name: mix.title,
+                        image: "", trackHashes: tracks.map { $0.trackhash }))
+                }
             }
             .padding(.top, 4).padding(.bottom, 8)
         }

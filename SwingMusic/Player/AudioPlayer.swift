@@ -456,8 +456,10 @@ final class AudioPlayer: ObservableObject {
     private func log() {
         guard let t = current, let s = started else { return }
         let d = Int(Date().timeIntervalSince(s))
-        let src = source.token
-        if d >= 5 { Task { try? await API.shared.logPlay(hash: t.trackhash, ts: startTS, dur: d, source: src) } }
+
+        if d >= 5 {
+            ScrobbleQueue.shared.record(trackhash: t.trackhash, timestamp: startTS, duration: d, source: source.token)
+        }
         started = nil
     }
 

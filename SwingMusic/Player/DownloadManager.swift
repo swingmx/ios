@@ -8,6 +8,16 @@ final class DownloadManager: ObservableObject {
     @Published var downloads: [String: DownloadState] = [:]
     @Published var downloadedTracks: [Track] = []
     @Published var downloadedHashes: Set<String> = []
+    @Published var downloadGroups: [DownloadGroup] = []
+
+    struct DownloadGroup: Codable, Identifiable, Hashable {
+        enum Kind: String, Codable { case album, playlist, folder, mix }
+        let id: String
+        let kind: Kind
+        let name: String
+        let image: String
+        var trackHashes: [String]
+    }
 
     enum DownloadState: Equatable {
         case queued
@@ -31,8 +41,25 @@ final class DownloadManager: ObservableObject {
         downloadsDir.appendingPathComponent("metadata.json")
     }
 
+    private var groupsURL: URL {
+        downloadsDir.appendingPathComponent("groups.json")
+    }
+
     private init() {
         loadMetadata()
+        loadGroups()
+    }
+
+    var ungroupedTracks: [Track] {
+        let grouped = Set(downloadGroups.flatMap { $0.trackHashes })
+        return downloadedTracks.filter { !grouped.contains($0.trackhash) }
+    }
+
+    func tracks(in group: DownloadGroup) -> [Track] {
+        let order = Dictionary(uniqueKeysWithValues: group.trackHashes.enumerated().map { ($1, $0) })
+        return downloadedTracks
+            .filter { group.trackHashes.contains($0.trackhash) }
+            .sorted { (order[$0.trackhash] ?? 0) < (order[$1.trackhash] ?? 0) }
     }
 
     func isDownloaded(_ track: Track) -> Bool {
@@ -70,10 +97,28 @@ final class DownloadManager: ObservableObject {
         }
     }
 
-    func downloadAll(_ tracks: [Track]) {
+    func downloadAll(_ tracks: [Track], group: DownloadGroup? = nil) {
+        if let group {
+            if let idx = downloadGroups.firstIndex(where: { $0.id == group.id }) {
+                downloadGroups[idx] = group
+            } else {
+                downloadGroups.append(group)
+            }
+            saveGroups()
+        }
         for track in tracks {
             download(track)
         }
+    }
+
+    func removeGroup(_ group: DownloadGroup) {
+        for hash in group.trackHashes {
+            if let t = downloadedTracks.first(where: { $0.trackhash == hash }) {
+                removeDownload(t)
+            }
+        }
+        downloadGroups.removeAll { $0.id == group.id }
+        saveGroups()
     }
 
     func removeDownload(_ track: Track) {
@@ -92,7 +137,9 @@ final class DownloadManager: ObservableObject {
         }
         downloads.removeAll()
         downloadedTracks.removeAll()
+        downloadGroups.removeAll()
         saveMetadata()
+        saveGroups()
     }
 
     var totalSize: String {
@@ -194,6 +241,22 @@ final class DownloadManager: ObservableObject {
 
         for track in downloadedTracks {
             downloads[track.trackhash] = .completed
+        }
+    }
+
+    private func saveGroups() {
+        guard let data = try? JSONEncoder().encode(downloadGroups) else { return }
+        try? data.write(to: groupsURL)
+    }
+
+    private func loadGroups() {
+        guard let data = try? Data(contentsOf: groupsURL),
+              let groups = try? JSONDecoder().decode([DownloadGroup].self, from: data) else { return }
+
+        downloadGroups = groups.compactMap { group in
+            let present = group.trackHashes.filter { downloadedHashes.contains($0) }
+            guard !present.isEmpty else { return nil }
+            return DownloadGroup(id: group.id, kind: group.kind, name: group.name, image: group.image, trackHashes: present)
         }
     }
 }

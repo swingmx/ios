@@ -9,7 +9,7 @@ struct LibraryView: View {
     private let menu: [LibItem] = [.folders, .artists, .albums, .favorites, .downloads]
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $state.libraryPath) {
 
             List {
                 Section {
@@ -73,8 +73,17 @@ struct LibraryView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 100) }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, y in
+                state.updateScroll(-y)
+            }
             .scrollContentBackground(.hidden)
             .background { AmbientBackground() }
+            .refreshable {
+                await state.loadAlbums()
+                await state.loadArtists()
+                await state.loadPlaylists()
+                await state.loadHome()
+            }
             .navigationTitle("Library")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

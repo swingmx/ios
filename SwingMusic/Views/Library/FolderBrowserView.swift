@@ -36,6 +36,15 @@ struct FolderBrowserView: View {
                     }
 
                     if !tracks.isEmpty {
+                        HStack {
+                            Text("\(tracks.count) songs").font(.system(size: 13)).foregroundStyle(.secondary)
+                            Spacer()
+                            DownloadControl(tracks: tracks, size: 32, group: DownloadManager.DownloadGroup(
+                                id: "folder:\(path)", kind: .folder, name: title,
+                                image: tracks.first?.image ?? "", trackHashes: tracks.map { $0.trackhash }))
+                        }
+                        .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 2)
+
                         ForEach(tracks) { t in
                             TrackRow(track: t, active: state.player.current == t) {
                                 state.player.play(t, from: tracks, source: .folder(path))

@@ -44,9 +44,10 @@ struct SearchView: View {
     @State private var searching = false
     @State private var task: Task<Void, Never>?
     @State private var genreImages: [String: String] = GenreImageCache.load()
+    @State private var recents: [RecentSearchItem] = SearchHistory.load()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $state.searchPath) {
             VStack(spacing: 0) {
                 if query.isEmpty && result == nil {
                     idleView
@@ -56,6 +57,7 @@ struct SearchView: View {
                     ScrollView(.vertical, showsIndicators: false) {
                         results(r).padding(.top, 8).padding(.bottom, 100)
                     }
+                    .scrollDismissesKeyboard(.immediately)
                 }
             }
             .background { AmbientBackground() }
@@ -70,18 +72,17 @@ struct SearchView: View {
                     await doSearch(v)
                 }
             }
-            .onSubmit(of: .search) {
-                let q = query.trimmingCharacters(in: .whitespaces)
-                if !q.isEmpty { SearchHistory.add(q) }
-            }
             .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
             .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
+            .onChange(of: state.searchPath) { _, _ in
+
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
         }
     }
 
     private var idleView: some View {
-        let recents = SearchHistory.load()
-        return ScrollView(.vertical, showsIndicators: false) {
+        ScrollView(.vertical, showsIndicators: false) {
             if recents.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
@@ -100,34 +101,63 @@ struct SearchView: View {
                         Text("Recent Searches")
                             .font(.system(size: 20, weight: .bold))
                         Spacer()
-                        Button("Clear") { SearchHistory.clear(); query = "" }
+                        Button("Clear") { SearchHistory.clear(); recents = [] }
                             .font(.system(size: 14))
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 6)
 
-                    ForEach(recents, id: \.self) { term in
-                        Button { query = term } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "clock.arrow.circlepath")
-                                    .font(.system(size: 15))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 24)
-                                Text(term).foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: "arrow.up.left")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                    ForEach(recents) { item in
+                        recentRow(item)
                     }
                 }
                 .padding(.top, 8)
+                .padding(.bottom, 100)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func recentRow(_ item: RecentSearchItem) -> some View {
+        let isArtist = item.kind == .artist
+        let label = HStack(spacing: 12) {
+            Img(url: isArtist ? API.shared.artistImg(item.image, size: "medium")
+                              : API.shared.img(item.image, size: "medium"),
+                radius: isArtist ? 22 : 8)
+                .frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(item.subtitle)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: item.kind == .track ? "play.circle.fill" : "chevron.right")
+                .font(.system(size: item.kind == .track ? 22 : 13, weight: .semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+
+        switch item.kind {
+        case .track:
+            Button {
+                if let t = item.track {
+                    state.player.play(t, from: [t], source: .search(item.title))
+                }
+            } label: { label }
+            .buttonStyle(.plain)
+        case .album:
+            NavigationLink(value: Album(stub: item.hash, title: item.title, image: item.image, date: nil, albumartists: nil)) { label }
+                .buttonStyle(.plain)
+        case .artist:
+            NavigationLink(value: Artist(stub: item.hash, name: item.title, image: item.image)) { label }
+                .buttonStyle(.plain)
         }
     }
 
@@ -204,12 +234,20 @@ struct SearchView: View {
 
     private func results(_ r: SearchResult) -> some View {
         VStack(alignment: .leading, spacing: 28) {
+            if let top = r.top_result, !top.displayName.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Top Result").font(.system(size: 20, weight: .bold)).foregroundStyle(.primary).padding(.horizontal, 16)
+                    topResultCard(top)
+                        .padding(.horizontal, 16)
+                }
+            }
             if let tracks = r.tracks, !tracks.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Songs").font(.system(size: 20, weight: .bold)).foregroundStyle(.primary).padding(.horizontal, 16)
                     VStack(spacing: 0) {
                         ForEach(Array(tracks.prefix(8).enumerated()), id: \.element.id) { _, t in
                             TrackRow(track: t, active: state.player.current == t) {
+                                record(RecentSearchItem(kind: .track, hash: t.trackhash, title: t.title, subtitle: t.artist, image: t.image, track: t))
                                 state.player.play(t, from: tracks, source: .search(query))
                             }
                         }
@@ -224,7 +262,11 @@ struct SearchView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 14) {
                             ForEach(albums.prefix(10)) { a in
-                                NavigationLink(value: a) { AlbumCard(album: a, size: 140) }.buttonStyle(.plain)
+                                NavigationLink(value: a) { AlbumCard(album: a, size: 140) }
+                                    .buttonStyle(.plain)
+                                    .simultaneousGesture(TapGesture().onEnded {
+                                        record(RecentSearchItem(kind: .album, hash: a.albumhash, title: a.title, subtitle: a.artist, image: a.image, track: nil))
+                                    })
                             }
                         }.padding(.horizontal, 16)
                     }
@@ -236,7 +278,11 @@ struct SearchView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 14) {
                             ForEach(artists.prefix(8)) { a in
-                                NavigationLink(value: a) { ArtistCard(artist: a, size: 100) }.buttonStyle(.plain)
+                                NavigationLink(value: a) { ArtistCard(artist: a, size: 100) }
+                                    .buttonStyle(.plain)
+                                    .simultaneousGesture(TapGesture().onEnded {
+                                        record(RecentSearchItem(kind: .artist, hash: a.artisthash, title: a.name, subtitle: "Artist", image: a.image, track: nil))
+                                    })
                             }
                         }.padding(.horizontal, 16)
                     }
@@ -245,10 +291,51 @@ struct SearchView: View {
         }
     }
 
+    @ViewBuilder
+    private func topResultCard(_ top: TopResult) -> some View {
+        let isArtist = top.type == "artist"
+        let card = HStack(spacing: 14) {
+            Img(url: isArtist ? API.shared.artistImg(top.image ?? "", size: "medium")
+                              : API.shared.img(top.image ?? "", size: "medium"),
+                radius: isArtist ? 30 : 10)
+                .frame(width: 60, height: 60)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(top.displayName).font(.system(size: 17, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
+                Text(top.subtitle).font(.system(size: 14)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.tertiary)
+        }
+        .padding(14)
+        .nativeCard(18)
+
+        switch top.type {
+        case "artist":
+            NavigationLink(value: Artist(stub: top.artisthash ?? "", name: top.displayName, image: top.image ?? "")) { card }
+                .buttonStyle(.plain)
+                .simultaneousGesture(TapGesture().onEnded {
+                    record(RecentSearchItem(kind: .artist, hash: top.artisthash ?? "", title: top.displayName, subtitle: "Artist", image: top.image ?? "", track: nil))
+                })
+        case "album":
+            NavigationLink(value: Album(stub: top.albumhash ?? "", title: top.displayName, image: top.image ?? "", date: nil, albumartists: nil)) { card }
+                .buttonStyle(.plain)
+                .simultaneousGesture(TapGesture().onEnded {
+                    record(RecentSearchItem(kind: .album, hash: top.albumhash ?? "", title: top.displayName, subtitle: "Album", image: top.image ?? "", track: nil))
+                })
+        default:
+            card
+        }
+    }
+
     private func doSearch(_ q: String) async {
         searching = true
         result = try? await API.shared.search(q)
         searching = false
+    }
+
+    private func record(_ item: RecentSearchItem) {
+        SearchHistory.add(item)
+        recents = SearchHistory.load()
     }
 }
 
@@ -264,26 +351,38 @@ enum GenreImageCache {
     }
 }
 
+struct RecentSearchItem: Codable, Identifiable, Hashable {
+    enum Kind: String, Codable { case track, album, artist }
+    let kind: Kind
+    let hash: String
+    let title: String
+    let subtitle: String
+    let image: String
+    let track: Track?
+
+    var id: String { kind.rawValue + ":" + hash }
+    static func == (l: RecentSearchItem, r: RecentSearchItem) -> Bool { l.id == r.id }
+    func hash(into h: inout Hasher) { h.combine(id) }
+}
+
 enum SearchHistory {
-    private static let key = "searchHistory"
+    private static let key = "searchHistory.items.v1"
     private static let maxItems = 20
 
-    static func load() -> [String] {
-        UserDefaults.standard.stringArray(forKey: key) ?? []
+    static func load() -> [RecentSearchItem] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let items = try? JSONDecoder().decode([RecentSearchItem].self, from: data) else { return [] }
+        return items
     }
 
-    static func add(_ term: String) {
-        var history = load()
-        history.removeAll { $0.lowercased() == term.lowercased() }
-        history.insert(term, at: 0)
-        if history.count > maxItems { history = Array(history.prefix(maxItems)) }
-        UserDefaults.standard.set(history, forKey: key)
-    }
-
-    static func remove(_ term: String) {
-        var history = load()
-        history.removeAll { $0 == term }
-        UserDefaults.standard.set(history, forKey: key)
+    static func add(_ item: RecentSearchItem) {
+        var items = load()
+        items.removeAll { $0.id == item.id }
+        items.insert(item, at: 0)
+        if items.count > maxItems { items = Array(items.prefix(maxItems)) }
+        if let data = try? JSONEncoder().encode(items) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
     }
 
     static func clear() {

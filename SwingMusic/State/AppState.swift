@@ -167,6 +167,7 @@ final class AppState: ObservableObject {
             guard let key = entry.keys.first,
                   let sec = entry[key] as? [String: Any] else { continue }
             let title = (sec["title"] as? String) ?? key.replacingOccurrences(of: "_", with: " ").capitalized
+            let description = (sec["description"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             let rawItems = (sec["items"] as? [[String: Any]]) ?? []
 
             var items: [HomeItem] = []
@@ -189,7 +190,7 @@ final class AppState: ObservableObject {
                     break
                 }
             }
-            if !items.isEmpty { result.append(HomeSection(id: key, title: title, items: items)) }
+            if !items.isEmpty { result.append(HomeSection(id: key, title: title, description: description, items: items)) }
         }
         homeSections = result
     }

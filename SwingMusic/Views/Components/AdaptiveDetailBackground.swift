@@ -15,14 +15,14 @@ struct AdaptiveDetailBackground: View {
                 (isDark ? Color.black : Color(.systemBackground))
 
                 if let image {
+
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: geo.size.width, height: geo.size.height * (blendHeight + 0.15))
+                        .frame(width: geo.size.width, height: 440)
                         .clipped()
                         .blur(radius: 70, opaque: true)
-                        .opacity(isDark ? 0.7 : 0.22)
-
+                        .opacity(isDark ? 0.6 : 0.2)
                         .mask(
                             LinearGradient(
                                 stops: [

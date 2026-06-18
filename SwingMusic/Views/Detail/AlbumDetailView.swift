@@ -51,9 +51,15 @@ struct AlbumDetailView: View {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
-                Text(d.info.artist)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                Button {
+                    let a = d.info.albumartists?.first
+                    state.navigationTarget = .artist(Artist(stub: a?.artisthash ?? d.info.artisthash, name: a?.name ?? d.info.artist, image: d.info.image))
+                } label: {
+                    Text(d.info.artist)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
                 HStack(spacing: 6) {
                     if let dt = d.info.date { Text(Date(timeIntervalSince1970: TimeInterval(dt)).formatted(.dateTime.year())) }
                     if let tc = d.info.trackcount { Text("·"); Text("\(tc) songs") }
@@ -82,7 +88,9 @@ struct AlbumDetailView: View {
                 }
                 .buttonStyle(Pressed())
 
-                DownloadControl(tracks: d.tracks)
+                DownloadControl(tracks: d.tracks, group: DownloadManager.DownloadGroup(
+                    id: "album:\(hash)", kind: .album, name: d.info.title,
+                    image: d.info.image, trackHashes: d.tracks.map { $0.trackhash }))
             }
             .padding(.top, 4).padding(.bottom, 8)
         }
@@ -97,36 +105,13 @@ struct AlbumDetailView: View {
         }
     }
 
-    @ViewBuilder
     private func trackList(_ d: AlbumDetail) -> some View {
-        let ordered = sortedTracks(d.tracks)
-        let discs = Set(ordered.map { $0.disc ?? 1 }).sorted()
-        VStack(spacing: 0) {
-            if discs.count > 1 {
-                ForEach(discs, id: \.self) { disc in
-                    HStack(spacing: 8) {
-                        Image(systemName: "opticaldisc")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Disc \(disc)")
-                            .font(.system(size: 14, weight: .semibold))
-                        Spacer()
-                    }
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
-                    .padding(.top, disc == discs.first ? 4 : 18)
-                    .padding(.bottom, 4)
 
-                    ForEach(ordered.filter { ($0.disc ?? 1) == disc }) { t in
-                        TrackRow(track: t, num: t.trackno ?? 1, active: state.player.current == t, showArt: false) {
-                            state.player.play(t, from: ordered, source: .album(hash))
-                        }
-                    }
-                }
-            } else {
-                ForEach(Array(ordered.enumerated()), id: \.element.id) { i, t in
-                    TrackRow(track: t, num: t.trackno ?? (i + 1), active: state.player.current == t, showArt: false) {
-                        state.player.play(t, from: ordered, source: .album(hash))
-                    }
+        let ordered = sortedTracks(d.tracks)
+        return VStack(spacing: 0) {
+            ForEach(Array(ordered.enumerated()), id: \.element.id) { i, t in
+                TrackRow(track: t, num: t.trackno ?? (i + 1), active: state.player.current == t, showArt: false) {
+                    state.player.play(t, from: ordered, source: .album(hash))
                 }
             }
         }

@@ -15,82 +15,42 @@ struct HomeView: View {
         case allAlbums, allArtists
     }
 
-    private var isLoading: Bool {
-        state.recentPlayed.isEmpty && state.recentAdded.isEmpty
-            && state.topTracks.isEmpty && state.allPlaylists.isEmpty
-    }
+    @State private var didLoad = false
+
+    private var isLoading: Bool { !didLoad && state.homeSections.isEmpty }
 
     var body: some View {
         NavigationStack(path: $state.homePath) {
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 32) {
-                    Color.clear.frame(height: 0)
-                        .trackScrollOffset(in: "homeScroll") { state.updateScroll($0) }
-
+                LazyVStack(alignment: .leading, spacing: 28) {
                     if isLoading {
                         skeleton
-                    } else if !state.homeSections.isEmpty {
-
-                        if !heroes.isEmpty { heroCarousel }
-                        if !state.topTracks.isEmpty {
-                            section("Top Songs", subtitle: "Your most played this month") { topSongsChart }
-                        }
-                        ForEach(state.homeSections) { serverSection($0) }
-                        if !state.favTracks.isEmpty {
-                            section("Favorites") { favoritesGrid }
-                        }
-
-                        if !state.allArtists.isEmpty {
-                            section("Artists", seeAll: .allArtists) { artistRail }
-                        }
-                        if !state.allPlaylists.isEmpty {
-                            section("Playlists") { playlistRail }
-                        }
+                    } else if state.homeSections.isEmpty {
+                        emptyState
                     } else {
-                        if !heroes.isEmpty {
-                            heroCarousel
-                        }
-                        if !state.recentPlayed.isEmpty {
-                            section("Recently Played") { albumRail(state.recentPlayed) }
-                        }
-                        if !state.topTracks.isEmpty {
-                            section("Top Songs", subtitle: "Your most played this month") {
-                                topSongsChart
-                            }
-                        }
-                        if !state.favTracks.isEmpty {
-                            section("Favorites") { favoritesGrid }
-                        }
-                        if !state.recentAdded.isEmpty {
-                            section("Recently Added", seeAll: .allAlbums) { albumRail(state.recentAdded) }
-                        }
-                        if !state.allArtists.isEmpty {
-                            section("Artists", seeAll: .allArtists) { artistRail }
-                        }
-                        if !state.allPlaylists.isEmpty {
-                            section("Playlists") { playlistRail }
-                        }
+
+                        ForEach(state.homeSections) { serverSection($0) }
                     }
                     Color.clear.frame(height: 100)
                 }
                 .padding(.top, 12)
             }
-            .coordinateSpace(name: "homeScroll")
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, y in
+                state.updateScroll(-y)
+            }
             .background { AmbientBackground() }
             .navigationTitle("Listening Now")
             .refreshable {
                 await state.loadHomeSections()
-                await state.loadHome()
-                await state.loadFavorites()
-                heroes = pickHeroes()
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "person.crop.circle")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.primary)
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("Settings")
                 }
             }
@@ -109,12 +69,8 @@ struct HomeView: View {
             .navigationDestination(for: Mix.self) { MixDetailView(mix: $0) }
         }
         .task {
-            async let sections: Void = state.loadHomeSections()
-            if state.recentAdded.isEmpty { await state.loadHome() }
-            if heroes.isEmpty { heroes = pickHeroes() }
-            async let artists: Void = state.loadArtists()
-            async let favs: Void = state.loadFavorites()
-            _ = await (sections, artists, favs)
+            await state.loadHomeSections()
+            didLoad = true
         }
     }
 
@@ -337,7 +293,7 @@ struct HomeView: View {
 
     @ViewBuilder
     private func serverSection(_ s: HomeSection) -> some View {
-        section(s.title) {
+        section(s.title, subtitle: s.description) {
             ScrollView(.horizontal, showsIndicators: false) {
 
                 LazyHStack(alignment: .top, spacing: 14) {
@@ -349,7 +305,6 @@ struct HomeView: View {
             }
             .scrollTargetBehavior(.viewAligned)
             .contentMargins(.horizontal, 16, for: .scrollContent)
-            .scrollClipDisabled()
         }
     }
 
@@ -361,8 +316,18 @@ struct HomeView: View {
                 .buttonStyle(PressableCardStyle())
                 .contextMenu { albumMenuItems(a) }
         case .artist(let a):
-            NavigationLink(value: a) { ArtistCard(artist: a, size: 110) }
-                .buttonStyle(PressableCardStyle())
+
+            NavigationLink(value: a) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ArtistAvatar(artist: a, size: 150)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(a.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
+                        Text("Artist").font(.system(size: 13)).foregroundStyle(.secondary)
+                    }
+                    .frame(width: 150, alignment: .leading)
+                }
+            }
+            .buttonStyle(PressableCardStyle())
         case .playlist(let pl):
             NavigationLink(value: pl) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -471,14 +436,25 @@ struct HomeView: View {
         .scrollClipDisabled()
     }
 
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "music.note.house")
+                .font(.system(size: 38))
+                .foregroundStyle(.secondary)
+            Text("Nothing here yet")
+                .font(.system(size: 17, weight: .semibold))
+            Text("Pull to refresh once your server has some listening data.")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+        .frame(maxWidth: .infinity, minHeight: 460)
+    }
+
     private var skeleton: some View {
         VStack(alignment: .leading, spacing: 28) {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-                .frame(height: 360)
-                .padding(.horizontal, 24)
-
-            ForEach(0..<2, id: \.self) { _ in
+            ForEach(0..<3, id: \.self) { _ in
                 VStack(alignment: .leading, spacing: 14) {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(Color(.secondarySystemBackground))
