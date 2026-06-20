@@ -15,8 +15,14 @@ enum APIError: Error, LocalizedError {
 
 final class API {
     static let shared = API()
-    private let session = URLSession.shared
-    private init() {}
+    private let session: URLSession
+    private init() {
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = 20
+        cfg.timeoutIntervalForResource = 40
+        cfg.waitsForConnectivity = false
+        session = URLSession(configuration: cfg)
+    }
 
     var base: String {
         get { UserDefaults.standard.string(forKey: "server") ?? "http://localhost:1970" }
@@ -97,7 +103,15 @@ final class API {
 
     func normalizedServer(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let withScheme = (trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://")) ? trimmed : "http://\(trimmed)"
+        var withScheme = trimmed
+        if !(trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://")) {
+            let host = trimmed.split(separator: "/").first.map(String.init) ?? trimmed
+            let hostNoPort = host.split(separator: ":").first.map(String.init) ?? host
+            let isLocal = hostNoPort == "localhost"
+                || hostNoPort.hasSuffix(".local")
+                || hostNoPort.range(of: #"^\d{1,3}(\.\d{1,3}){3}$"#, options: .regularExpression) != nil
+            withScheme = (isLocal ? "http://" : "https://") + trimmed
+        }
         return withScheme.hasSuffix("/") ? String(withScheme.dropLast()) : withScheme
     }
 

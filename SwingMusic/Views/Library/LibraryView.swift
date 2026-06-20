@@ -73,9 +73,6 @@ struct LibraryView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 100) }
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, y in
-                state.updateScroll(-y)
-            }
             .scrollContentBackground(.hidden)
             .background { AmbientBackground() }
             .refreshable {
@@ -90,10 +87,12 @@ struct LibraryView: View {
                     Button {
                         showSettings = true
                     } label: {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "person.crop.circle")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.primary)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Settings")
                 }
             }
             .alert("New Playlist", isPresented: $showingCreateAlert) {

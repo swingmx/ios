@@ -35,9 +35,6 @@ struct HomeView: View {
                 }
                 .padding(.top, 12)
             }
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, y in
-                state.updateScroll(-y)
-            }
             .background { AmbientBackground() }
             .navigationTitle("Listening Now")
             .refreshable {

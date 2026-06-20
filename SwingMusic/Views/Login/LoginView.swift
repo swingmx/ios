@@ -68,12 +68,26 @@ struct LoginView: View {
                         }
                         .frame(height: 28)
                         .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Capsule(style: .continuous))
                         .modifier(BlueLiquidGlassBackground())
                     }
                     .buttonStyle(.plain)
-                    .disabled(loading || server.isEmpty)
+                    .disabled(loading)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+
+                    if let error {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            Text(error)
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
+                    }
                 }
 
                 Section {
@@ -103,9 +117,13 @@ struct LoginView: View {
     }
 
     private func go() async {
+        let trimmed = server.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            withAnimation { error = "Please enter your server address." }
+            return
+        }
         loading = true
         error = nil
-        let trimmed = server.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             try await state.login(server: trimmed, user: user, pass: pass)
         } catch {
@@ -158,7 +176,7 @@ struct LoginView: View {
 private struct BlueLiquidGlassBackground: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.glassEffect(.regular.tint(.blue).interactive(), in: Capsule(style: .continuous))
+            content.glassEffect(.regular.tint(.blue), in: Capsule(style: .continuous))
         } else {
             content
                 .background(Color.blue, in: Capsule(style: .continuous))

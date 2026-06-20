@@ -280,6 +280,14 @@ struct FullPlayerView: View {
             }
     }
 
+    private func artistTapped(_ t: Track) {
+        let hash = t.artisthash
+        guard !hash.isEmpty else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let artist = Artist(stub: hash, name: t.artist, image: t.image)
+        state.navigationTarget = .artist(artist)
+    }
+
     private func albumArtTapped(_ t: Track) {
         if albumArtTapAction == "lyrics" {
             toggleLyrics()
@@ -314,7 +322,12 @@ struct FullPlayerView: View {
             if let t = player.current {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(t.title).font(.system(size: 24, weight: .bold)).foregroundStyle(.white).lineLimit(1)
-                    Text(t.artist).font(.system(size: 18)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                    Button {
+                        artistTapped(t)
+                    } label: {
+                        Text(t.artist).font(.system(size: 18)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer()

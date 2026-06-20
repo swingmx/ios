@@ -115,7 +115,7 @@ final class AppState: ObservableObject {
         }
         Log.info("auth", "Logged in to \(API.shared.base)")
         authed = true
-        await loadHome()
+        Task { await loadHome() }
     }
 
     func loginWithToken(server: String, token: String) async throws {
@@ -124,13 +124,13 @@ final class AppState: ObservableObject {
 
         let _ = try await API.shared.recentlyAdded(1)
         authed = true
-        await loadHome()
+        Task { await loadHome() }
     }
 
     func loginWithPairingCode(server: String, code: String) async throws {
         try await API.shared.loginWithPairingCode(server: server, code: code)
         authed = true
-        await loadHome()
+        Task { await loadHome() }
     }
 
     func logout() {

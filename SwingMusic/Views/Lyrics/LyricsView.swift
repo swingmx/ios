@@ -94,6 +94,12 @@ struct SyncedLyricsView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .id(i)
+                                .onGeometryChange(for: CGFloat.self) { proxy in
+                                    isActive ? proxy.frame(in: .named("lyrics")).midY : .nan
+                                } action: { midY in
+                                    guard isActive, !midY.isNaN else { return }
+                                    reengageIfCentered(midY, geo.size.height)
+                                }
 
                                 .animation(
                                     .spring(response: 0.6, dampingFraction: 1.0)
@@ -114,6 +120,7 @@ struct SyncedLyricsView: View {
                         .frame(width: geo.size.width)
                     }
                     .clipped()
+                    .coordinateSpace(.named("lyrics"))
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 10)
                             .onChanged { _ in
@@ -159,6 +166,15 @@ struct SyncedLyricsView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func reengageIfCentered(_ midY: CGFloat, _ height: CGFloat) {
+        guard userScrolledAway else { return }
+        let focus = height * 0.35
+        if abs(midY - focus) < height * 0.15 {
+            autoScrollEnabled = true
+            userScrolledAway = false
         }
     }
 

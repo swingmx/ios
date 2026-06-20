@@ -32,6 +32,13 @@
         </array>
         <key>UIRequiresFullScreen</key>
         <true/>
+        <key>NSAppTransportSecurity</key>
+        <dict>
+                <key>NSAllowsArbitraryLoads</key>
+                <true/>
+                <key>NSAllowsLocalNetworking</key>
+                <true/>
+        </dict>
         <key>NSCameraUsageDescription</key>
         <string>Access is required to scan the SwingMusic QR pairing codes for instant login.</string>
         <key>NSAppleMusicUsageDescription</key>
