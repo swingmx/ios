@@ -33,6 +33,7 @@ struct AlbumsGridView: View {
             }
             .padding(.horizontal, 16).padding(.bottom, 100)
         }
+        .squeezeMiniPlayer(state)
         .background { AmbientBackground() }
         .navigationTitle("Albums")
         .toolbar { sortMenu }
@@ -86,6 +87,7 @@ struct ArtistsGridView: View {
             }
             .padding(.horizontal, 16).padding(.bottom, 100)
         }
+        .squeezeMiniPlayer(state)
         .background { AmbientBackground() }
         .navigationTitle("Artists")
         .toolbar { sortMenu }
@@ -113,18 +115,86 @@ struct FavoriteTracksView: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 ForEach(Array(state.favTracks.enumerated()), id: \.element.id) { i, t in
                     TrackRow(track: t, num: i + 1, active: state.player.current == t) {
                         state.player.play(t, from: state.favTracks, source: .favorite)
                     }
+
+                    .onAppear {
+                        if i >= state.favTracks.count - 5 {
+                            Task { await state.loadMoreFavoriteTracks() }
+                        }
+                    }
+                }
+                if state.favTracks.count < state.favTracksTotal {
+                    ProgressView().tint(.secondary).frame(maxWidth: .infinity).padding(.vertical, 20)
                 }
             }
             .padding(.bottom, 100)
         }
+        .squeezeMiniPlayer(state)
         .background { AmbientBackground() }
         .navigationTitle("Songs")
-                .task { await state.loadFavorites() }
+        .task { if state.favTracks.isEmpty { await state.loadFavorites() } }
+    }
+}
+
+struct FavoriteAlbumsGridView: View {
+    @EnvironmentObject var state: AppState
+    private let cols = [GridItem(.adaptive(minimum: 150), spacing: 14)]
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVGrid(columns: cols, spacing: 18) {
+                ForEach(Array(state.favAlbums.enumerated()), id: \.element.id) { i, a in
+                    NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
+                        .buttonStyle(.plain)
+                        .onAppear {
+                            if i >= state.favAlbums.count - 4 {
+                                Task { await state.loadMoreFavoriteAlbums() }
+                            }
+                        }
+                }
+            }
+            .padding(.horizontal, 16).padding(.bottom, 100)
+            if state.favAlbums.count < state.favAlbumsTotal {
+                ProgressView().tint(.secondary).padding(.vertical, 20)
+            }
+        }
+        .squeezeMiniPlayer(state)
+        .background { AmbientBackground() }
+        .navigationTitle("Favorite Albums")
+        .task { if state.favAlbums.isEmpty { await state.loadFavorites() } }
+    }
+}
+
+struct FavoriteArtistsGridView: View {
+    @EnvironmentObject var state: AppState
+    private let cols = [GridItem(.adaptive(minimum: 120), spacing: 14)]
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVGrid(columns: cols, spacing: 18) {
+                ForEach(Array(state.favArtists.enumerated()), id: \.element.id) { i, a in
+                    NavigationLink(value: a) { ArtistCard(artist: a, size: 110) }
+                        .buttonStyle(.plain)
+                        .onAppear {
+                            if i >= state.favArtists.count - 4 {
+                                Task { await state.loadMoreFavoriteArtists() }
+                            }
+                        }
+                }
+            }
+            .padding(.horizontal, 16).padding(.bottom, 100)
+            if state.favArtists.count < state.favArtistsTotal {
+                ProgressView().tint(.secondary).padding(.vertical, 20)
+            }
+        }
+        .squeezeMiniPlayer(state)
+        .background { AmbientBackground() }
+        .navigationTitle("Favorite Artists")
+        .task { if state.favArtists.isEmpty { await state.loadFavorites() } }
     }
 }
 
@@ -141,6 +211,7 @@ struct RecentlyAddedView: View {
             }
             .padding(.horizontal, 16).padding(.bottom, 100)
         }
+        .squeezeMiniPlayer(state)
         .background { AmbientBackground() }
         .navigationTitle("Recently Added")
             }

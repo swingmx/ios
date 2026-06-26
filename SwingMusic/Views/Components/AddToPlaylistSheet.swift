@@ -28,13 +28,13 @@ struct AddToPlaylistSheet: View {
                             Spacer()
                         }
                     }
-                    .listRowBackground(Color.white.opacity(0.08))
+                    .listRowBackground(Color.primary.opacity(0.08))
                 }
 
                 Section {
                     if state.allPlaylists.isEmpty {
                         Text("No playlists yet")
-                            .foregroundStyle(.white.opacity(0.3))
+                            .foregroundStyle(.primary.opacity(0.3))
                             .font(.system(size: 14))
                             .padding(.vertical, 20)
                     } else {
@@ -51,7 +51,7 @@ struct AddToPlaylistSheet: View {
                                 AddToPlaylistRow(playlist: pl)
                             }
                             .buttonStyle(.plain)
-                            .listRowBackground(Color.white.opacity(0.03))
+                            .listRowBackground(Color.primary.opacity(0.03))
                         }
                     }
                 } header: {
@@ -60,8 +60,6 @@ struct AddToPlaylistSheet: View {
             }
             .navigationTitle("Add to Playlist")
             .navigationBarTitleDisplayMode(.inline)
-            .background(Color.black.ignoresSafeArea())
-            .preferredColorScheme(.dark)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
@@ -94,12 +92,12 @@ struct AddToPlaylistRow: View {
             PlaylistImageGrid(playlist: playlist, size: 32)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(playlist.name).font(.system(size: 16, weight: .medium)).foregroundStyle(.white)
-                Text("\(playlist.trackcount) songs").font(.system(size: 13, weight: .regular)).foregroundStyle(.white.opacity(0.3))
+                Text(playlist.name).font(.system(size: 16, weight: .medium)).foregroundStyle(.primary)
+                Text("\(playlist.trackcount) songs").font(.system(size: 13, weight: .regular)).foregroundStyle(.primary.opacity(0.3))
             }
 
             Spacer()
-            Image(systemName: "plus.circle").font(.system(size: 18)).foregroundStyle(.white.opacity(0.15))
+            Image(systemName: "plus.circle").font(.system(size: 18)).foregroundStyle(.primary.opacity(0.15))
         }
         .padding(.vertical, 8)
         .contentShape(Rectangle())

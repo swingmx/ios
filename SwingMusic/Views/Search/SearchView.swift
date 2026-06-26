@@ -58,8 +58,11 @@ struct SearchView: View {
                         results(r).padding(.top, 8).padding(.bottom, 100)
                     }
                     .scrollDismissesKeyboard(.immediately)
+                    .squeezeMiniPlayer(state)
                 }
             }
+
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background { AmbientBackground() }
             .navigationTitle("Search")
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Songs, Albums, Artists")
@@ -115,6 +118,7 @@ struct SearchView: View {
                 .padding(.bottom, 100)
             }
         }
+        .squeezeMiniPlayer(state)
     }
 
     @ViewBuilder
@@ -147,6 +151,7 @@ struct SearchView: View {
         switch item.kind {
         case .track:
             Button {
+                dismissKeyboard()
                 if let t = item.track {
                     state.player.play(t, from: [t], source: .search(item.title))
                 }
@@ -155,9 +160,11 @@ struct SearchView: View {
         case .album:
             NavigationLink(value: Album(stub: item.hash, title: item.title, image: item.image, date: nil, albumartists: nil)) { label }
                 .buttonStyle(.plain)
+                .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
         case .artist:
             NavigationLink(value: Artist(stub: item.hash, name: item.title, image: item.image)) { label }
                 .buttonStyle(.plain)
+                .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
         }
     }
 
@@ -323,7 +330,14 @@ struct SearchView: View {
                     record(RecentSearchItem(kind: .album, hash: top.albumhash ?? "", title: top.displayName, subtitle: "Album", image: top.image ?? "", track: nil))
                 })
         default:
-            card
+
+            Button {
+                let tracks = result?.tracks ?? []
+                guard let t = tracks.first(where: { $0.trackhash == top.trackhash }) ?? tracks.first else { return }
+                record(RecentSearchItem(kind: .track, hash: t.trackhash, title: t.title, subtitle: t.artist, image: t.image, track: t))
+                state.player.play(t, from: tracks, source: .search(query))
+            } label: { card }
+            .buttonStyle(.plain)
         }
     }
 
@@ -336,6 +350,15 @@ struct SearchView: View {
     private func record(_ item: RecentSearchItem) {
         SearchHistory.add(item)
         recents = SearchHistory.load()
+        dismissKeyboard()
+    }
+
+    private func dismissKeyboard() {
+
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .forEach { $0.endEditing(true) }
     }
 }
 

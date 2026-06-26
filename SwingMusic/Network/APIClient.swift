@@ -71,6 +71,19 @@ final class API {
         return try await exec(r)
     }
 
+    func getData(_ path: String, q: [String: String] = [:]) async throws -> Data {
+        var c = URLComponents(string: base + path)!
+        if !q.isEmpty { c.queryItems = q.map { URLQueryItem(name: $0.key, value: $0.value) } }
+        var r = URLRequest(url: c.url!)
+        auth(&r)
+        let (data, resp) = try await session.data(for: r)
+        if let h = resp as? HTTPURLResponse {
+            if h.statusCode == 401 { throw APIError.unauthorized }
+            if h.statusCode >= 400 { throw APIError.server(h.statusCode) }
+        }
+        return data
+    }
+
     func post<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
         var r = URLRequest(url: URL(string: base + path)!)
         r.httpMethod = "POST"

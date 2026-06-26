@@ -24,10 +24,11 @@ struct AlbumDetailView: View {
                     Color.clear.frame(height: 100)
                 }
             } else {
-                VStack { Spacer(); ProgressView().tint(.white); Spacer() }
+                VStack { Spacer(); ProgressView().tint(.secondary); Spacer() }
                     .frame(minHeight: 400)
             }
         }
+        .squeezeMiniPlayer(state)
         .background { AdaptiveDetailBackground(image: bgImage) }
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
@@ -72,19 +73,19 @@ struct AlbumDetailView: View {
                 Button { state.player.playAll(sortedTracks(d.tracks), source: .album(hash)) } label: {
                     Label("Play", systemImage: "play.fill")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity).frame(height: 46)
-                        .background(.white, in: Capsule())
+                        .background(Color.primary, in: Capsule())
                 }
                 .buttonStyle(Pressed())
 
                 Button { state.player.playAll(sortedTracks(d.tracks), shuffled: true, source: .album(hash)) } label: {
                     Label("Shuffle", systemImage: "shuffle")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity).frame(height: 46)
                         .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
+                        .overlay(Capsule().strokeBorder(.primary.opacity(0.12), lineWidth: 0.5))
                 }
                 .buttonStyle(Pressed())
 
@@ -108,8 +109,25 @@ struct AlbumDetailView: View {
     private func trackList(_ d: AlbumDetail) -> some View {
 
         let ordered = sortedTracks(d.tracks)
+        let discs = Set(ordered.map { $0.disc ?? 1 })
+        let multiDisc = discs.count > 1
         return VStack(spacing: 0) {
             ForEach(Array(ordered.enumerated()), id: \.element.id) { i, t in
+                let disc = t.disc ?? 1
+                let isFirstOfDisc = i == 0 || (ordered[i - 1].disc ?? 1) != disc
+                if multiDisc && isFirstOfDisc {
+                    HStack(spacing: 8) {
+                        Image(systemName: "opticaldisc")
+                            .font(.system(size: 13))
+                        Text("Disc \(disc)")
+                            .font(.system(size: 14, weight: .semibold))
+                        Spacer()
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 20)
+                    .padding(.top, i == 0 ? 8 : 24)
+                    .padding(.bottom, 8)
+                }
                 TrackRow(track: t, num: t.trackno ?? (i + 1), active: state.player.current == t, showArt: false) {
                     state.player.play(t, from: ordered, source: .album(hash))
                 }

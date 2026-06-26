@@ -202,6 +202,48 @@ struct AlbumsResponse: Codable {
     let total: Int
 }
 
+struct FavoritesSummary: Decodable {
+    struct Count: Decodable {
+        let tracks: Int
+        let albums: Int
+        let artists: Int
+    }
+    let count: Count
+}
+
+struct FavoriteTracksPage: Decodable {
+    let tracks: [Track]
+    let total: Int
+    enum CodingKeys: String, CodingKey { case tracks, total }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tracks = (try? c.decode([Track].self, forKey: .tracks)) ?? []
+        total = (try? c.decode(Int.self, forKey: .total)) ?? tracks.count
+    }
+}
+
+struct FavoriteAlbumsPage: Decodable {
+    let albums: [Album]
+    let total: Int
+    enum CodingKeys: String, CodingKey { case albums, total }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        albums = (try? c.decode([Album].self, forKey: .albums)) ?? []
+        total = (try? c.decode(Int.self, forKey: .total)) ?? albums.count
+    }
+}
+
+struct FavoriteArtistsPage: Decodable {
+    let artists: [Artist]
+    let total: Int
+    enum CodingKeys: String, CodingKey { case artists, total }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        artists = (try? c.decode([Artist].self, forKey: .artists)) ?? []
+        total = (try? c.decode(Int.self, forKey: .total)) ?? artists.count
+    }
+}
+
 struct ArtistsResponse: Codable {
     let items: [Artist]
     let total: Int

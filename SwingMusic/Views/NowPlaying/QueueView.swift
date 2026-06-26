@@ -37,6 +37,11 @@ struct QueueView: View {
 
                         HStack(spacing: editMode == .active ? 12 : 0) {
                             QueueRow(track: player.queue[i], active: false)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    guard editMode != .active else { return }
+                                    player.jump(to: i)
+                                }
 
                             Button {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -72,6 +77,8 @@ struct QueueView: View {
             .navigationBarTitleDisplayMode(.inline)
 
             .environment(\.editMode, $editMode)
+
+            .environment(\.colorScheme, .dark)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(editMode == .active ? "Done" : "Edit") {

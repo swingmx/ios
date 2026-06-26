@@ -19,7 +19,7 @@ struct MixDetailView: View {
             VStack(spacing: 0) {
                 header
                 if loading && tracks.isEmpty {
-                    ProgressView().tint(.white).frame(maxWidth: .infinity, minHeight: 200)
+                    ProgressView().tint(.secondary).frame(maxWidth: .infinity, minHeight: 200)
                 } else {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
                         TrackRow(track: t, num: i + 1, active: state.player.current == t) {
@@ -30,6 +30,7 @@ struct MixDetailView: View {
                 Color.clear.frame(height: 100)
             }
         }
+        .squeezeMiniPlayer(state)
         .background { AdaptiveDetailBackground(image: bgImage) }
         .navigationTitle(mix.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -62,9 +63,9 @@ struct MixDetailView: View {
                 Button { state.player.playAll(tracks, source: source) } label: {
                     Label("Play", systemImage: "play.fill")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.black)
+                        .foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity).frame(height: 46)
-                        .background(.white, in: Capsule())
+                        .background(Color.primary, in: Capsule())
                 }
                 .buttonStyle(Pressed())
                 .disabled(tracks.isEmpty)
@@ -72,10 +73,10 @@ struct MixDetailView: View {
                 Button { state.player.playAll(tracks, shuffled: true, source: source) } label: {
                     Label("Shuffle", systemImage: "shuffle")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity).frame(height: 46)
                         .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
+                        .overlay(Capsule().strokeBorder(.primary.opacity(0.12), lineWidth: 0.5))
                 }
                 .buttonStyle(Pressed())
                 .disabled(tracks.isEmpty)

@@ -35,6 +35,7 @@ struct HomeView: View {
                 }
                 .padding(.top, 12)
             }
+            .squeezeMiniPlayer(state)
             .background { AmbientBackground() }
             .navigationTitle("Listening Now")
             .refreshable {
@@ -294,7 +295,8 @@ struct HomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
 
                 LazyHStack(alignment: .top, spacing: 14) {
-                    ForEach(s.items) { item in
+
+                    ForEach(Array(s.items.enumerated()), id: \.offset) { _, item in
                         homeItemCard(item)
                     }
                 }

@@ -92,7 +92,7 @@ struct TrackRow: View {
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
-        .background(active ? .white.opacity(0.05) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(active ? Color.primary.opacity(0.06) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onSwipeRight {
             AudioPlayer.shared.addLast(track)
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()

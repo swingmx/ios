@@ -7,8 +7,8 @@ struct LyricsView: View {
         ZStack {
             if state.loadingLyrics {
                 VStack(spacing: 14) {
-                    ProgressView().tint(.white)
-                    Text("Loading lyrics...").font(.system(size: 14)).foregroundStyle(.white.opacity(0.3))
+                    ProgressView().tint(.secondary)
+                    Text("Loading lyrics...").font(.system(size: 14)).foregroundStyle(.primary.opacity(0.3))
                 }
             } else if let lyrics = state.lyrics, !lyrics.lines.isEmpty {
                 if lyrics.synced {
@@ -20,9 +20,9 @@ struct LyricsView: View {
                 VStack(spacing: 20) {
                     VStack(spacing: 12) {
                         Image(systemName: "music.note")
-                            .font(.system(size: 32)).foregroundStyle(.white.opacity(0.1))
+                            .font(.system(size: 32)).foregroundStyle(.primary.opacity(0.1))
                         Text("No lyrics available")
-                            .font(.system(size: 15, weight: .medium)).foregroundStyle(.white.opacity(0.2))
+                            .font(.system(size: 15, weight: .medium)).foregroundStyle(.primary.opacity(0.2))
                     }
 
                     Button {
@@ -33,10 +33,10 @@ struct LyricsView: View {
                             Text("Search on Server")
                         }
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(.primary.opacity(0.8))
                         .padding(.vertical, 10)
                         .padding(.horizontal, 20)
-                        .background(.white.opacity(0.08))
+                        .background(.primary.opacity(0.08))
                         .clipShape(Capsule())
                     }
                 }
@@ -110,7 +110,7 @@ struct SyncedLyricsView: View {
 
                             if let cr = lyrics.copyright, !cr.isEmpty {
                                 Text(cr)
-                                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.12))
+                                    .font(.system(size: 11)).foregroundStyle(.primary.opacity(0.12))
                                     .multilineTextAlignment(.center)
                                     .padding(.top, 32).padding(.horizontal, 24)
                             }
@@ -150,7 +150,7 @@ struct SyncedLyricsView: View {
                                 Text("Back to Now")
                             }
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                             .padding(.vertical, 14)
                             .padding(.horizontal, 22)
                             .modifier(AccentLiquidGlassBackground())
@@ -205,7 +205,7 @@ struct SyncedLyricsView: View {
             .fixedSize(horizontal: false, vertical: true)
         } else {
             Text(line.text)
-                .foregroundStyle(isActive ? .white : .white.opacity(isPast ? 0.35 : 0.3))
+                .foregroundStyle(isActive ? Color.primary : Color.primary.opacity(isPast ? 0.35 : 0.3))
                 .blur(radius: isActive ? 0 : (isPast ? 0 : 1.2))
                 .lineLimit(nil)
                 .multilineTextAlignment(isBg ? .trailing : .leading)
@@ -246,7 +246,7 @@ struct KaraokeWord: View {
             } else {
 
                 Text(text)
-                    .foregroundStyle(Color.white.opacity(isPast ? 0.35 : 0.3))
+                    .foregroundStyle(Color.primary.opacity(isPast ? 0.35 : 0.3))
             }
         }
         .padding(.trailing, hasSpace ? (isBg ? 6 : 8) : 0)
@@ -254,10 +254,10 @@ struct KaraokeWord: View {
 
     private func plainWord(fill: Double) -> some View {
         Text(text)
-            .foregroundStyle(Color.white.opacity(0.28))
+            .foregroundStyle(Color.primary.opacity(0.28))
             .overlay {
                 Text(text)
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(Color.primary)
                     .mask { fillGradient(fill) }
             }
     }
@@ -288,8 +288,8 @@ struct KaraokeWord: View {
                 let b = max(0, 1 - x * x)
                 let s = b * amount
                 Text(String(chars[i]))
-                    .foregroundStyle(bright ? Color.white : Color.white.opacity(0.28))
-                    .shadow(color: bright ? Color.white.opacity(0.5 * s) : .clear,
+                    .foregroundStyle(bright ? Color.primary : Color.primary.opacity(0.28))
+                    .shadow(color: bright ? Color.primary.opacity(0.5 * s) : .clear,
                             radius: bright ? 6 * s : 0)
                     .scaleEffect(1 + 0.1 * s, anchor: .bottom)
                     .offset(y: -0.07 * fontSize * s)
@@ -412,12 +412,12 @@ struct StaticLyricsView: View {
                     } else {
                         Text(line.text)
                             .font(.system(size: 19, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.primary.opacity(0.7))
                             .lineSpacing(8)
                     }
                 }
                 if let cr = lyrics.copyright, !cr.isEmpty {
-                    Text(cr).font(.system(size: 11)).foregroundStyle(.white.opacity(0.12))
+                    Text(cr).font(.system(size: 11)).foregroundStyle(.primary.opacity(0.12))
                         .padding(.top, 24)
                 }
                 Spacer(minLength: 40)
@@ -436,7 +436,7 @@ private struct AccentLiquidGlassBackground: ViewModifier {
                 .background(.ultraThinMaterial, in: Capsule(style: .continuous))
                 .overlay(
                     Capsule(style: .continuous)
-                        .strokeBorder(.white.opacity(0.25), lineWidth: 0.6)
+                        .strokeBorder(.primary.opacity(0.25), lineWidth: 0.6)
                 )
         }
     }

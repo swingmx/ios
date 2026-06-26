@@ -12,7 +12,7 @@ struct FolderBrowserView: View {
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             if loading {
-                VStack { Spacer(); ProgressView().tint(.white); Spacer() }
+                VStack { Spacer(); ProgressView().tint(.secondary); Spacer() }
                     .frame(minHeight: 400)
             } else if folders.isEmpty && tracks.isEmpty {
                 VStack(spacing: 10) {
@@ -56,6 +56,7 @@ struct FolderBrowserView: View {
                 .padding(.top, 6)
             }
         }
+        .squeezeMiniPlayer(state)
         .background { AmbientBackground() }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)

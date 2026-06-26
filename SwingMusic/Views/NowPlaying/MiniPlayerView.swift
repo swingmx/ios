@@ -3,9 +3,10 @@ import SwiftUI
 struct MiniPlayerView: View {
     @EnvironmentObject var state: AppState
     @ObservedObject var player = AudioPlayer.shared
+    @ObservedObject var scroll = ScrollTracker.shared
     @Binding var expanded: Bool
 
-    private var compact: Bool { state.scrollingDown && state.scrollOffset < -60 }
+    private var compact: Bool { scroll.down && scroll.offset < -60 }
 
     var body: some View {
         if player.current != nil && !state.keyboardVisible {

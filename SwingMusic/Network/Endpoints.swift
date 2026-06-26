@@ -56,16 +56,17 @@ extension API {
     }
 
     func playlists() async throws -> [Playlist] {
-        struct R1: Decodable { let playlists: [Playlist] }
-        struct R2: Decodable { let items: [Playlist] }
-        struct R3: Decodable { let data: [Playlist] }
 
-        if let r = try? await (get("/playlists") as R1) { return r.playlists }
-        if let r = try? await (get("/playlists") as R2) { return r.items }
-        if let r = try? await (get("/playlists") as R3) { return r.data }
+        struct RData: Decodable { let data: [Playlist] }
+        struct RPlaylists: Decodable { let playlists: [Playlist] }
+        struct RItems: Decodable { let items: [Playlist] }
 
-        if let direct = try? await (get("/playlists") as [Playlist]) { return direct }
-
+        let body = try await API.shared.getData("/playlists")
+        let dec = JSONDecoder()
+        if let r = try? dec.decode(RData.self, from: body) { return r.data }
+        if let r = try? dec.decode(RPlaylists.self, from: body) { return r.playlists }
+        if let r = try? dec.decode(RItems.self, from: body) { return r.items }
+        if let direct = try? dec.decode([Playlist].self, from: body) { return direct }
         return []
     }
 
@@ -169,19 +170,20 @@ extension API {
         let _: E = try await post("/logger/track/log", body: B(trackhash: hash, timestamp: ts, duration: dur, source: source))
     }
 
-    func favoriteTracks() async throws -> [Track] {
-        struct R: Decodable { let tracks: [Track] }
-        return try await (get("/favorites/tracks", q: ["limit": "200"]) as R).tracks
+    func favoritesSummary() async throws -> FavoritesSummary {
+        try await get("/favorites", q: ["track_limit": "1", "album_limit": "1", "artist_limit": "1"])
     }
 
-    func favoriteAlbums() async throws -> [Album] {
-        struct R: Decodable { let albums: [Album] }
-        return try await (get("/favorites/albums", q: ["limit": "100"]) as R).albums
+    func favoriteTracks(start: Int = 0, limit: Int = 50) async throws -> FavoriteTracksPage {
+        try await get("/favorites/tracks", q: ["start": "\(start)", "limit": "\(limit)"])
     }
 
-    func favoriteArtists() async throws -> [Artist] {
-        struct R: Decodable { let artists: [Artist] }
-        return try await (get("/favorites/artists", q: ["limit": "100"]) as R).artists
+    func favoriteAlbums(start: Int = 0, limit: Int = 50) async throws -> FavoriteAlbumsPage {
+        try await get("/favorites/albums", q: ["start": "\(start)", "limit": "\(limit)"])
+    }
+
+    func favoriteArtists(start: Int = 0, limit: Int = 50) async throws -> FavoriteArtistsPage {
+        try await get("/favorites/artists", q: ["start": "\(start)", "limit": "\(limit)"])
     }
 
     func folder(_ path: String, limit: Int = 500) async throws -> FolderResponse {

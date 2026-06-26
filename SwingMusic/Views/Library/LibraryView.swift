@@ -12,6 +12,24 @@ struct LibraryView: View {
         NavigationStack(path: $state.libraryPath) {
 
             List {
+
+                Section {
+                    Button {
+                        Task { await state.shuffleLibrary() }
+                    } label: {
+                        HStack {
+                            Image(systemName: "shuffle")
+                                .foregroundStyle(.blue)
+                                .frame(width: 28)
+                            Text("Shuffle Library")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if state.shufflingLibrary { ProgressView() }
+                        }
+                    }
+                    .disabled(state.shufflingLibrary)
+                }
+
                 Section {
                     ForEach(menu) { item in
                         NavigationLink(value: item) {
@@ -59,7 +77,7 @@ struct LibraryView: View {
                     Section(header: Text("Recently Added")) {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 14) {
-                                ForEach(state.recentAdded) { a in
+                                ForEach(Array(state.recentAdded.enumerated()), id: \.offset) { _, a in
                                     NavigationLink(value: a) { AlbumCard(album: a, size: 130) }
                                         .buttonStyle(.plain)
                                 }
@@ -73,7 +91,10 @@ struct LibraryView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 100) }
+
+            .listRowBackground(Color(.secondarySystemGroupedBackground))
             .scrollContentBackground(.hidden)
+            .squeezeMiniPlayer(state)
             .background { AmbientBackground() }
             .refreshable {
                 await state.loadAlbums()
@@ -155,10 +176,10 @@ struct PlaylistsListView: View {
                             PlaylistImageGrid(playlist: pl, size: 48)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(pl.name).font(.system(size: 16)).foregroundStyle(.primary)
-                                Text("\(pl.trackcount) songs").font(.system(size: 13)).foregroundStyle(.white.opacity(0.3))
+                                Text("\(pl.trackcount) songs").font(.system(size: 13)).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.15))
+                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.tertiary)
                         }
                         .padding(.horizontal, 16).padding(.vertical, 10)
                     }
@@ -167,6 +188,7 @@ struct PlaylistsListView: View {
             }
             .padding(.bottom, 100)
         }
+        .squeezeMiniPlayer(state)
         .background { AmbientBackground() }
         .navigationTitle("Playlists")
                 .toolbar {

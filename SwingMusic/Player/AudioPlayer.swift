@@ -187,6 +187,33 @@ final class AudioPlayer: ObservableObject {
         }
     }
 
+    func jump(to i: Int) {
+        guard queue.indices.contains(i) else { return }
+        log()
+        index = i
+        current = queue[i]
+        load(queue[i])
+    }
+
+    func toggleShuffle() {
+        shuffle.toggle()
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    func cycleLoop() {
+        switch loop {
+        case .off: loop = .all
+        case .all: loop = .one
+        case .one: loop = .off
+        }
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    func appendToQueue(_ tracks: [Track]) {
+        guard !tracks.isEmpty else { return }
+        queue.append(contentsOf: tracks)
+    }
+
     func next() {
         guard !queue.isEmpty else { return }
         if loop == .one { seek(0); player?.play(); return }
@@ -305,6 +332,8 @@ final class AudioPlayer: ObservableObject {
         let item = AVPlayerItem(asset: asset)
         player = AVPlayer(playerItem: item)
         player?.volume = volume
+
+        player?.allowsExternalPlayback = false
 
         NotificationCenter.default.addObserver(self, selector: #selector(ended), name: .AVPlayerItemDidPlayToEndTime, object: item)
         setupTimeObserver()

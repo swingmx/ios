@@ -24,7 +24,7 @@ struct DownloadsView: View {
                                 }
                             }
                             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.06), lineWidth: 0.5))
+                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.primary.opacity(0.06), lineWidth: 0.5))
                             .padding(.horizontal, 16)
                         }
 
@@ -52,8 +52,11 @@ struct DownloadsView: View {
                     }
                     .padding(.bottom, 100)
                 }
+                .squeezeMiniPlayer(state)
             }
         }
+
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { AmbientBackground() }
         .navigationTitle("Downloads")
         .navigationDestination(for: DownloadManager.DownloadGroup.self) { DownloadedGroupView(group: $0) }
@@ -88,7 +91,7 @@ struct DownloadsView: View {
         HStack(spacing: 14) {
             ZStack {
                 if group.image.isEmpty {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.primary.opacity(0.08))
                         .frame(width: 44, height: 44)
                     Image(systemName: icon(group.kind)).font(.system(size: 18)).foregroundStyle(.blue)
                 } else {
@@ -144,14 +147,14 @@ struct DownloadedGroupView: View {
                 HStack(spacing: 12) {
                     Button { state.player.playAll(tracks) } label: {
                         Label("Play", systemImage: "play.fill")
-                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(Color(.systemBackground))
                             .frame(maxWidth: .infinity).frame(height: 46)
-                            .background(.white, in: Capsule())
+                            .background(Color.primary, in: Capsule())
                     }
                     .buttonStyle(Pressed())
                     Button { state.player.playAll(tracks, shuffled: true) } label: {
                         Label("Shuffle", systemImage: "shuffle")
-                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary)
                             .frame(maxWidth: .infinity).frame(height: 46)
                             .background(.ultraThinMaterial, in: Capsule())
                     }
@@ -167,6 +170,7 @@ struct DownloadedGroupView: View {
                 Color.clear.frame(height: 100)
             }
         }
+        .squeezeMiniPlayer(state)
         .background { AmbientBackground() }
         .navigationTitle(group.name)
         .navigationBarTitleDisplayMode(.inline)

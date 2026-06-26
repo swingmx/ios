@@ -33,11 +33,12 @@ struct ArtistDetailView: View {
                     Color.clear.frame(height: 110)
                 }
             } else {
-                ProgressView().tint(.white)
+                ProgressView().tint(.secondary)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 420)
             }
         }
+        .squeezeMiniPlayer(state)
         .background { AdaptiveDetailBackground(image: bgImage) }
         .navigationBarTitleDisplayMode(.inline)
                 .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
@@ -56,7 +57,7 @@ struct ArtistDetailView: View {
 
                 Text(d.artist.name)
                     .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
 
@@ -76,19 +77,19 @@ struct ArtistDetailView: View {
                     Button { state.player.playAll(d.tracks, source: .artist(hash)) } label: {
                         Label("Play", systemImage: "play.fill")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.black)
+                            .foregroundStyle(Color(.systemBackground))
                             .frame(width: 150, height: 46)
-                            .background(.white, in: Capsule())
+                            .background(Color.primary, in: Capsule())
                     }
                     .buttonStyle(Pressed())
 
                     Button { state.player.playAll(d.tracks, shuffled: true, source: .artist(hash)) } label: {
                         Label("Shuffle", systemImage: "shuffle")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                             .frame(width: 150, height: 46)
                             .background(.ultraThinMaterial, in: Capsule())
-                            .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
+                            .overlay(Capsule().strokeBorder(.primary.opacity(0.12), lineWidth: 0.5))
                     }
                     .buttonStyle(Pressed())
                 }
@@ -101,7 +102,7 @@ struct ArtistDetailView: View {
             HStack {
                 Text("Top Songs")
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                 Spacer()
                 if d.tracks.count > 5 {
                     Button {
@@ -109,7 +110,7 @@ struct ArtistDetailView: View {
                     } label: {
                         Text(showAllTracks ? "SHOW LESS" : "SEE ALL")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.primary.opacity(0.7))
                     }
                     .buttonStyle(.plain)
                 }
@@ -132,16 +133,16 @@ struct ArtistDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Genres")
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .padding(.horizontal, 18)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(genres, id: \.genrehash) { g in
                             Text(g.name)
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.85))
+                                .foregroundStyle(.primary.opacity(0.85))
                                 .padding(.horizontal, 14).padding(.vertical, 7)
-                                .background(.white.opacity(0.1), in: Capsule())
+                                .background(Color.primary.opacity(0.1), in: Capsule())
                         }
                     }
                     .padding(.horizontal, 18)
@@ -165,11 +166,11 @@ struct ArtistDetailView: View {
                     HStack {
                         Text(section.title)
                             .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                         Spacer()
                         Text("\(section.albums.count)")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .foregroundStyle(.primary.opacity(0.6))
                     }
                     .padding(.horizontal, 18)
 
@@ -193,7 +194,7 @@ struct ArtistDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Stats")
                 .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 18)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -236,7 +237,7 @@ struct ArtistDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+                .strokeBorder(.primary.opacity(0.12), lineWidth: 0.5)
         )
     }
 
@@ -266,7 +267,7 @@ struct ArtistDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Similar Artists")
                 .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 18)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -286,7 +287,7 @@ struct ArtistDetailView: View {
     private func statBadge(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.white.opacity(0.8))
+            .foregroundStyle(.primary.opacity(0.8))
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(.ultraThinMaterial, in: Capsule())

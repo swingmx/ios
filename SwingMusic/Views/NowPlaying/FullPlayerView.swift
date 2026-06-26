@@ -23,6 +23,8 @@ struct FullPlayerView: View {
     @State private var showOptionsSheet = false
     @State private var controlsHeight: CGFloat = 250
     @ObservedObject var sleepTimer = SleepTimer.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
 
     @AppStorage("albumArtTapAction") private var albumArtTapAction = "album"
 
@@ -80,9 +82,13 @@ struct FullPlayerView: View {
             )
         }
         .ignoresSafeArea()
+
+        .environment(\.colorScheme, .dark)
         .task { await loadBG(); await checkFavorite() }
         .onChange(of: player.current) { _, _ in Task { await loadBG(); await checkFavorite() } }
         .onChange(of: showLyrics) { _, newVal in
+
+            UIApplication.shared.isIdleTimerDisabled = newVal
             if newVal {
                 showControlsBriefly()
             } else {
@@ -90,11 +96,16 @@ struct FullPlayerView: View {
                 withAnimation(.easeInOut(duration: 0.3)) { controlsVisible = true }
             }
         }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
     }
 
     private var bg: some View {
-        ZStack {
-            Color.black
+
+        let coverOpacity = isDark ? 0.8 : 0.8
+        return ZStack {
+            (isDark ? Color.black : Color(.systemBackground))
 
             if let prev = prevBgImage {
                 Image(uiImage: prev)
@@ -103,7 +114,8 @@ struct FullPlayerView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .blur(radius: 60, opaque: true)
-                    .opacity(0.8 * (1 - bgTransition))
+                    .saturation(isDark ? 1.0 : 1.4)
+                    .opacity(coverOpacity * (1 - bgTransition))
             }
 
             if let img = bgImage {
@@ -113,11 +125,16 @@ struct FullPlayerView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .blur(radius: 60, opaque: true)
-                    .opacity(0.8 * bgTransition)
+                    .saturation(isDark ? 1.0 : 1.4)
+                    .opacity(coverOpacity * bgTransition)
             }
 
             LinearGradient(
-                colors: [.black.opacity(0.2), .black.opacity(0.5), .black.opacity(0.7)],
+                colors: isDark
+                    ? [.black.opacity(0.2), .black.opacity(0.5), .black.opacity(0.7)]
+                    : [Color(.systemBackground).opacity(0.3),
+                       Color(.systemBackground).opacity(0.46),
+                       Color(.systemBackground).opacity(0.64)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -127,7 +144,7 @@ struct FullPlayerView: View {
     private var handle: some View {
         VStack {
             RoundedRectangle(cornerRadius: 3)
-                .fill(.white.opacity(0.4))
+                .fill(.primary.opacity(0.4))
                 .frame(width: 36, height: 5)
                 .padding(.top, 22)
             HStack { Spacer(); Spacer() }.frame(height: 22)
@@ -191,8 +208,8 @@ struct FullPlayerView: View {
                                             .contentShape(Rectangle())
                                             .onTapGesture { toggleLyrics() }
                                         VStack(alignment: .leading, spacing: 3) {
-                                            Text(t.title).font(.system(size: 15, weight: .bold)).foregroundStyle(.white).lineLimit(1)
-                                            Text(t.artist).font(.system(size: 12)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+                                            Text(t.title).font(.system(size: 15, weight: .bold)).foregroundStyle(.primary).lineLimit(1)
+                                            Text(t.artist).font(.system(size: 12)).foregroundStyle(.primary.opacity(0.5)).lineLimit(1)
                                         }
                                         .padding(.top, 2)
                                         Spacer(minLength: 0)
@@ -200,18 +217,7 @@ struct FullPlayerView: View {
                                     .padding(.top, 8).padding(.leading, 10)
                                     .animation(.easeInOut(duration: 0.5), value: controlsVisible)
                                 } else {
-                                    AlbumArt(track: t, size: bigSize)
-                                        .frame(width: bigSize, height: bigSize)
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                        .scaleEffect(playScale)
-                                        .shadow(color: .black.opacity(0.5), radius: 30, y: 20)
-                                        .matchedGeometryEffect(id: "cover", in: coverNS)
-                                        .offset(x: hDrag * 0.6)
-                                        .opacity(1 - min(abs(hDrag) / 300, 0.5))
-                                        .contentShape(Rectangle())
-                                        .gesture(artSwipeGesture)
-                                        .onTapGesture { albumArtTapped(t) }
-                                        .padding(.top, 20)
+                                    coverCarousel(bigSize: bigSize, playScale: playScale)
                                 }
                             }
                         }
@@ -249,33 +255,85 @@ struct FullPlayerView: View {
         }
     }
 
-    private var artSwipeGesture: some Gesture {
+    private func slot(for bigSize: CGFloat) -> CGFloat { bigSize + 70 }
+
+    private func adjacentTrack(_ d: Int) -> Track? {
+        let i = player.index + d
+        return player.queue.indices.contains(i) ? player.queue[i] : nil
+    }
+
+    private func coverCarousel(bigSize: CGFloat, playScale: CGFloat) -> some View {
+        let s = slot(for: bigSize)
+        return ZStack {
+            if let pt = adjacentTrack(-1) {
+                cover(pt, bigSize: bigSize)
+                    .offset(x: -s + hDrag)
+                    .opacity(coverOpacity(atX: -s + hDrag, slot: s))
+            }
+            if let nt = adjacentTrack(1) {
+                cover(nt, bigSize: bigSize)
+                    .offset(x: s + hDrag)
+                    .opacity(coverOpacity(atX: s + hDrag, slot: s))
+            }
+            if let t = player.current {
+                cover(t, bigSize: bigSize)
+                    .scaleEffect(playScale)
+                    .matchedGeometryEffect(id: "cover", in: coverNS)
+                    .offset(x: hDrag)
+                    .opacity(coverOpacity(atX: hDrag, slot: s))
+                    .onTapGesture { albumArtTapped(t) }
+            }
+        }
+        .frame(width: bigSize, height: bigSize)
+        .contentShape(Rectangle())
+        .gesture(artSwipeGesture(slot: s))
+        .padding(.top, 20)
+    }
+
+    private func cover(_ track: Track, bigSize: CGFloat) -> some View {
+        AlbumArt(track: track, size: bigSize)
+            .frame(width: bigSize, height: bigSize)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: .black.opacity(0.5), radius: 30, y: 20)
+    }
+
+    private func coverOpacity(atX x: CGFloat, slot: CGFloat) -> Double {
+        let d = min(abs(x) / slot, 1)
+        return Double(1 - d * 0.55)
+    }
+
+    private func artSwipeGesture(slot: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 18)
             .onChanged { value in
                 guard !showLyrics else { return }
                 let h = value.translation.width
                 guard abs(h) > abs(value.translation.height) else { return }
 
-                hDrag = h * (abs(h) > 140 ? 0.75 : 1)
+                let hasNeighbor = adjacentTrack(h < 0 ? 1 : -1) != nil
+                hDrag = hasNeighbor ? h : h * 0.25
             }
             .onEnded { value in
                 guard !showLyrics else { return }
                 let h = value.translation.width
                 let v = value.translation.height
                 let velocity = value.predictedEndTranslation.width - value.translation.width
-                let commit = (abs(h) > 60 || abs(velocity) > 120) && abs(h) > abs(v)
+                let dir: CGFloat = h < 0 ? -1 : 1
+                let target = player.index + (h < 0 ? 1 : -1)
+                let commit = (abs(h) > slot * 0.32 || abs(velocity) > 200)
+                    && abs(h) > abs(v)
+                    && player.queue.indices.contains(target)
                 guard commit else {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.78)) { hDrag = 0 }
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) { hDrag = 0 }
                     return
                 }
                 UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                let dir: CGFloat = h < 0 ? -1 : 1
 
-                withAnimation(.easeOut(duration: 0.2)) { hDrag = dir * 620 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                    if dir < 0 { player.next() } else { player.prev() }
-                    hDrag = -dir * 620
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { hDrag = 0 }
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+                    hDrag = dir * slot
+                } completion: {
+                    player.jump(to: target)
+                    var instant = Transaction(); instant.disablesAnimations = true
+                    withTransaction(instant) { hDrag = 0 }
                 }
             }
     }
@@ -321,11 +379,11 @@ struct FullPlayerView: View {
         HStack {
             if let t = player.current {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(t.title).font(.system(size: 24, weight: .bold)).foregroundStyle(.white).lineLimit(1)
+                    Text(t.title).font(.system(size: 24, weight: .bold)).foregroundStyle(.primary).lineLimit(1)
                     Button {
                         artistTapped(t)
                     } label: {
-                        Text(t.artist).font(.system(size: 18)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                        Text(t.artist).font(.system(size: 18)).foregroundStyle(.primary.opacity(0.6)).lineLimit(1)
                     }
                     .buttonStyle(.plain)
                 }
@@ -339,8 +397,8 @@ struct FullPlayerView: View {
                         Task { try? await API.shared.toggleFavorite(hash: t.trackhash, type: "track", add: newState) }
                     } label: {
                         ZStack {
-                            Circle().fill(isFavorite ? .yellow.opacity(0.15) : .white.opacity(0.1)).frame(width: 50, height: 50)
-                            Image(systemName: isFavorite ? "star.fill" : "star").font(.system(size: 18, weight: .semibold)).foregroundStyle(isFavorite ? .yellow : .white)
+                            Circle().fill(isFavorite ? Color.yellow.opacity(0.15) : Color.primary.opacity(0.1)).frame(width: 50, height: 50)
+                            Image(systemName: isFavorite ? "star.fill" : "star").font(.system(size: 18, weight: .semibold)).foregroundStyle(isFavorite ? Color.yellow : Color.primary)
                         }
                         .contentShape(Circle())
                     }
@@ -349,8 +407,8 @@ struct FullPlayerView: View {
                         showOptionsSheet = true
                     } label: {
                         ZStack {
-                            Circle().fill(.white.opacity(0.1)).frame(width: 50, height: 50)
-                            Image(systemName: "ellipsis").font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
+                            Circle().fill(.primary.opacity(0.1)).frame(width: 50, height: 50)
+                            Image(systemName: "ellipsis").font(.system(size: 20, weight: .bold)).foregroundStyle(.primary)
                         }
                         .contentShape(Circle())
                     }
@@ -362,41 +420,54 @@ struct FullPlayerView: View {
 
     private func timeline(width: CGFloat) -> some View {
         VStack(spacing: 6) {
-            ThinSlider(value: Binding(get: { min(max(0, player.time), max(player.total, 1)) }, set: { player.seek($0) }), range: 0...max(player.total, 1), trackHeight: 4, activeColor: .white.opacity(0.9), inactiveColor: .white.opacity(0.12))
+            ThinSlider(value: Binding(get: { min(max(0, player.time), max(player.total, 1)) }, set: { player.seek($0) }), range: 0...max(player.total, 1), trackHeight: 4, activeColor: .primary.opacity(0.9), inactiveColor: .primary.opacity(0.12))
             HStack {
                 Text(player.time.mmss)
                 Spacer()
                 Text(player.audioQuality.shortLabel)
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.25))
+                    .foregroundStyle(.primary.opacity(0.25))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(.white.opacity(0.08), in: Capsule())
+                    .background(.primary.opacity(0.08), in: Capsule())
                 Spacer()
                 Text("-" + max(0, player.total - player.time).mmss)
             }
-            .font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(.white.opacity(0.35))
+            .font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(.primary.opacity(0.35))
         }.frame(maxWidth: .infinity)
     }
 
     private func controls(width: CGFloat) -> some View {
-        HStack(spacing: 50) {
-            Button { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); player.prev() } label: { Image(systemName: "backward.fill").font(.system(size: 32)).foregroundStyle(.white) }.buttonStyle(Pressed())
-            Button { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { player.toggle() } } label: { Image(systemName: player.playing ? "pause.fill" : "play.fill").contentTransition(.symbolEffect(.replace)).font(.system(size: 46)).foregroundStyle(.white).frame(width: 60) }.buttonStyle(Pressed())
-            Button { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); player.next() } label: { Image(systemName: "forward.fill").font(.system(size: 32)).foregroundStyle(.white) }.buttonStyle(Pressed())
-        }.frame(width: min(width - 24, 300), alignment: .center)
+        HStack(spacing: 0) {
+
+            Button { player.toggleShuffle() } label: {
+                Image(systemName: "shuffle")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(player.shuffle ? Color.blue : .primary.opacity(0.45))
+            }.buttonStyle(Pressed()).frame(maxWidth: .infinity)
+
+            Button { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); player.prev() } label: { Image(systemName: "backward.fill").font(.system(size: 30)).foregroundStyle(.primary) }.buttonStyle(Pressed()).frame(maxWidth: .infinity)
+            Button { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { player.toggle() } } label: { Image(systemName: player.playing ? "pause.fill" : "play.fill").contentTransition(.symbolEffect(.replace)).font(.system(size: 46)).foregroundStyle(.primary).frame(width: 56) }.buttonStyle(Pressed()).frame(maxWidth: .infinity)
+            Button { UIImpactFeedbackGenerator(style: .medium).impactOccurred(); player.next() } label: { Image(systemName: "forward.fill").font(.system(size: 30)).foregroundStyle(.primary) }.buttonStyle(Pressed()).frame(maxWidth: .infinity)
+
+            Button { player.cycleLoop() } label: {
+                Image(systemName: player.loop == .one ? "repeat.1" : "repeat")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(player.loop != .off ? Color.blue : .primary.opacity(0.45))
+            }.buttonStyle(Pressed()).frame(maxWidth: .infinity)
+        }.frame(width: min(width, 340), alignment: .center)
     }
 
     private func bottomToolbar(width: CGFloat) -> some View {
         ZStack {
-            AirPlayButton().frame(width: 28, height: 28).tint(.white.opacity(0.7))
+            AirPlayButton().frame(width: 28, height: 28).tint(.primary.opacity(0.7))
             HStack {
-                Button { toggleLyrics() } label: { Image(systemName: "quote.bubble").font(.system(size: 18)).foregroundStyle(showLyrics ? .white : .white.opacity(0.5)) }
+                Button { toggleLyrics() } label: { Image(systemName: "quote.bubble").font(.system(size: 18)).foregroundStyle(showLyrics ? Color.primary : Color.primary.opacity(0.5)) }
                 if sleepTimer.active {
                     Button { showSleepTimer = true } label: { HStack(spacing: 4) { Image(systemName: "moon.fill").font(.system(size: 11)); Text(sleepTimer.displayTime).font(.system(size: 11, weight: .medium, design: .monospaced)) }.foregroundStyle(.blue).padding(.horizontal, 8).padding(.vertical, 4).background(.blue.opacity(0.15), in: Capsule()) }
                 }
                 Spacer()
-                Button { UIImpactFeedbackGenerator(style: .light).impactOccurred(); showQueue = true } label: { Image(systemName: "list.bullet").font(.system(size: 18)).foregroundStyle(.white.opacity(0.5)) }
+                Button { UIImpactFeedbackGenerator(style: .light).impactOccurred(); showQueue = true } label: { Image(systemName: "list.bullet").font(.system(size: 18)).foregroundStyle(.primary.opacity(0.5)) }
             }
         }
         .frame(maxWidth: .infinity)
@@ -424,11 +495,11 @@ struct FullPlayerView: View {
 
     private func volumeBar(width: CGFloat) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "speaker.fill").font(.system(size: 9)).foregroundStyle(.white.opacity(0.4))
+            Image(systemName: "speaker.fill").font(.system(size: 9)).foregroundStyle(.primary.opacity(0.4))
             SystemVolumeSlider()
                 .frame(height: 24)
-                .tint(.white.opacity(0.7))
-            Image(systemName: "speaker.wave.3.fill").font(.system(size: 11)).foregroundStyle(.white.opacity(0.4))
+                .tint(.primary.opacity(0.7))
+            Image(systemName: "speaker.wave.3.fill").font(.system(size: 11)).foregroundStyle(.primary.opacity(0.4))
         }.frame(maxWidth: .infinity).padding(.top, 10)
     }
 
@@ -451,25 +522,27 @@ struct FullPlayerView: View {
 
     private func checkFavorite() async {
         guard let t = player.current else { isFavorite = false; return }
-        let favs = (try? await API.shared.favoriteTracks()) ?? []
-        isFavorite = favs.contains { $0.trackhash == t.trackhash }
+        isFavorite = (try? await API.shared.checkFavorite(hash: t.trackhash, type: "track")) ?? false
     }
 }
 
 struct SheetBlurBackground: View {
     var image: UIImage?
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
         ZStack {
-            Color.black
+            (isDark ? Color.black : Color(.systemBackground))
             if let img = image {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
                     .blur(radius: 60, opaque: true)
-                    .opacity(0.6)
+                    .saturation(isDark ? 1.0 : 1.4)
+                    .opacity(isDark ? 0.6 : 0.7)
             }
-            Color.black.opacity(0.4)
+            (isDark ? Color.black.opacity(0.4) : Color(.systemBackground).opacity(0.42))
         }
         .ignoresSafeArea()
     }
@@ -477,7 +550,7 @@ struct SheetBlurBackground: View {
 
 struct AirPlayButton: UIViewRepresentable {
     func makeUIView(context: Context) -> AVRoutePickerView {
-        let v = AVRoutePickerView(); v.tintColor = .white; v.activeTintColor = .systemBlue; v.prioritizesVideoDevices = false; return v
+        let v = AVRoutePickerView(); v.tintColor = .label; v.activeTintColor = .systemBlue; v.prioritizesVideoDevices = false; return v
     }
     func updateUIView(_ v: AVRoutePickerView, context: Context) {}
 }
@@ -490,8 +563,8 @@ struct SystemVolumeSlider: UIViewRepresentable {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             if let slider = v.subviews.first(where: { $0 is UISlider }) as? UISlider {
-                slider.minimumTrackTintColor = UIColor.white.withAlphaComponent(0.7)
-                slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.1)
+                slider.minimumTrackTintColor = UIColor.label.withAlphaComponent(0.7)
+                slider.maximumTrackTintColor = UIColor.label.withAlphaComponent(0.1)
 
                 let empty = UIImage()
                 slider.setThumbImage(empty, for: .normal)

@@ -3,10 +3,11 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var state: AppState
 
-    @State private var hasTrack = AudioPlayer.shared.current != nil
+    @State private var hasTrack = false
 
     var body: some View {
         nativeTabView
+        .onReceive(AudioPlayer.shared.$current) { hasTrack = ($0 != nil) }
         .fullScreenCover(isPresented: $state.showPlayer, onDismiss: onPlayerDismissed) {
             FullPlayerView(show: $state.showPlayer)
                 .environmentObject(state)
@@ -17,7 +18,7 @@ struct ContentView: View {
                 .environmentObject(state)
         }
         .onChange(of: state.tab) { _, _ in
-            state.scrollOffset = 0
+            state.scroll.reset()
         }
         .onChange(of: state.navigationTarget) { _, target in
             guard target != nil else { return }
@@ -27,7 +28,6 @@ struct ContentView: View {
                 navigateToTarget(target!)
             }
         }
-        .onReceive(AudioPlayer.shared.$current) { hasTrack = $0 != nil }
     }
 
     @ViewBuilder
@@ -41,6 +41,7 @@ struct ContentView: View {
                     }
             } else {
                 tabView
+                    .tabBarMinimizeBehavior(.onScrollDown)
             }
         } else {
             tabView

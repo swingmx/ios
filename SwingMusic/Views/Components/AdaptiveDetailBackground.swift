@@ -19,17 +19,20 @@ struct AdaptiveDetailBackground: View {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: geo.size.width, height: 440)
+                        .frame(width: geo.size.width, height: isDark ? 440 : 620)
                         .clipped()
-                        .blur(radius: 70, opaque: true)
-                        .opacity(isDark ? 0.6 : 0.2)
+                        .blur(radius: isDark ? 70 : 110, opaque: true)
+                        .saturation(isDark ? 1.0 : 1.3)
+                        .opacity(isDark ? 0.6 : 0.7)
                         .mask(
                             LinearGradient(
-                                stops: [
-                                    .init(color: .black, location: 0),
-                                    .init(color: .black, location: 0.45),
-                                    .init(color: .clear, location: 1)
-                                ],
+                                stops: isDark
+                                    ? [.init(color: .black, location: 0),
+                                       .init(color: .black, location: 0.45),
+                                       .init(color: .clear, location: 1)]
+                                    : [.init(color: .black, location: 0),
+                                       .init(color: .black, location: 0.08),
+                                       .init(color: .clear, location: 0.95)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )

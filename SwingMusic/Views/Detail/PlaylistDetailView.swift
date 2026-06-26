@@ -26,6 +26,7 @@ struct PlaylistDetailView: View {
                 Color.clear.frame(height: 100)
             }
         }
+        .squeezeMiniPlayer(state)
         .background { AdaptiveDetailBackground(image: bgImage) }
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
@@ -52,18 +53,18 @@ struct PlaylistDetailView: View {
             HStack(spacing: 12) {
                 Button { state.player.playAll(tracks, source: .playlist(id)) } label: {
                     Label("Play", systemImage: "play.fill")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.black)
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(Color(.systemBackground))
                         .frame(maxWidth: .infinity).frame(height: 46)
-                        .background(.white, in: Capsule())
+                        .background(Color.primary, in: Capsule())
                 }
                 .buttonStyle(Pressed())
 
                 Button { state.player.playAll(tracks, shuffled: true, source: .playlist(id)) } label: {
                     Label("Shuffle", systemImage: "shuffle")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary)
                         .frame(maxWidth: .infinity).frame(height: 46)
                         .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
+                        .overlay(Capsule().strokeBorder(.primary.opacity(0.12), lineWidth: 0.5))
                 }
                 .buttonStyle(Pressed())
 

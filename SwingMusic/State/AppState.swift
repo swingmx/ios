@@ -2,7 +2,35 @@ import SwiftUI
 import Combine
 
 @MainActor
+final class ScrollTracker: ObservableObject {
+    static let shared = ScrollTracker()
+
+    @Published var offset: CGFloat = 0
+    @Published var down = false
+    private var last: CGFloat = 0
+
+    func update(_ newOffset: CGFloat) {
+        let delta = newOffset - last
+        last = newOffset
+        if abs(delta) > 2 {
+            let isDown = delta < 0
+            if isDown != down { down = isDown }
+        }
+
+        if abs(newOffset - offset) > 6 { offset = newOffset }
+    }
+
+    func reset() {
+        offset = 0
+        down = false
+        last = 0
+    }
+}
+
+@MainActor
 final class AppState: ObservableObject {
+
+    let scroll = ScrollTracker.shared
     @Published var authed = false
     @Published var tab: Tab = .home
     @Published var accent: Color = .white
@@ -25,7 +53,13 @@ final class AppState: ObservableObject {
 
     @Published var colorCache: [String: Color] = [:]
     @Published var currentBGImage: UIImage?
-    @Published var appearanceMode: AppearanceMode = .dark
+    @Published var appearanceMode: AppearanceMode = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "") ?? .dark {
+        didSet { UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode") }
+    }
+
+    @Published var favTracksTotal = 0
+    @Published var favAlbumsTotal = 0
+    @Published var favArtistsTotal = 0
 
     enum AppearanceMode: String, CaseIterable {
         case system = "System"
@@ -57,10 +91,7 @@ final class AppState: ObservableObject {
 
     @Published var navigationTarget: NavTarget?
     @Published var requestedTrackForPlaylist: Track? = nil
-    @Published var scrollOffset: CGFloat = 0
-    @Published var scrollingDown = false
     @Published var keyboardVisible = false
-    private var lastScrollOffset: CGFloat = 0
 
     @Published var showBugReport = false
     @Published var currentBugReport: BugReport?
@@ -77,16 +108,6 @@ final class AppState: ObservableObject {
         } else {
             showBugReport = true
         }
-    }
-
-    func updateScroll(_ offset: CGFloat) {
-        let delta = offset - lastScrollOffset
-
-        if abs(delta) > 2 {
-            scrollingDown = delta < 0
-        }
-        lastScrollOffset = offset
-        scrollOffset = offset
     }
 
     init() {
@@ -156,6 +177,38 @@ final class AppState: ObservableObject {
         allArtists = (try? await API.shared.artists(limit: 300))?.items ?? []
     }
 
+    @Published var shufflingLibrary = false
+
+    func shuffleLibrary() async {
+        guard !shufflingLibrary else { return }
+        shufflingLibrary = true
+        let albums = ((try? await API.shared.albums(limit: 5000))?.items ?? allAlbums).shuffled()
+        guard !albums.isEmpty else { shufflingLibrary = false; return }
+
+        let batchN = min(8, albums.count)
+        var initial: [Track] = []
+        await withTaskGroup(of: [Track].self) { group in
+            for a in albums.prefix(batchN) {
+                group.addTask { (try? await API.shared.album(a.albumhash))?.tracks ?? [] }
+            }
+            for await ts in group { initial.append(contentsOf: ts) }
+        }
+        initial.shuffle()
+        shufflingLibrary = false
+        guard !initial.isEmpty else { return }
+
+        player.shuffle = true
+        player.playAll(initial, source: .none)
+
+        let rest = Array(albums.dropFirst(batchN))
+        Task { [weak self] in
+            for a in rest {
+                let ts = (try? await API.shared.album(a.albumhash))?.tracks ?? []
+                if !ts.isEmpty { self?.player.appendToQueue(ts.shuffled()) }
+            }
+        }
+    }
+
     @Published var homeSections: [HomeSection] = []
 
     func loadHomeSections() async {
@@ -195,14 +248,52 @@ final class AppState: ObservableObject {
         homeSections = result
     }
 
+    private let favPageSize = 50
+
     func loadFavorites() async {
 
-        async let tracks = API.shared.favoriteTracks()
-        async let albums = API.shared.favoriteAlbums()
-        async let artists = API.shared.favoriteArtists()
-        favTracks = (try? await tracks) ?? []
-        favAlbums = (try? await albums) ?? []
-        favArtists = (try? await artists) ?? []
+        async let summary = try? await API.shared.favoritesSummary()
+        async let tracksPage = try? await API.shared.favoriteTracks(start: 0, limit: favPageSize)
+        async let albumsPage = try? await API.shared.favoriteAlbums(start: 0, limit: favPageSize)
+        async let artistsPage = try? await API.shared.favoriteArtists(start: 0, limit: favPageSize)
+
+        favTracks = (await tracksPage)?.tracks ?? []
+        favAlbums = (await albumsPage)?.albums ?? []
+        favArtists = (await artistsPage)?.artists ?? []
+
+        if let s = await summary {
+            favTracksTotal = s.count.tracks
+            favAlbumsTotal = s.count.albums
+            favArtistsTotal = s.count.artists
+        } else {
+            favTracksTotal = max(favTracksTotal, favTracks.count)
+            favAlbumsTotal = max(favAlbumsTotal, favAlbums.count)
+            favArtistsTotal = max(favArtistsTotal, favArtists.count)
+        }
+    }
+
+    func loadMoreFavoriteTracks() async {
+        guard favTracks.count < favTracksTotal else { return }
+        guard let page = try? await API.shared.favoriteTracks(start: favTracks.count, limit: favPageSize),
+              !page.tracks.isEmpty else { return }
+        let existing = Set(favTracks.map { $0.trackhash })
+        favTracks.append(contentsOf: page.tracks.filter { !existing.contains($0.trackhash) })
+    }
+
+    func loadMoreFavoriteAlbums() async {
+        guard favAlbums.count < favAlbumsTotal else { return }
+        guard let page = try? await API.shared.favoriteAlbums(start: favAlbums.count, limit: favPageSize),
+              !page.albums.isEmpty else { return }
+        let existing = Set(favAlbums.map { $0.albumhash })
+        favAlbums.append(contentsOf: page.albums.filter { !existing.contains($0.albumhash) })
+    }
+
+    func loadMoreFavoriteArtists() async {
+        guard favArtists.count < favArtistsTotal else { return }
+        guard let page = try? await API.shared.favoriteArtists(start: favArtists.count, limit: favPageSize),
+              !page.artists.isEmpty else { return }
+        let existing = Set(favArtists.map { $0.artisthash })
+        favArtists.append(contentsOf: page.artists.filter { !existing.contains($0.artisthash) })
     }
 
     func loadPlaylists() async {
@@ -399,5 +490,15 @@ final class AppState: ObservableObject {
         guard let (data, _) = try? await URLSession.shared.data(for: req),
               let img = UIImage(data: data) else { return }
         withAnimation(.easeInOut(duration: 0.8)) { currentBGImage = img }
+    }
+}
+
+extension View {
+    func squeezeMiniPlayer(_ state: AppState) -> some View {
+        self.onScrollGeometryChange(for: CGFloat.self) { geo in
+            -geo.contentOffset.y
+        } action: { _, newValue in
+            state.scroll.update(newValue)
+        }
     }
 }

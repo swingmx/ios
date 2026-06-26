@@ -65,7 +65,6 @@ struct VerticalLiquidSlider: View {
                     )
                     .frame(width: w, height: max(w, fillH))
                     .clipShape(RoundedRectangle(cornerRadius: value == 0 ? 4 : w / 2, style: .continuous))
-                    .blur(radius: isDragging ? 1.5 : 0)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: value == 0)
 
                 if isDragging {
@@ -83,6 +82,16 @@ struct VerticalLiquidSlider: View {
                 Capsule()
                     .strokeBorder(isDark ? .white.opacity(0.12) : .black.opacity(0.08), lineWidth: 0.5)
             )
+
+            .overlay(alignment: .bottom) {
+                let ballSize = w * 0.9
+                let ballR = ballSize / 2
+                let thumbCenter = min(max(fillH, ballR), h - ballR)
+                GlassBall(size: ballSize, pressed: isDragging)
+                    .offset(y: -(thumbCenter - ballR))
+                    .allowsHitTesting(false)
+                    .animation(.interactiveSpring(response: 0.35, dampingFraction: 0.75), value: value)
+            }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -118,6 +127,29 @@ struct VerticalLiquidSlider: View {
             )
             .animation(.interactiveSpring(response: 0.35, dampingFraction: 0.75), value: value)
             .animation(.easeOut(duration: 0.15), value: isDragging)
+        }
+    }
+}
+
+private struct GlassBall: View {
+    let size: CGFloat
+    let pressed: Bool
+
+    var body: some View {
+        ball
+            .frame(width: size, height: size)
+            .scaleEffect(pressed ? 1.1 : 1.0)
+            .shadow(color: .black.opacity(0.16), radius: pressed ? 6 : 3, y: pressed ? 3 : 1)
+            .animation(.spring(response: 0.3, dampingFraction: 0.65), value: pressed)
+    }
+
+    @ViewBuilder private var ball: some View {
+        if #available(iOS 26.0, *) {
+            Circle()
+                .fill(.clear)
+                .glassEffect(.clear.interactive(), in: Circle())
+        } else {
+            Circle().fill(.ultraThinMaterial)
         }
     }
 }
