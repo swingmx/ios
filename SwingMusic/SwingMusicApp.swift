@@ -25,16 +25,6 @@ struct SwingMusicApp: App {
                     BugReportSheet(report: report)
                 }
             }
-            #if DEBUG
-            .background(
-                Color.clear
-                    .frame(width: 0, height: 0)
-                    .task {
-                        ComponentExporter.runIfRequested(state: state)
-                        DebugCapture.runIfRequested(state: state)
-                    }
-            )
-            #endif
         }
     }
 }

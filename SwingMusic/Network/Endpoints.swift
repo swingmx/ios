@@ -30,7 +30,8 @@ extension API {
     }
 
     func artist(_ hash: String) async throws -> ArtistDetail {
-        try await get("/artist/\(hash)", q: ["tracklimit": "20", "albumlimit": "30"])
+
+        try await get("/artist/\(hash)", q: ["tracklimit": "100", "albumlimit": "100"])
     }
 
     func artistAlbums(_ hash: String) async throws -> [ArtistAlbumSection] {

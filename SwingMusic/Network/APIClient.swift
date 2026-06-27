@@ -49,18 +49,30 @@ final class API {
         streamURLs(hash).first
     }
 
-    func streamURLs(_ hash: String, filepath: String = "") -> [URL] {
+    private static let queryValueAllowed: CharacterSet = {
+        var s = CharacterSet.alphanumerics
+        s.insert(charactersIn: "-_.!~*'()")
+        return s
+    }()
+
+    func streamURLs(_ hash: String, filepath: String = "", container: String = "mp3", quality: String = "original") -> [URL] {
         var paths: [String] = []
 
-        if !filepath.isEmpty, let encodedPath = filepath.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-            paths.append("/file/\(hash)/legacy?filepath=\(encodedPath)")
+        if !filepath.isEmpty, let enc = filepath.addingPercentEncoding(withAllowedCharacters: Self.queryValueAllowed) {
+            paths.append("/file/\(hash)/legacy?filepath=\(enc)&container=\(container)&quality=\(quality)")
+
+            paths.append("/file/\(hash)/legacy?filepath=\(enc)&container=mp3&quality=original")
+
+            paths.append("/file/\(hash)/legacy?filepath=\(enc)")
         }
 
         paths.append("/file/\(hash)")
         paths.append("/stream/\(hash)")
         paths.append("/track/\(hash)")
 
-        return paths.compactMap { URL(string: base + $0) }
+        var seen = Set<String>()
+        let unique = paths.filter { seen.insert($0).inserted }
+        return unique.compactMap { URL(string: base + $0) }
     }
 
     func get<T: Decodable>(_ path: String, q: [String: String] = [:]) async throws -> T {
