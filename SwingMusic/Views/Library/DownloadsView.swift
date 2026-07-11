@@ -16,7 +16,7 @@ struct DownloadsView: View {
                         if !dm.downloadGroups.isEmpty {
                             VStack(spacing: 0) {
                                 ForEach(dm.downloadGroups) { group in
-                                    NavigationLink(value: group) { groupRow(group) }
+                                    groupLink(group)
                                         .buttonStyle(.plain)
                                     if group.id != dm.downloadGroups.last?.id {
                                         Divider().padding(.leading, 60)
@@ -85,6 +85,21 @@ struct DownloadsView: View {
                 .font(.system(size: 13, design: .monospaced)).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private func groupLink(_ group: DownloadManager.DownloadGroup) -> some View {
+        let realID = group.id.contains(":") ? String(group.id[group.id.firstIndex(of: ":")!...].dropFirst()) : group.id
+        switch group.kind {
+        case .album:
+            NavigationLink(value: Album(stub: realID, title: group.name, image: group.image, date: nil, albumartists: nil)) { groupRow(group) }
+        case .playlist:
+            NavigationLink(value: Playlist(stub: realID, name: group.name, image: group.image)) { groupRow(group) }
+        case .mix:
+            NavigationLink(value: Mix(stub: realID, title: group.name, image: group.image)) { groupRow(group) }
+        case .folder:
+            NavigationLink(value: group) { groupRow(group) }
+        }
     }
 
     private func groupRow(_ group: DownloadManager.DownloadGroup) -> some View {

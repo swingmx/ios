@@ -312,6 +312,43 @@ struct Folder: Decodable, Identifiable, Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(path) }
 }
 
+extension Folder {
+
+    init(path: String, name: String, trackcount: Int? = nil, foldercount: Int? = nil) {
+        self.path = path
+        self.name = name
+        self.trackcount = trackcount
+        self.foldercount = foldercount
+    }
+}
+
+extension Playlist {
+
+    init(stub id: String, name: String, image: String?) {
+        self.id = id
+        self.name = name
+        self.image = image
+        self.images = nil
+        self.trackcount = 0
+        self.duration = 0
+        self.pinned = false
+    }
+}
+
+extension Mix {
+
+    init(stub id: String, title: String, image: String) {
+        self.id = id
+        self.title = title
+        self.sourcehash = ""
+        self.trackcount = nil
+        self.extra = Extra(type: nil, og_sourcehash: nil,
+                           image: MixImageRef(image: image, color: nil), images: nil)
+        self.tagline = nil
+        self.time = nil
+    }
+}
+
 struct FolderResponse: Decodable {
     let folders: [Folder]
     let tracks: [Track]
@@ -324,6 +361,10 @@ struct Mix: Decodable, Identifiable, Hashable {
     let sourcehash: String
     let trackcount: Int?
     let extra: Extra
+
+    let tagline: String?
+
+    let time: String?
 
     struct Extra: Decodable, Hashable {
         let type: String?
@@ -340,7 +381,10 @@ struct Mix: Decodable, Identifiable, Hashable {
 
     var ogSourcehash: String { extra.og_sourcehash ?? sourcehash }
 
-    enum CodingKeys: String, CodingKey { case id, title, sourcehash, trackcount, extra }
+    enum CodingKeys: String, CodingKey {
+        case id, title, sourcehash, trackcount, extra, time
+        case tagline = "description"
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -350,6 +394,8 @@ struct Mix: Decodable, Identifiable, Hashable {
         sourcehash = (try? c.decode(String.self, forKey: .sourcehash)) ?? ""
         trackcount = try? c.decode(Int.self, forKey: .trackcount)
         extra = (try? c.decode(Extra.self, forKey: .extra)) ?? Extra(type: nil, og_sourcehash: nil, image: nil, images: nil)
+        tagline = try? c.decode(String.self, forKey: .tagline)
+        time = try? c.decode(String.self, forKey: .time)
     }
 
     static func == (lhs: Mix, rhs: Mix) -> Bool { lhs.id == rhs.id }

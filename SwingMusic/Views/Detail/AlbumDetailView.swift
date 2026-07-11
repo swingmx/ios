@@ -136,7 +136,17 @@ struct AlbumDetailView: View {
     }
 
     private func load() async {
-        detail = try? await API.shared.album(hash)
+        if let d = try? await API.shared.album(hash) {
+            detail = d
+        } else {
+
+            let dl = DownloadManager.shared.downloadedTracks.filter { $0.albumhash == hash }
+            if let t = dl.first {
+                detail = AlbumDetail(
+                    info: Album(stub: hash, title: t.album, image: t.image, date: t.date, albumartists: t.albumartists),
+                    tracks: dl)
+            }
+        }
         loading = false
         await loadBgImage()
     }

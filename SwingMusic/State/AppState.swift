@@ -87,6 +87,7 @@ final class AppState: ObservableObject {
     enum NavTarget: Equatable {
         case album(Album)
         case artist(Artist)
+        case folder(Folder)
     }
 
     @Published var navigationTarget: NavTarget?
@@ -197,14 +198,14 @@ final class AppState: ObservableObject {
         shufflingLibrary = false
         guard !initial.isEmpty else { return }
 
-        player.shuffle = true
         player.playAll(initial, source: .none)
+        player.shuffle = true
 
         let rest = Array(albums.dropFirst(batchN))
         Task { [weak self] in
             for a in rest {
                 let ts = (try? await API.shared.album(a.albumhash))?.tracks ?? []
-                if !ts.isEmpty { self?.player.appendToQueue(ts.shuffled()) }
+                if !ts.isEmpty { self?.player.enqueueInterleaved(ts) }
             }
         }
     }
@@ -269,6 +270,29 @@ final class AppState: ObservableObject {
             favTracksTotal = max(favTracksTotal, favTracks.count)
             favAlbumsTotal = max(favAlbumsTotal, favAlbums.count)
             favArtistsTotal = max(favArtistsTotal, favArtists.count)
+        }
+    }
+
+    @discardableResult
+    func setTrackFavorite(_ track: Track, _ fav: Bool) async -> Bool {
+        applyFavorite(track, fav)
+        do {
+            try await API.shared.toggleFavorite(hash: track.trackhash, type: "track", add: fav)
+            return fav
+        } catch {
+            applyFavorite(track, !fav)
+            return !fav
+        }
+    }
+
+    private func applyFavorite(_ track: Track, _ fav: Bool) {
+        let present = favTracks.contains { $0.trackhash == track.trackhash }
+        if fav && !present {
+            favTracks.insert(track, at: 0)
+            favTracksTotal += 1
+        } else if !fav && present {
+            favTracks.removeAll { $0.trackhash == track.trackhash }
+            favTracksTotal = max(0, favTracksTotal - 1)
         }
     }
 

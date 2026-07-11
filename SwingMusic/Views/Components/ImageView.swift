@@ -1,5 +1,47 @@
 import SwiftUI
 
+enum ImageDiskCache {
+    private static let browseDir: URL = {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let d = base.appendingPathComponent("ImageCache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }()
+
+    private static let offlineDir: URL = {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let d = docs.appendingPathComponent("OfflineMusic/Thumbnails", isDirectory: true)
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }()
+
+    private static func key(for url: URL) -> String {
+        let raw = url.path + (url.query.map { "?\($0)" } ?? "")
+        var hash: UInt64 = 5381
+        for b in raw.utf8 { hash = (hash &* 33) ^ UInt64(b) }
+        return String(hash, radix: 16)
+    }
+
+    static func image(for url: URL) -> UIImage? {
+        let name = key(for: url)
+        if let data = try? Data(contentsOf: offlineDir.appendingPathComponent(name)), let ui = UIImage(data: data) { return ui }
+        if let data = try? Data(contentsOf: browseDir.appendingPathComponent(name)), let ui = UIImage(data: data) { return ui }
+        return nil
+    }
+
+    static func storeBrowse(_ data: Data, for url: URL) {
+        try? data.write(to: browseDir.appendingPathComponent(key(for: url)), options: .atomic)
+    }
+
+    static func storeOffline(_ data: Data, for url: URL) {
+        try? data.write(to: offlineDir.appendingPathComponent(key(for: url)), options: .atomic)
+    }
+
+    static func removeOffline(for url: URL) {
+        try? FileManager.default.removeItem(at: offlineDir.appendingPathComponent(key(for: url)))
+    }
+}
+
 struct Img: View {
 
     static var cache: [String: UIImage] = [:]
@@ -60,6 +102,15 @@ struct Img: View {
     private func load() async {
         guard let key = primaryKey else { loading = false; return }
         if let cached = Img.cache[key] { img = cached; loading = false; return }
+
+        for url in urls {
+            if let disk = ImageDiskCache.image(for: url) {
+                Img.cache[key] = disk
+                img = disk
+                loading = false
+                return
+            }
+        }
         loading = true
 
         var token: String? { API.shared.token }
@@ -70,6 +121,7 @@ struct Img: View {
             if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) { continue }
             guard let ui = UIImage(data: data) else { continue }
             Img.cache[key] = ui
+            ImageDiskCache.storeBrowse(data, for: url)
             withAnimation { img = ui; loading = false }
             return
         }

@@ -56,10 +56,20 @@ final class DownloadManager: ObservableObject {
     }
 
     func tracks(in group: DownloadGroup) -> [Track] {
-        let order = Dictionary(uniqueKeysWithValues: group.trackHashes.enumerated().map { ($1, $0) })
-        return downloadedTracks
-            .filter { group.trackHashes.contains($0.trackhash) }
-            .sorted { (order[$0.trackhash] ?? 0) < (order[$1.trackhash] ?? 0) }
+        let items = downloadedTracks.filter { group.trackHashes.contains($0.trackhash) }
+        switch group.kind {
+        case .album:
+
+            return items.sorted {
+                let d0 = $0.disc ?? 1, d1 = $1.disc ?? 1
+                if d0 != d1 { return d0 < d1 }
+                return ($0.trackno ?? 0) < ($1.trackno ?? 0)
+            }
+        case .folder, .playlist, .mix:
+
+            let order = Dictionary(uniqueKeysWithValues: group.trackHashes.enumerated().map { ($1, $0) })
+            return items.sorted { (order[$0.trackhash] ?? 0) < (order[$1.trackhash] ?? 0) }
+        }
     }
 
     func isDownloaded(_ track: Track) -> Bool {
@@ -124,6 +134,7 @@ final class DownloadManager: ObservableObject {
     func removeDownload(_ track: Track) {
         let file = localURL(for: track)
         try? fileManager.removeItem(at: file)
+        removeThumbnails(for: track)
         downloads.removeValue(forKey: track.trackhash)
         downloadedTracks.removeAll { $0.trackhash == track.trackhash }
         downloadedHashes.remove(track.trackhash)
@@ -171,7 +182,11 @@ final class DownloadManager: ObservableObject {
 
         do {
             let hash = track.trackhash
-            let progressDelegate = DownloadProgressDelegate { [weak self] p in
+
+            let br = Double(track.bitrate ?? 0)
+            let bps = br > 100_000 ? br : (br > 0 ? br * 1000 : 320_000)
+            let estimatedBytes = Int64(bps / 8 * Double(max(track.duration, 1)))
+            let progressDelegate = DownloadProgressDelegate(estimatedTotalBytes: estimatedBytes) { [weak self] p in
                 Task { @MainActor in
                     if case .downloading = self?.downloads[hash] {
                         self?.downloads[hash] = .downloading(progress: p)
@@ -209,6 +224,8 @@ final class DownloadManager: ObservableObject {
                 Log.warn("download", "Lyrics unavailable for \(track.title): \(error.localizedDescription)")
             }
 
+            await cacheThumbnails(for: track)
+
             downloads[track.trackhash] = .completed
             Log.info("download", "Completed \(track.title)")
 
@@ -220,6 +237,23 @@ final class DownloadManager: ObservableObject {
         } catch {
             Log.error("download", "Failed \(track.title): \(error.localizedDescription)")
             downloads[track.trackhash] = .failed
+        }
+    }
+
+    private func cacheThumbnails(for track: Track) async {
+        for size in ["small", "medium"] {
+            guard let url = API.shared.img(track.image, size: size) else { continue }
+            var req = URLRequest(url: url)
+            if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
+            guard let (data, resp) = try? await URLSession.shared.data(for: req),
+                  let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { continue }
+            ImageDiskCache.storeOffline(data, for: url)
+        }
+    }
+
+    private func removeThumbnails(for track: Track) {
+        for size in ["small", "medium"] {
+            if let url = API.shared.img(track.image, size: size) { ImageDiskCache.removeOffline(for: url) }
         }
     }
 
@@ -263,17 +297,22 @@ final class DownloadManager: ObservableObject {
 
 final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
     private let onProgress: (Double) -> Void
+    private let estimatedTotalBytes: Int64
 
-    init(onProgress: @escaping (Double) -> Void) {
+    init(estimatedTotalBytes: Int64 = 0, onProgress: @escaping (Double) -> Void) {
+        self.estimatedTotalBytes = estimatedTotalBytes
         self.onProgress = onProgress
     }
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                     didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
                     totalBytesExpectedToWrite: Int64) {
-        guard totalBytesExpectedToWrite > 0 else { return }
-        let p = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-        onProgress(min(max(p, 0), 1))
+        if totalBytesExpectedToWrite > 0 {
+            onProgress(min(max(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0), 1))
+        } else if estimatedTotalBytes > 0 {
+
+            onProgress(min(Double(totalBytesWritten) / Double(estimatedTotalBytes), 0.99))
+        }
     }
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,

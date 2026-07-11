@@ -2,6 +2,7 @@ import AVFoundation
 import Combine
 import MediaPlayer
 import os
+import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
@@ -13,6 +14,8 @@ final class AudioPlayer: ObservableObject {
     @Published var current: Track?
     @Published var queue: [Track] = []
     @Published var index: Int = 0
+
+    private var baseOrder: [Track] = []
 
     @Published var source: PlaySource = .none
 
@@ -112,12 +115,65 @@ final class AudioPlayer: ObservableObject {
 
     private var wasPlayingBeforeInterruption = false
 
+    private var queueCancellables = Set<AnyCancellable>()
+
     private init() {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
         try? AVAudioSession.sharedInstance().setActive(true)
         remote()
         setupWidgetCommandPolling()
         observeInterruptions()
+        restoreQueue()
+        setupQueuePersistence()
+    }
+
+    private struct QueueSnapshot: Codable {
+        var queue: [Track]
+        var index: Int
+        var shuffle: Bool
+        var baseOrder: [Track]
+        var time: Double
+    }
+
+    private static let queueStateURL: URL = {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("queue_state.json")
+    }()
+
+    private func setupQueuePersistence() {
+        Publishers.CombineLatest($queue, $index)
+            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in self?.persistQueue() }
+            .store(in: &queueCancellables)
+
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.persistQueue() }
+        }
+    }
+
+    private func persistQueue() {
+        guard !queue.isEmpty else {
+            try? FileManager.default.removeItem(at: Self.queueStateURL)
+            return
+        }
+        let snap = QueueSnapshot(queue: queue, index: index, shuffle: shuffle, baseOrder: baseOrder, time: time)
+        guard let data = try? JSONEncoder().encode(snap) else { return }
+        try? data.write(to: Self.queueStateURL, options: .atomic)
+    }
+
+    private func restoreQueue() {
+        guard let data = try? Data(contentsOf: Self.queueStateURL),
+              let snap = try? JSONDecoder().decode(QueueSnapshot.self, from: data),
+              !snap.queue.isEmpty, snap.queue.indices.contains(snap.index) else { return }
+        queue = snap.queue
+        index = snap.index
+        shuffle = snap.shuffle
+        baseOrder = snap.baseOrder
+        current = snap.queue[snap.index]
+        total = Double(snap.queue[snap.index].duration)
     }
 
     private func observeInterruptions() {
@@ -169,7 +225,17 @@ final class AudioPlayer: ObservableObject {
     func play(_ track: Track, from list: [Track]? = nil, source: PlaySource = .none) {
         log()
         if source != .none { self.source = source }
-        if let list { queue = list; index = list.firstIndex(of: track) ?? 0 }
+        if let list {
+            baseOrder = list
+            if shuffle {
+
+                queue = [track] + list.filter { $0 != track }.shuffled()
+                index = 0
+            } else {
+                queue = list
+                index = list.firstIndex(of: track) ?? 0
+            }
+        }
         current = track
         load(track)
     }
@@ -178,14 +244,18 @@ final class AudioPlayer: ObservableObject {
         guard !tracks.isEmpty else { return }
         log()
         self.source = source
+        baseOrder = tracks
+        shuffle = shuffled
         queue = shuffled ? tracks.shuffled() : tracks
         index = 0
         current = queue[0]
         load(queue[0])
     }
 
+    static let queueAnim: Animation = .spring(response: 0.35, dampingFraction: 0.85)
+
     func addLast(_ track: Track) {
-        queue.append(track)
+        withAnimation(Self.queueAnim) { queue.append(track) }
         if current == nil {
             index = 0
             current = track
@@ -197,7 +267,7 @@ final class AudioPlayer: ObservableObject {
         if queue.isEmpty {
             addLast(track)
         } else {
-            queue.insert(track, at: index + 1)
+            withAnimation(Self.queueAnim) { queue.insert(track, at: index + 1) }
         }
     }
 
@@ -212,6 +282,25 @@ final class AudioPlayer: ObservableObject {
     func toggleShuffle() {
         shuffle.toggle()
         UISelectionFeedbackGenerator().selectionChanged()
+        applyShuffleToUpcoming()
+    }
+
+    private func applyShuffleToUpcoming() {
+        guard !queue.isEmpty, queue.indices.contains(index) else { return }
+        let head = Array(queue[0...index])
+        let playedHashes = Set(head.map { $0.trackhash })
+        let upcoming = Array(queue[(index + 1)...])
+        if shuffle {
+
+            queue = head + upcoming.shuffled()
+        } else {
+
+            let baseSet = Set(baseOrder.map { $0.trackhash })
+            let restored = baseOrder.filter { !playedHashes.contains($0.trackhash) }
+            let extras = upcoming.filter { !baseSet.contains($0.trackhash) }
+            queue = head + restored + extras
+        }
+
     }
 
     func cycleLoop() {
@@ -225,14 +314,23 @@ final class AudioPlayer: ObservableObject {
 
     func appendToQueue(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
-        queue.append(contentsOf: tracks)
+        withAnimation(Self.queueAnim) { queue.append(contentsOf: tracks) }
+    }
+
+    func enqueueInterleaved(_ tracks: [Track]) {
+        guard !tracks.isEmpty else { return }
+        for t in tracks {
+            let lower = min(index + 1, queue.count)
+            let pos = lower <= queue.count ? Int.random(in: lower...queue.count) : queue.count
+            queue.insert(t, at: pos)
+        }
     }
 
     func next() {
         guard !queue.isEmpty else { return }
         if loop == .one { seek(0); player?.play(); return }
-        if shuffle { index = Int.random(in: 0..<queue.count) }
-        else if index < queue.count - 1 { index += 1 }
+
+        if index < queue.count - 1 { index += 1 }
         else if loop == .all { index = 0 }
         else {
             playing = false
@@ -277,7 +375,9 @@ final class AudioPlayer: ObservableObject {
     }
 
     func seek(_ t: Double) {
-        player?.seek(to: CMTime(seconds: t, preferredTimescale: 1000), toleranceBefore: .zero, toleranceAfter: .zero)
+
+        let tol = CMTime(seconds: 0.2, preferredTimescale: 1000)
+        player?.seek(to: CMTime(seconds: t, preferredTimescale: 1000), toleranceBefore: tol, toleranceAfter: tol)
         time = t
         timeAnchor = t
         timeAnchorDate = Date()
@@ -578,7 +678,8 @@ final class AudioPlayer: ObservableObject {
         guard let t = current else { return }
         var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         info[MPMediaItemPropertyTitle] = t.title
-        info[MPMediaItemPropertyArtist] = t.artist
+
+        info[MPMediaItemPropertyArtist] = t.allArtists
         info[MPMediaItemPropertyAlbumTitle] = t.album
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = time
         info[MPMediaItemPropertyPlaybackDuration] = total

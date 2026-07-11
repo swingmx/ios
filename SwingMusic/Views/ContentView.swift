@@ -79,17 +79,20 @@ struct ContentView: View {
             switch target {
             case .album(let a): state.homePath.append(a)
             case .artist(let a): state.homePath.append(a)
+            case .folder(let f): state.homePath.append(f)
             }
         case .library:
             switch target {
             case .album(let a): state.libraryPath.append(a)
             case .artist(let a): state.libraryPath.append(a)
+            case .folder(let f): state.libraryPath.append(f)
             }
         default:
             state.tab = .home
             switch target {
             case .album(let a): state.homePath.append(a)
             case .artist(let a): state.homePath.append(a)
+            case .folder(let f): state.homePath.append(f)
             }
         }
     }

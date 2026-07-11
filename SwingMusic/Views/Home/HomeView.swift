@@ -65,6 +65,7 @@ struct HomeView: View {
             .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
             .navigationDestination(for: Playlist.self) { PlaylistDetailView(id: $0.id, name: $0.name) }
             .navigationDestination(for: Mix.self) { MixDetailView(mix: $0) }
+            .navigationDestination(for: Folder.self) { FolderBrowserView(path: $0.path, title: $0.name) }
         }
         .task {
             await state.loadHomeSections()
@@ -360,8 +361,15 @@ struct HomeView: View {
                         placeholderColor: m.extra.images?.first?.color ?? m.extra.image?.color)
                         .frame(width: 150, height: 150)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(m.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
-                        Text(m.extra.type.map { "\($0.capitalized) mix" } ?? "Mix").font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
+
+                        Text(m.tagline?.isEmpty == false ? m.tagline! : m.title)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.primary.opacity(0.9))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        if let time = m.time, !time.isEmpty {
+                            Text(time).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                        }
                     }
                     .frame(width: 150, alignment: .leading)
                 }
@@ -447,6 +455,21 @@ struct HomeView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
+
+            if !DownloadManager.shared.downloadedHashes.isEmpty {
+                Button {
+                    state.tab = .library
+                    state.libraryPath.append(LibItem.downloads)
+                } label: {
+                    Label("Go to Downloads", systemImage: "arrow.down.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color(.systemBackground))
+                        .padding(.horizontal, 20).frame(height: 46)
+                        .background(Color.primary, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 460)
     }

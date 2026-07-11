@@ -43,6 +43,9 @@ struct ArtistDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
                 .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
                 .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
+                .navigationDestination(for: ArtistAlbumSection.self) { section in
+                    ArtistAlbumsGridView(title: section.title, albums: section.albums)
+                }
         .task { await load() }
     }
 
@@ -168,9 +171,19 @@ struct ArtistDetailView: View {
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(.primary)
                         Spacer()
-                        Text("\(section.albums.count)")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.primary.opacity(0.6))
+
+                        if section.albums.count > 3 {
+                            NavigationLink(value: section) {
+                                Text("SEE ALL")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.primary.opacity(0.7))
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Text("\(section.albums.count)")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.primary.opacity(0.6))
+                        }
                     }
                     .padding(.horizontal, 18)
 
@@ -313,5 +326,29 @@ struct ArtistDetailView: View {
               (200...299).contains(http.statusCode),
               let img = UIImage(data: data) else { return }
         bgImage = img
+    }
+}
+
+struct ArtistAlbumsGridView: View {
+    let title: String
+    let albums: [Album]
+    @EnvironmentObject var state: AppState
+    private let cols = [GridItem(.adaptive(minimum: 150), spacing: 14)]
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVGrid(columns: cols, spacing: 18) {
+                ForEach(albums) { a in
+                    NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
+                        .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16).padding(.bottom, 100)
+        }
+        .squeezeMiniPlayer(state)
+        .background { AmbientBackground() }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
     }
 }

@@ -81,6 +81,9 @@ struct PlaylistDetailView: View {
         if let d = try? await API.shared.playlist(id) {
             tracks = d.tracks
             await loadBgImage(p: d.info)
+        } else if let group = DownloadManager.shared.downloadGroups.first(where: { $0.id == "playlist:\(id)" }) {
+
+            tracks = DownloadManager.shared.tracks(in: group)
         }
         loading = false
     }

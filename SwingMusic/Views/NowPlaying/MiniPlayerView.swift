@@ -51,7 +51,7 @@ struct MiniPlayerView: View {
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundStyle(.primary)
                                         .lineLimit(1)
-                                    Text(t.artist)
+                                    Text(t.allArtists)
                                         .font(.system(size: 11))
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
@@ -133,7 +133,7 @@ struct NowPlayingAccessory: View {
                                     .foregroundStyle(.primary)
                                     .lineLimit(1)
                                 if !inline {
-                                    Text(t.artist)
+                                    Text(t.allArtists)
                                         .font(.system(size: 12))
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)

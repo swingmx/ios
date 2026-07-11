@@ -3,7 +3,6 @@ import AVKit
 import MediaPlayer
 
 struct FullPlayerView: View {
-    @Namespace private var coverNS
     @EnvironmentObject var state: AppState
     @ObservedObject var player = AudioPlayer.shared
     @Binding var show: Bool
@@ -13,6 +12,7 @@ struct FullPlayerView: View {
     @State private var showLyrics = false
     @State private var showQueue = false
     @State private var drag: CGFloat = 0
+    @State private var isScrubbing = false
     @State private var hDrag: CGFloat = 0
     @State private var isFavorite = false
     @State private var showPlaylistSheet = false
@@ -30,9 +30,9 @@ struct FullPlayerView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let width = min(max(geo.size.width - 56, 280), 336)
+            let width = min(max(geo.size.width - 44, 280), 360)
 
-            let cornerR: CGFloat = 16.5
+            let cornerR: CGFloat = 44
 
             ZStack {
                 bg
@@ -55,19 +55,21 @@ struct FullPlayerView: View {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 30)
                     .onChanged { value in
-                        guard !showLyrics else { return }
+                        guard !showLyrics, !isScrubbing else { return }
                         let h = value.translation.width
                         let v = value.translation.height
                         if v > 0 && abs(v) > abs(h) { drag = v }
                     }
                     .onEnded { value in
+
+                        if isScrubbing { drag = 0; return }
                         let h = value.translation.width
                         let v = value.translation.height
 
                         if showLyrics {
                             if abs(h) > 60 && abs(h) > abs(v) * 1.5 {
                                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                withAnimation { showLyrics = false }
+                                withAnimation(.spring(response: 0.55, dampingFraction: 0.86)) { showLyrics = false }
                             }
                             drag = 0
                             return
@@ -152,7 +154,7 @@ struct FullPlayerView: View {
     }
 
     private func playerContent(width: CGFloat) -> some View {
-        let bigSize = min(width, 320)
+        let bigSize = min(width, 340)
         let playScale: CGFloat = player.playing ? 1.0 : 0.85
 
         return ZStack {
@@ -196,45 +198,21 @@ struct FullPlayerView: View {
                         .opacity(showLyrics ? 0 : 1)
                         .allowsHitTesting(!showLyrics)
 
-                        VStack(spacing: 0) {
-                            if let t = player.current {
-                                if showLyrics {
-                                    HStack(alignment: .top, spacing: 12) {
-                                        AlbumArt(track: t, size: 54)
-                                            .frame(width: 54, height: 54)
-                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                            .matchedGeometryEffect(id: "cover", in: coverNS)
-                                            .shadow(color: .black.opacity(0.13), radius: 4, y: 1)
-                                            .contentShape(Rectangle())
-                                            .onTapGesture { toggleLyrics() }
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(t.title).font(.system(size: 15, weight: .bold)).foregroundStyle(.primary).lineLimit(1)
-                                            Text(t.artist).font(.system(size: 12)).foregroundStyle(.primary.opacity(0.5)).lineLimit(1)
-                                        }
-                                        .padding(.top, 2)
-                                        Spacer(minLength: 0)
-                                    }
-                                    .padding(.top, 8).padding(.leading, 10)
-                                    .animation(.easeInOut(duration: 0.5), value: controlsVisible)
-                                } else {
-                                    coverCarousel(bigSize: bigSize, playScale: playScale)
-                                }
-                            }
-                        }
-                        .allowsHitTesting(true)
+                        coverArea(bigSize: bigSize, playScale: playScale, width: width)
+                            .allowsHitTesting(true)
                     }
-                    .animation(.spring(response: 0.55, dampingFraction: 0.82, blendDuration: 0.2), value: showLyrics)
+
                     .animation(.spring(response: 0.45, dampingFraction: 0.75), value: player.playing)
 
                     VStack(spacing: 0) {
                         timeline(width: width)
-                        Spacer(minLength: 40)
+                        Spacer(minLength: 28)
                         controls(width: width)
-                        Spacer(minLength: 40)
+                        Spacer(minLength: 26)
                         volumeBar(width: width)
-                        Spacer(minLength: 30)
+                        Spacer(minLength: 18)
                         bottomToolbar(width: width)
-                        Spacer(minLength: 20)
+                        Spacer(minLength: 12)
                     }
                     .background(
                         GeometryReader { proxy in
@@ -262,32 +240,65 @@ struct FullPlayerView: View {
         return player.queue.indices.contains(i) ? player.queue[i] : nil
     }
 
-    private func coverCarousel(bigSize: CGFloat, playScale: CGFloat) -> some View {
+    private func coverArea(bigSize: CGFloat, playScale: CGFloat, width: CGFloat) -> some View {
         let s = slot(for: bigSize)
-        return ZStack {
-            if let pt = adjacentTrack(-1) {
-                cover(pt, bigSize: bigSize)
-                    .offset(x: -s + hDrag)
-                    .opacity(coverOpacity(atX: -s + hDrag, slot: s))
+        let small: CGFloat = 54
+        return ZStack(alignment: .topLeading) {
+
+            if !showLyrics {
+                if let pt = adjacentTrack(-1) {
+                    cover(pt, bigSize: bigSize)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .offset(x: -s + hDrag)
+                        .opacity(coverOpacity(atX: -s + hDrag, slot: s))
+                }
+                if let nt = adjacentTrack(1) {
+                    cover(nt, bigSize: bigSize)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .offset(x: s + hDrag)
+                        .opacity(coverOpacity(atX: s + hDrag, slot: s))
+                }
             }
-            if let nt = adjacentTrack(1) {
-                cover(nt, bigSize: bigSize)
-                    .offset(x: s + hDrag)
-                    .opacity(coverOpacity(atX: s + hDrag, slot: s))
-            }
+
             if let t = player.current {
-                cover(t, bigSize: bigSize)
-                    .scaleEffect(playScale)
-                    .matchedGeometryEffect(id: "cover", in: coverNS)
-                    .offset(x: hDrag)
-                    .opacity(coverOpacity(atX: hDrag, slot: s))
-                    .onTapGesture { albumArtTapped(t) }
+                HStack(alignment: .top, spacing: showLyrics ? 12 : 0) {
+                    coverImage(t, size: showLyrics ? small : bigSize, renderSize: bigSize, radius: showLyrics ? 12 : 14)
+                        .scaleEffect(showLyrics ? 1 : playScale)
+                        .offset(x: showLyrics ? 0 : hDrag)
+                        .opacity(showLyrics ? 1 : coverOpacity(atX: hDrag, slot: s))
+                        .onTapGesture { showLyrics ? toggleLyrics() : albumArtTapped(t) }
+
+                    if showLyrics {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(t.title).font(.system(size: 15, weight: .bold)).foregroundStyle(.primary).lineLimit(1)
+                            Text(t.allArtists).font(.system(size: 12)).foregroundStyle(.primary.opacity(0.5)).lineLimit(1)
+                        }
+                        .padding(.top, 2)
+                        .transition(.opacity)
+                        Spacer(minLength: 0)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: showLyrics ? .leading : .center)
             }
         }
-        .frame(width: bigSize, height: bigSize)
+        .frame(width: width, height: bigSize, alignment: .topLeading)
         .contentShape(Rectangle())
         .gesture(artSwipeGesture(slot: s))
-        .padding(.top, 20)
+        .padding(.top, showLyrics ? 8 : 20)
+        .padding(.leading, showLyrics ? 10 : 0)
+    }
+
+    private func coverImage(_ t: Track, size: CGFloat, renderSize: CGFloat, radius: CGFloat) -> some View {
+        let sizes = ["original", "", "medium"]
+        let scale = renderSize > 0 ? size / renderSize : 1
+        return Img(urls: sizes.compactMap { API.shared.img(t.image, size: $0) },
+                   radius: 0, blurhash: t.blurhash, placeholderColor: t.color)
+            .frame(width: renderSize, height: renderSize)
+            .scaleEffect(scale, anchor: .topLeading)
+            .frame(width: size, height: size, alignment: .topLeading)
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+
+            .shadow(color: .black.opacity(0.4), radius: 22, y: 12)
     }
 
     private func cover(_ track: Track, bigSize: CGFloat) -> some View {
@@ -383,7 +394,7 @@ struct FullPlayerView: View {
                     Button {
                         artistTapped(t)
                     } label: {
-                        Text(t.artist).font(.system(size: 18)).foregroundStyle(.primary.opacity(0.6)).lineLimit(1)
+                        Text(t.allArtists).font(.system(size: 18)).foregroundStyle(.primary.opacity(0.6)).lineLimit(1)
                     }
                     .buttonStyle(.plain)
                 }
@@ -394,11 +405,18 @@ struct FullPlayerView: View {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         let newState = !isFavorite
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { isFavorite = newState }
-                        Task { try? await API.shared.toggleFavorite(hash: t.trackhash, type: "track", add: newState) }
+
+                        Task {
+                            let confirmed = await state.setTrackFavorite(t, newState)
+                            if confirmed != newState {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { isFavorite = confirmed }
+                            }
+                        }
                     } label: {
                         ZStack {
-                            Circle().fill(isFavorite ? Color.yellow.opacity(0.15) : Color.primary.opacity(0.1)).frame(width: 50, height: 50)
-                            Image(systemName: isFavorite ? "star.fill" : "star").font(.system(size: 18, weight: .semibold)).foregroundStyle(isFavorite ? Color.yellow : Color.primary)
+                            Circle().fill(isFavorite ? Color.pink.opacity(0.15) : Color.primary.opacity(0.1)).frame(width: 50, height: 50)
+                            Image(systemName: isFavorite ? "heart.fill" : "heart").font(.system(size: 18, weight: .semibold)).foregroundStyle(isFavorite ? Color.pink : Color.primary)
+                                .symbolEffect(.bounce, value: isFavorite)
                         }
                         .contentShape(Circle())
                     }
@@ -420,7 +438,7 @@ struct FullPlayerView: View {
 
     private func timeline(width: CGFloat) -> some View {
         VStack(spacing: 6) {
-            ThinSlider(value: Binding(get: { min(max(0, player.time), max(player.total, 1)) }, set: { player.seek($0) }), range: 0...max(player.total, 1), trackHeight: 4, activeColor: .primary.opacity(0.9), inactiveColor: .primary.opacity(0.12))
+            ThinSlider(value: Binding(get: { min(max(0, player.time), max(player.total, 1)) }, set: { player.seek($0) }), range: 0...max(player.total, 1), onEditingChanged: { isScrubbing = $0 }, trackHeight: 6, activeColor: .primary.opacity(0.9), inactiveColor: .primary.opacity(0.12))
             HStack {
                 Text(player.time.mmss)
                 Spacer()
@@ -500,7 +518,7 @@ struct FullPlayerView: View {
                 .frame(height: 24)
                 .tint(.primary.opacity(0.7))
             Image(systemName: "speaker.wave.3.fill").font(.system(size: 11)).foregroundStyle(.primary.opacity(0.4))
-        }.frame(maxWidth: .infinity).padding(.top, 10)
+        }.frame(maxWidth: .infinity).padding(.top, 2)
     }
 
     private func loadBG() async {
@@ -563,8 +581,9 @@ struct SystemVolumeSlider: UIViewRepresentable {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             if let slider = v.subviews.first(where: { $0 is UISlider }) as? UISlider {
-                slider.minimumTrackTintColor = UIColor.label.withAlphaComponent(0.7)
-                slider.maximumTrackTintColor = UIColor.label.withAlphaComponent(0.1)
+
+                slider.setMinimumTrackImage(Self.trackImage(UIColor.white.withAlphaComponent(0.9)), for: .normal)
+                slider.setMaximumTrackImage(Self.trackImage(UIColor.white.withAlphaComponent(0.12)), for: .normal)
 
                 let empty = UIImage()
                 slider.setThumbImage(empty, for: .normal)
@@ -574,4 +593,13 @@ struct SystemVolumeSlider: UIViewRepresentable {
         return v
     }
     func updateUIView(_ v: MPVolumeView, context: Context) {}
+
+    private static func trackImage(_ color: UIColor, height: CGFloat = 6) -> UIImage {
+        let size = CGSize(width: height, height: height)
+        let img = UIGraphicsImageRenderer(size: size).image { _ in
+            color.setFill()
+            UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: height / 2).fill()
+        }
+        return img.resizableImage(withCapInsets: UIEdgeInsets(top: 0, left: height / 2, bottom: 0, right: height / 2))
+    }
 }

@@ -44,21 +44,11 @@ struct LibraryView: View {
                 }
 
                 if !state.allPlaylists.isEmpty {
+                    let pinned = state.allPlaylists.filter { $0.pinned }
+                    let others = state.allPlaylists.filter { !$0.pinned }
+
                     Section {
-                        ForEach(state.allPlaylists) { pl in
-                            NavigationLink(value: pl) {
-                                HStack(spacing: 12) {
-                                    PlaylistImageGrid(playlist: pl, size: 44)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(pl.name)
-                                            .lineLimit(1)
-                                        Text("\(pl.trackcount) songs")
-                                            .font(.system(size: 13))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                        }
+                        ForEach(pinned.isEmpty ? others : pinned) { playlistRow($0) }
                     } header: {
                         HStack {
                             Text("Playlists")
@@ -69,6 +59,12 @@ struct LibraryView: View {
                                 Image(systemName: "plus")
                                     .font(.system(size: 16, weight: .semibold))
                             }
+                        }
+                    }
+
+                    if !pinned.isEmpty && !others.isEmpty {
+                        Section {
+                            ForEach(others) { playlistRow($0) }
                         }
                     }
                 }
@@ -151,6 +147,8 @@ struct LibraryView: View {
             .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
             .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
             .navigationDestination(for: Playlist.self) { PlaylistDetailView(id: $0.id, name: $0.name) }
+            .navigationDestination(for: Folder.self) { FolderBrowserView(path: $0.path, title: $0.name) }
+            .navigationDestination(for: Mix.self) { MixDetailView(mix: $0) }
         }
         .task {
             await state.loadAlbums()
@@ -158,6 +156,29 @@ struct LibraryView: View {
             await state.loadPlaylists()
 
             if state.recentAdded.isEmpty { await state.loadHome() }
+        }
+    }
+
+    @ViewBuilder
+    private func playlistRow(_ pl: Playlist) -> some View {
+        NavigationLink(value: pl) {
+            HStack(spacing: 12) {
+                PlaylistImageGrid(playlist: pl, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(pl.name)
+                        .lineLimit(1)
+                    Text("\(pl.trackcount) songs")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if pl.pinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(45))
+                }
+            }
         }
     }
 }

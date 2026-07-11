@@ -36,25 +36,52 @@ struct MixDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             tracks = (try? await API.shared.mixTracks(id: mix.id, sourcehash: mix.sourcehash, ogSourcehash: mix.ogSourcehash)) ?? []
+            if tracks.isEmpty, let group = DownloadManager.shared.downloadGroups.first(where: { $0.id == "mix:\(mix.id)" }) {
+
+                tracks = DownloadManager.shared.tracks(in: group)
+            }
             loading = false
             await loadBg()
         }
     }
 
+    private var totalDuration: Int { tracks.reduce(0) { $0 + $1.duration } }
+
+    private func durationText(_ s: Int) -> String {
+        let h = s / 3600, m = (s % 3600) / 60
+        if h > 0 { return m > 0 ? "\(h) hr \(m) min" : "\(h) hr" }
+        if m > 0 { return "\(m) min" }
+        return "\(s) sec"
+    }
+
+    private var metaLine: String {
+        let count = tracks.isEmpty ? (mix.trackcount ?? 0) : tracks.count
+        var parts = ["\(count) song\(count == 1 ? "" : "s")"]
+        if totalDuration > 0 { parts.append(durationText(totalDuration)) }
+        return parts.joined(separator: " · ")
+    }
+
     private var header: some View {
         VStack(spacing: 16) {
+
+            Text(mix.title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 16)
+
             Img(urls: imageURLs("medium"), radius: 14, placeholderColor: mix.extra.images?.first?.color ?? mix.extra.image?.color)
                 .frame(width: 220, height: 220)
                 .shadow(color: .black.opacity(0.6), radius: 30, y: 10)
-                .padding(.top, 16)
 
             VStack(spacing: 6) {
-                Text(mix.title)
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.center)
-                Text([mix.extra.type.map { "\($0.capitalized) mix" } ?? "Mix",
-                      mix.trackcount.map { "\($0) songs" }].compactMap { $0 }.joined(separator: " · "))
+                if let tag = mix.tagline, !tag.isEmpty {
+                    Text(tag)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.primary.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                }
+                Text(metaLine)
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }

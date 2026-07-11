@@ -81,10 +81,14 @@ struct SyncedLyricsView: View {
                                     }
 
                                     .compositingGroup()
-                                    .scaleEffect(isActive ? 1.0 : 0.92, anchor: isBg ? .trailing : .leading)
 
-                                    .blur(radius: isActive || userScrolledAway ? 0 : (abs(i - index) > 2 ? 2.5 : 1.5))
-                                    .opacity(isActive ? 1.0 : (userScrolledAway ? 0.8 : (abs(i - index) > 2 ? 0.3 : 0.5)))
+                                    .opacity(isActive ? 1.0 : (userScrolledAway ? 0.85 : (isPast ? 0.497 : 0.51)))
+
+                                    .animation(.easeInOut(duration: 0.35), value: index)
+
+                                    .blur(radius: isActive || userScrolledAway ? 0 : min(1.25 * CGFloat(abs(i - index)), 6.83))
+
+                                    .modifier(CascadeBounce(distance: abs(i - index), index: index))
 
                                     .geometryGroup()
                                     .frame(width: geo.size.width - 48, alignment: isBg ? .trailing : .leading)
@@ -100,12 +104,6 @@ struct SyncedLyricsView: View {
                                     guard isActive, !midY.isNaN else { return }
                                     reengageIfCentered(midY, geo.size.height)
                                 }
-
-                                .animation(
-                                    .spring(response: 0.6, dampingFraction: 1.0)
-                                        .delay(Double(min(abs(i - index), 4)) * 0.03),
-                                    value: index
-                                )
                             }
 
                             if let cr = lyrics.copyright, !cr.isEmpty {
@@ -131,8 +129,8 @@ struct SyncedLyricsView: View {
                     .onChange(of: index) { _, idx in
                         guard autoScrollEnabled else { return }
 
-                        withAnimation(.spring(response: 0.6, dampingFraction: 1.0)) {
-                            proxy.scrollTo(idx, anchor: UnitPoint(x: 0.5, y: 0.35))
+                        withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                            proxy.scrollTo(idx, anchor: UnitPoint(x: 0.5, y: 0.22))
                         }
                     }
 
@@ -142,7 +140,7 @@ struct SyncedLyricsView: View {
                             autoScrollEnabled = true
                             userScrolledAway = false
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                proxy.scrollTo(index, anchor: UnitPoint(x: 0.5, y: 0.35))
+                                proxy.scrollTo(index, anchor: UnitPoint(x: 0.5, y: 0.22))
                             }
                         } label: {
                             HStack(spacing: 7) {
@@ -184,25 +182,15 @@ struct SyncedLyricsView: View {
         let words = line.words ?? []
 
         if !words.isEmpty {
-            WordLayout {
-                ForEach(Array(words.enumerated()), id: \.element.id) { i, word in
-                    let isLast = i == words.count - 1
-                    let duration = isLast ? max(0.4, (line.time + 3.0) - word.time) : (words[i+1].time - word.time)
 
-                    KaraokeWord(
-                        text: word.text,
-                        startTime: word.time,
-                        duration: duration,
-                        hasSpace: word.hasSpace,
-                        isBg: isBg,
-                        isActive: isActive,
-                        isPast: isPast
-                    )
+            if isActive {
+                TimelineView(.animation) { context in
+                    let now = AudioPlayer.shared.smoothTime(at: context.date)
+                    wordRow(line, words: words, isBg: isBg, isActive: true, isPast: isPast, now: now)
                 }
+            } else {
+                wordRow(line, words: words, isBg: isBg, isActive: false, isPast: isPast, now: 0)
             }
-            .lineLimit(nil)
-            .multilineTextAlignment(isBg ? .trailing : .leading)
-            .fixedSize(horizontal: false, vertical: true)
         } else {
             Text(line.text)
                 .foregroundStyle(isActive ? Color.primary : Color.primary.opacity(isPast ? 0.35 : 0.3))
@@ -211,6 +199,54 @@ struct SyncedLyricsView: View {
                 .multilineTextAlignment(isBg ? .trailing : .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func wordRow(_ line: LyricLine, words: [LyricWord], isBg: Bool, isActive: Bool, isPast: Bool, now: Double) -> some View {
+        WordLayout {
+            ForEach(Array(words.enumerated()), id: \.element.id) { i, word in
+                let isLast = i == words.count - 1
+                let duration = isLast ? max(0.4, (line.time + 3.0) - word.time) : (words[i+1].time - word.time)
+                KaraokeWord(
+                    text: word.text,
+                    startTime: word.time,
+                    duration: duration,
+                    hasSpace: word.hasSpace,
+                    isBg: isBg,
+                    isActive: isActive,
+                    isPast: isPast,
+                    now: now
+                )
+            }
+        }
+        .lineLimit(nil)
+        .multilineTextAlignment(isBg ? .trailing : .leading)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct CascadeBounce: ViewModifier {
+    let distance: Int
+    let index: Int
+    @State private var offset: CGFloat = 0
+    @State private var last: Int = -1
+
+    func body(content: Content) -> some View {
+        content
+            .offset(y: offset)
+            .onChange(of: index) { _, newIndex in
+                let dir: CGFloat = last < 0 ? 1 : (newIndex >= last ? 1 : -1)
+                last = newIndex
+
+                guard distance <= 12 else { offset = 0; return }
+
+                let delay = 1 - pow(0.95, Double(distance))
+
+                var tx = Transaction(); tx.disablesAnimations = true
+                withTransaction(tx) { offset = dir * 18 }
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.6).delay(delay)) {
+                    offset = 0
+                }
+            }
     }
 }
 
@@ -223,7 +259,7 @@ struct KaraokeWord: View {
     var isActive: Bool = true
     var isPast: Bool = false
 
-    @ObservedObject private var player = AudioPlayer.shared
+    var now: Double = 0
 
     private var fontSize: Double { isBg ? 26 : 34 }
     private var emphasized: Bool { duration >= 1.0 && !text.isEmpty }
@@ -231,16 +267,12 @@ struct KaraokeWord: View {
     var body: some View {
         Group {
             if isActive {
-                TimelineView(.animation) { context in
-                    let now = player.smoothTime(at: context.date)
-                    let fill = min(max((now - startTime) / max(duration, 0.1), 0), 1)
-
-                    Group {
-                        if emphasized {
-                            emphasizedWord(now: now, fill: fill)
-                        } else {
-                            plainWord(fill: fill)
-                        }
+                let fill = min(max((now - startTime) / max(duration, 0.1), 0), 1)
+                Group {
+                    if emphasized {
+                        emphasizedWord(now: now, fill: fill)
+                    } else {
+                        plainWord(fill: fill)
                     }
                 }
             } else {
@@ -263,13 +295,17 @@ struct KaraokeWord: View {
     }
 
     private func emphasizedWord(now: Double, fill: Double) -> some View {
-        Text(text)
+
+        let pB = (now - startTime) / max(duration, 0.1)
+        let glow = max(0, 1 - (2 * pB - 1) * (2 * pB - 1)) * min(1.0, 0.5 * duration)
+        return Text(text)
             .opacity(0)
             .overlay(alignment: .leading) {
                 ZStack(alignment: .leading) {
                     charRow(now: now, bright: false)
                     charRow(now: now, bright: true)
                         .mask { fillGradient(fill) }
+                        .shadow(color: Color.primary.opacity(0.5 * glow), radius: 7 * glow)
                 }
                 .fixedSize(horizontal: true, vertical: false)
             }
@@ -289,8 +325,6 @@ struct KaraokeWord: View {
                 let s = b * amount
                 Text(String(chars[i]))
                     .foregroundStyle(bright ? Color.primary : Color.primary.opacity(0.28))
-                    .shadow(color: bright ? Color.primary.opacity(0.5 * s) : .clear,
-                            radius: bright ? 6 * s : 0)
                     .scaleEffect(1 + 0.1 * s, anchor: .bottom)
                     .offset(y: -0.07 * fontSize * s)
             }

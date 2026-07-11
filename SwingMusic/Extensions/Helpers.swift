@@ -140,12 +140,15 @@ struct ThinSlider: View {
 
     @State private var isDragging = false
 
+    @State private var dragFraction: CGFloat = 0
+
     var body: some View {
         GeometryReader { geo in
             let total = geo.size.width
-            let fraction = (value - range.lowerBound) / max(range.upperBound - range.lowerBound, 0.001)
-            let filled = total * min(max(CGFloat(fraction), 0), 1)
-            let height: CGFloat = isDragging && expandOnDrag ? 7 : trackHeight
+            let boundFraction = CGFloat((value - range.lowerBound) / max(range.upperBound - range.lowerBound, 0.001))
+            let fraction = isDragging ? dragFraction : boundFraction
+            let filled = total * min(max(fraction, 0), 1)
+            let height: CGFloat = isDragging && expandOnDrag ? 9 : trackHeight
 
             ZStack(alignment: .leading) {
 
@@ -162,16 +165,18 @@ struct ThinSlider: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { drag in
+
+                        let clamped = min(max(drag.location.x / total, 0), 1)
                         if !isDragging {
                             isDragging = true
                             onEditingChanged?(true)
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         }
-                        let frac = Double(drag.location.x / total)
-                        let clamped = min(max(frac, 0), 1)
-                        value = range.lowerBound + clamped * (range.upperBound - range.lowerBound)
+                        dragFraction = clamped
                     }
-                    .onEnded { _ in
+                    .onEnded { drag in
+                        let clamped = min(max(drag.location.x / total, 0), 1)
+                        value = range.lowerBound + Double(clamped) * (range.upperBound - range.lowerBound)
                         isDragging = false
                         onEditingChanged?(false)
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()

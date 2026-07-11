@@ -15,7 +15,8 @@ struct TrackRow: View {
                 HStack(spacing: 12) {
                     if let n = num {
                         ZStack {
-                            if active {
+
+                            if active && !showArt {
                                 Bars(color: .accentColor)
                             } else {
                                 Text("\(n)")
@@ -30,7 +31,7 @@ struct TrackRow: View {
                         ZStack {
                             AlbumArt(track: track, size: 46)
                             if active {
-                                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.black.opacity(0.5))
+                                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.black.opacity(0.62))
                                 Bars(color: .white).scaleEffect(0.7)
                             }
                         }
@@ -76,7 +77,18 @@ struct TrackRow: View {
                 } else {
                     Button { state.navigationTarget = .artist(Artist(stub: track.artisthash, name: track.artist, image: track.image)) } label: { Label("View Artist", systemImage: "music.mic") }
                 }
+                Button {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    Task { await state.setTrackFavorite(track, true) }
+                } label: { Label("Add to Favorites", systemImage: "heart") }
                 Button { state.requestedTrackForPlaylist = track } label: { Label("Add to Playlist", systemImage: "text.badge.plus") }
+                let parent = (track.filepath as NSString).deletingLastPathComponent
+                if !parent.isEmpty {
+                    Button {
+                        let name = (parent as NSString).lastPathComponent
+                        state.navigationTarget = .folder(Folder(path: parent, name: name.isEmpty ? parent : name))
+                    } label: { Label("Go to Folder", systemImage: "folder") }
+                }
                 Divider()
                 if DownloadManager.shared.isDownloaded(track) {
                     Button(role: .destructive) { DownloadManager.shared.removeDownload(track) } label: { Label("Remove Download", systemImage: "trash") }
