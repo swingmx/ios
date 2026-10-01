@@ -30,6 +30,8 @@ struct ArtistDetailView: View {
                         statsSection(stats, color: d.artist.color)
                     }
 
+                    ArtistAboutSection(artistName: d.artist.name, hint: d.tracks.first?.title)
+
                     Color.clear.frame(height: 110)
                 }
             } else {
@@ -40,7 +42,7 @@ struct ArtistDetailView: View {
         }
         .squeezeMiniPlayer(state)
         .background { AdaptiveDetailBackground(image: bgImage) }
-        .navigationBarTitleDisplayMode(.inline)
+        .detailScrollTitle(detail?.artist.name ?? "", after: 380)
                 .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
                 .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
                 .navigationDestination(for: ArtistAlbumSection.self) { section in
@@ -51,74 +53,42 @@ struct ArtistDetailView: View {
 
     private func heroSection(_ d: ArtistDetail) -> some View {
             VStack(spacing: 16) {
-                HStack {
-                    Spacer()
-                    ArtistAvatar(artist: d.artist, size: 160)
-                        .padding(.top, 20)
-                    Spacer()
+                GeometryReader { geo in
+                    let minY = geo.frame(in: .scrollView).minY
+                    ArtistAvatar(artist: d.artist, size: 170)
+                        .shadow(color: (d.artist.color.flatMap { Color(rgbString: $0) } ?? .black).opacity(0.55),
+                                radius: 34, y: 12)
+                        .scaleEffect(minY > 0 ? 1 + minY / 600 : 1 + minY / 2400, anchor: .bottom)
+                        .offset(y: minY > 0 ? -minY * 0.3 : -minY * 0.2)
+                        .opacity(minY < 0 ? max(0.25, 1 + minY / 500) : 1)
+                        .frame(maxWidth: .infinity)
                 }
+                .frame(height: 170)
+                .padding(.top, 20)
 
                 Text(d.artist.name)
-                    .font(.system(size: 30, weight: .bold))
+                    .font(.largeTitle.bold())
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
 
-                HStack(spacing: 8) {
-                    if let tc = d.artist.trackcount {
-                        statBadge("\(tc) Songs")
-                    }
-                    if let ac = d.artist.albumcount {
-                        statBadge("\(ac) Albums")
-                    }
-                    if let dur = d.artist.duration, dur > 0 {
-                        statBadge(formatDuration(dur))
-                    }
-                }
+                Text(statsLine(d.artist))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
-                HStack(spacing: 12) {
-                    Button { state.player.playAll(d.tracks, source: .artist(hash)) } label: {
-                        Label("Play", systemImage: "play.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Color(.systemBackground))
-                            .frame(width: 150, height: 46)
-                            .background(Color.primary, in: Capsule())
-                    }
-                    .buttonStyle(Pressed())
-
-                    Button { state.player.playAll(d.tracks, shuffled: true, source: .artist(hash)) } label: {
-                        Label("Shuffle", systemImage: "shuffle")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 150, height: 46)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .overlay(Capsule().strokeBorder(.primary.opacity(0.12), lineWidth: 0.5))
-                    }
-                    .buttonStyle(Pressed())
-                }
+                DetailPlayButtons(
+                    play: { state.player.playAll(d.tracks, source: .artist(hash)) },
+                    shuffle: { state.player.playAll(d.tracks, shuffled: true, source: .artist(hash)) }
+                )
             }
     }
 
     private func topSongsList(_ d: ArtistDetail) -> some View {
         let shown = showAllTracks ? d.tracks : Array(d.tracks.prefix(5))
         return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Top Songs")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.primary)
-                Spacer()
-                if d.tracks.count > 5 {
-                    Button {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.9)) { showAllTracks.toggle() }
-                    } label: {
-                        Text(showAllTracks ? "SHOW LESS" : "SEE ALL")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.primary.opacity(0.7))
-                    }
-                    .buttonStyle(.plain)
-                }
+            sectionHeader("Top Songs", showsChevron: d.tracks.count > 5) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.9)) { showAllTracks.toggle() }
             }
-            .padding(.horizontal, 18)
 
             VStack(spacing: 0) {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, t in
@@ -130,22 +100,44 @@ struct ArtistDetailView: View {
         }
     }
 
+    private func sectionHeaderLabel(_ title: String, showsChevron: Bool) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.title2.bold())
+                .foregroundStyle(.primary)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 18)
+        .contentShape(.rect)
+    }
+
+    @ViewBuilder
+    private func sectionHeader(_ title: String, showsChevron: Bool, action: @escaping () -> Void) -> some View {
+        if showsChevron {
+            Button(action: action) { sectionHeaderLabel(title, showsChevron: true) }
+                .buttonStyle(.plain)
+        } else {
+            sectionHeaderLabel(title, showsChevron: false)
+        }
+    }
+
     @ViewBuilder
     private func genresStrip(_ d: ArtistDetail) -> some View {
         if let genres = d.artist.genres, !genres.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Genres")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 18)
+                sectionHeaderLabel("Genres", showsChevron: false)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(genres, id: \.genrehash) { g in
                             Text(g.name)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.primary.opacity(0.85))
-                                .padding(.horizontal, 14).padding(.vertical, 7)
-                                .background(Color.primary.opacity(0.1), in: Capsule())
+                                .font(.subheadline.weight(.medium))
+                                .padding(.horizontal, 14).padding(.vertical, 8)
+                                .glassEffect(.regular, in: .capsule)
                         }
                     }
                     .padding(.horizontal, 18)
@@ -166,26 +158,14 @@ struct ArtistDetailView: View {
         Group {
             if !section.albums.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text(section.title)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(.primary)
-                        Spacer()
-
-                        if section.albums.count > 3 {
-                            NavigationLink(value: section) {
-                                Text("SEE ALL")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.primary.opacity(0.7))
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            Text("\(section.albums.count)")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.primary.opacity(0.6))
+                    if section.albums.count > 3 {
+                        NavigationLink(value: section) {
+                            sectionHeaderLabel(section.title, showsChevron: true)
                         }
+                        .buttonStyle(.plain)
+                    } else {
+                        sectionHeaderLabel(section.title, showsChevron: false)
                     }
-                    .padding(.horizontal, 18)
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 14) {
@@ -206,7 +186,7 @@ struct ArtistDetailView: View {
     private func statsSection(_ stats: [ArtistStat], color: String?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Stats")
-                .font(.system(size: 20, weight: .bold))
+                .font(.title2.bold())
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 18)
 
@@ -221,37 +201,42 @@ struct ArtistDetailView: View {
         }
     }
 
+    private func statsLine(_ a: Artist) -> String {
+        var parts: [String] = []
+        if let tc = a.trackcount { parts.append("\(tc) \(tc == 1 ? "Song" : "Songs")") }
+        if let ac = a.albumcount { parts.append("\(ac) \(ac == 1 ? "Album" : "Albums")") }
+        if let dur = a.duration, dur > 0 { parts.append(DetailFooter.duration(dur)) }
+        return parts.joined(separator: " · ")
+    }
+
     private func statCard(_ stat: ArtistStat, color: String?) -> some View {
-        let base = color.flatMap { Color(rgbString: $0) } ?? .blue
-        let fg = textColor(forRGB: color)
-        return VStack(alignment: .leading, spacing: 8) {
+        let accent = color.flatMap { Color(rgbString: $0) } ?? .accentColor
+        return VStack(alignment: .leading, spacing: 0) {
             if let image = stat.image, !image.isEmpty {
-                Img(url: API.shared.img(image, size: "small"), radius: 8)
-                    .frame(width: 40, height: 40)
+                Img(url: API.shared.img(image, size: "small"), radius: 6)
+                    .frame(width: 32, height: 32)
             } else {
                 Image(systemName: statIcon(stat.cssclass))
-                    .font(.system(size: 20))
-                    .foregroundStyle(fg.opacity(0.9))
-                    .frame(width: 40, height: 40)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(accent.gradient, in: .circle)
             }
+            Spacer(minLength: 12)
             Text(stat.value)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(fg)
+                .font(.title3.weight(.bold))
+                .fontDesign(.rounded)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Text(stat.text)
-                .font(.system(size: 12))
-                .foregroundStyle(fg.opacity(0.6))
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 .lineLimit(2)
-            Spacer(minLength: 0)
         }
-        .padding(16)
-        .frame(width: 160, height: 160, alignment: .topLeading)
-        .background(base)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.primary.opacity(0.12), lineWidth: 0.5)
-        )
+        .padding(14)
+        .frame(width: 150, height: 130, alignment: .topLeading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 20))
     }
 
     private func statIcon(_ cssclass: String) -> String {
@@ -278,10 +263,7 @@ struct ArtistDetailView: View {
 
     private var similarArtistsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Similar Artists")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 18)
+            sectionHeaderLabel("Similar Artists", showsChevron: false)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 18) {
@@ -321,7 +303,7 @@ struct ArtistDetailView: View {
         if let tk = API.shared.token {
             req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization")
         }
-        guard let (data, response) = try? await URLSession.shared.data(for: req),
+        guard let (data, response) = try? await Net.session.data(for: req),
               let http = response as? HTTPURLResponse,
               (200...299).contains(http.statusCode),
               let img = UIImage(data: data) else { return }

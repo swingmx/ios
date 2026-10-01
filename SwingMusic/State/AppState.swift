@@ -16,7 +16,6 @@ final class ScrollTracker: ObservableObject {
             let isDown = delta < 0
             if isDown != down { down = isDown }
         }
-
         if abs(newOffset - offset) > 6 { offset = newOffset }
     }
 
@@ -29,7 +28,6 @@ final class ScrollTracker: ObservableObject {
 
 @MainActor
 final class AppState: ObservableObject {
-
     let scroll = ScrollTracker.shared
     @Published var authed = false
     @Published var tab: Tab = .home
@@ -48,7 +46,7 @@ final class AppState: ObservableObject {
     @Published var showPlayer = false
     @Published var showLyrics = false
     @Published var lyrics: ParsedLyrics?
-    @Published var lyricIdx = 0
+    var lyricIdx = 0
     @Published var loadingLyrics = false
 
     @Published var colorCache: [String: Color] = [:]
@@ -168,14 +166,16 @@ final class AppState: ObservableObject {
         do { let pl = try await API.shared.playlists(); allPlaylists = pl } catch { print("Error loaded playlists: \(error)") }
     }
 
-    func loadAlbums() async {
-        if !allAlbums.isEmpty { return }
-        allAlbums = (try? await API.shared.albums(limit: 300))?.items ?? []
+    func loadAlbums(force: Bool = false) async {
+        if !allAlbums.isEmpty, !force { return }
+        do { allAlbums = try await API.shared.albums(limit: 300).items }
+        catch { print("❌ Alben laden: \(error)") }
     }
 
-    func loadArtists() async {
-        if !allArtists.isEmpty { return }
-        allArtists = (try? await API.shared.artists(limit: 300))?.items ?? []
+    func loadArtists(force: Bool = false) async {
+        if !allArtists.isEmpty, !force { return }
+        do { allArtists = try await API.shared.artists(limit: 300).items }
+        catch { print("❌ Artists laden: \(error)") }
     }
 
     @Published var shufflingLibrary = false
@@ -252,7 +252,6 @@ final class AppState: ObservableObject {
     private let favPageSize = 50
 
     func loadFavorites() async {
-
         async let summary = try? await API.shared.favoritesSummary()
         async let tracksPage = try? await API.shared.favoriteTracks(start: 0, limit: favPageSize)
         async let albumsPage = try? await API.shared.favoriteAlbums(start: 0, limit: favPageSize)
@@ -344,6 +343,8 @@ final class AppState: ObservableObject {
         let c = await color(for: track.albumhash)
         withAnimation(.easeInOut(duration: 1.0)) { accent = c }
 
+        let musixmatchTask = wordByWordTask(for: track)
+
         await loadBGImage(for: track)
 
         var parsed: ParsedLyrics?
@@ -387,7 +388,6 @@ final class AppState: ObservableObject {
         if parsed == nil || parsed?.synced == false {
             print("🔍 Sync: \(parsed == nil ? "Keine Lyrics" : "Nur unsynced Lyrics") gefunden. Versuche Plugin/lrclib Suche...")
             do {
-
                 if parsed == nil {
                      let serverSearchResponse = try await API.shared.fetchLyricsFromServer(
                         hash: track.trackhash,
@@ -425,6 +425,120 @@ final class AppState: ObservableObject {
         lyrics = parsed
         loadingLyrics = false
         await ActivityManager.shared.updateAccent(c)
+
+        await upgradeToWordByWord(for: track, task: musixmatchTask)
+    }
+
+    private func wordByWordTask(for track: Track) -> Task<String?, Never>? {
+        guard UserDefaults.standard.object(forKey: "musixmatchWordByWord") as? Bool ?? true else {
+            return nil
+        }
+        return Task {
+            await MusixmatchLyrics.shared.richsyncLRC(
+                title: track.title,
+                artist: track.artist,
+                album: track.album,
+                duration: track.duration
+            )
+        }
+    }
+
+    private func upgradeToWordByWord(
+        for track: Track,
+        task: Task<String?, Never>?
+    ) async {
+        guard let task else { return }
+        if let current = lyrics, current.lines.contains(where: { ($0.words?.count ?? 0) > 1 }) {
+            task.cancel()
+            return
+        }
+
+        let lrc = await task.value
+        guard let lrc else { return }
+        guard player.current?.trackhash == track.trackhash else { return }
+
+        let parsed = parseLyrics(
+            LyricsResponse(lyrics: .string(lrc), synced: true, copyright: "Lyrics by Musixmatch"),
+            trackDuration: track.duration
+        )
+        guard !parsed.lines.isEmpty else { return }
+
+        if let reference = lyrics, reference.synced, reference.lines.count >= 4 {
+            if let shift = Self.timeShift(from: parsed, to: reference) {
+                if abs(shift) > 0.05 {
+                    print("↔️ Musixmatch: um \(String(format: "%.2f", shift)) s ausgerichtet.")
+                    lyrics = Self.shifted(parsed, by: shift)
+                    syncLyric(player.time)
+                    return
+                }
+            } else if let mine = reference.lines.first?.time,
+                      let theirs = parsed.lines.first?.time,
+                      abs(mine - theirs) > 2 {
+                print("⚠️ Musixmatch: andere Fassung (\(theirs)s statt \(mine)s) — verworfen.")
+                return
+            }
+        }
+
+        lyrics = parsed
+        syncLyric(player.time)
+    }
+
+    private static func timeShift(
+        from candidate: ParsedLyrics,
+        to reference: ParsedLyrics
+    ) -> TimeInterval? {
+        func key(_ text: String) -> String {
+            String(
+                text.lowercased()
+                    .filter { $0.isLetter || $0.isNumber }
+                    .prefix(10)
+            )
+        }
+
+        var referenceTimes: [String: TimeInterval] = [:]
+        for line in reference.lines {
+            let k = key(line.text)
+            guard k.count >= 6 else { continue }
+            if referenceTimes[k] == nil { referenceTimes[k] = line.time }
+        }
+
+        var deltas: [TimeInterval] = []
+        for line in candidate.lines {
+            let k = key(line.text)
+            guard k.count >= 6, let referenceTime = referenceTimes[k] else { continue }
+            deltas.append(referenceTime - line.time)
+        }
+
+        guard deltas.count >= 3 else { return nil }
+        deltas.sort()
+        let median = deltas[deltas.count / 2]
+
+        let agreeing = deltas.filter { abs($0 - median) <= 0.5 }.count
+        guard Double(agreeing) / Double(deltas.count) >= 0.7 else { return nil }
+        return median
+    }
+
+    private static func shifted(
+        _ lyrics: ParsedLyrics,
+        by shift: TimeInterval
+    ) -> ParsedLyrics {
+        ParsedLyrics(
+            lines: lyrics.lines.map { line in
+                LyricLine(
+                    time: max(line.time + shift, 0),
+                    text: line.text,
+                    words: line.words?.map {
+                        LyricWord(
+                            time: max($0.time + shift, 0),
+                            text: $0.text,
+                            hasSpace: $0.hasSpace
+                        )
+                    }
+                )
+            },
+            synced: lyrics.synced,
+            copyright: lyrics.copyright
+        )
     }
 
     func forceSearchLyrics() async {
@@ -454,7 +568,6 @@ final class AppState: ObservableObject {
                 self.lyrics = parsed
                 print("✨ Force: Lyrics vom Server gefunden.")
             } else {
-
                 let remote = try await API.shared.fallbackLyrics(
                     artist: track.artist,
                     title: track.title,
@@ -481,7 +594,7 @@ final class AppState: ObservableObject {
         if let token = API.shared.token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
 
         do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
+            let (data, resp) = try await Net.session.data(for: req)
             if let h = resp as? HTTPURLResponse, h.statusCode == 200 {
                 let ct = h.value(forHTTPHeaderField: "Content-Type") ?? ""
                 if !ct.hasPrefix("audio/") && data.count < 1_000_000 {
@@ -511,7 +624,7 @@ final class AppState: ObservableObject {
         guard let url = API.shared.img(track.image) else { return }
         var req = URLRequest(url: url)
         if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
-        guard let (data, _) = try? await URLSession.shared.data(for: req),
+        guard let (data, _) = try? await Net.session.data(for: req),
               let img = UIImage(data: data) else { return }
         withAnimation(.easeInOut(duration: 0.8)) { currentBGImage = img }
     }

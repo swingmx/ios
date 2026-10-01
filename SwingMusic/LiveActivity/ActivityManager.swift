@@ -10,6 +10,7 @@ final class ActivityManager {
     private let appGroup = "group.swingmusic"
     private let widgetKind = "SwingMusicNowPlaying"
     private var lastWidgetReload = Date.distantPast
+    private var lastPersisted: MusicAttributes.ContentState?
     private init() {}
 
     func start(track: Track, accentHex: String) async {
@@ -46,7 +47,6 @@ final class ActivityManager {
     }
 
     func updateImage(_ data: Data) async {
-
         let compressed: Data? = {
             guard let img = UIImage(data: data) else { return nil }
             let thumb = img.preparingThumbnail(of: CGSize(width: 80, height: 80)) ?? img
@@ -118,16 +118,27 @@ final class ActivityManager {
     }
 
     private func persistWidget(_ state: MusicAttributes.ContentState, forceReload: Bool) {
+        PerformanceTracer.shared.measure(.widgetWrite) {
+            persistWidgetTraced(state, forceReload: forceReload)
+        }
+    }
+
+    private func persistWidgetTraced(_ state: MusicAttributes.ContentState, forceReload: Bool) {
         guard let d = UserDefaults(suiteName: appGroup) else { return }
 
-        d.set(state.title, forKey: "w.title")
-        d.set(state.artist, forKey: "w.artist")
-        d.set(state.album, forKey: "w.album")
-        d.set(state.playing, forKey: "w.playing")
-        d.set(state.progress, forKey: "w.progress")
-        d.set(state.duration, forKey: "w.duration")
-        d.set(state.imageData, forKey: "w.image")
-        d.set(state.accentHex, forKey: "w.accent")
+        let previous = lastPersisted
+        if previous?.title != state.title { d.set(state.title, forKey: "w.title") }
+        if previous?.artist != state.artist { d.set(state.artist, forKey: "w.artist") }
+        if previous?.album != state.album { d.set(state.album, forKey: "w.album") }
+        if previous?.playing != state.playing { d.set(state.playing, forKey: "w.playing") }
+        if previous == nil || Int(previous!.progress) != Int(state.progress) || previous?.playing != state.playing {
+            d.set(state.progress, forKey: "w.progress")
+            d.set(Date().timeIntervalSince1970, forKey: "w.progressAt")
+        }
+        if previous?.duration != state.duration { d.set(state.duration, forKey: "w.duration") }
+        if previous?.imageData != state.imageData { d.set(state.imageData, forKey: "w.image") }
+        if previous?.accentHex != state.accentHex { d.set(state.accentHex, forKey: "w.accent") }
+        lastPersisted = state
 
         reloadWidgetsIfNeeded(force: forceReload)
     }

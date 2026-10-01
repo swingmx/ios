@@ -18,7 +18,9 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
     let artisthashes: [String]?
     let color: String?
     let blurhash: String?
+    let explicit: Bool?
 
+    var isExplicit: Bool { explicit == true }
     var artist: String { artists?.first?.name ?? "Unknown Artist" }
     var artisthash: String { artisthashes?.first ?? artists?.first?.artisthash ?? "" }
     var allArtists: String {
@@ -33,7 +35,8 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
     enum CodingKeys: String, CodingKey {
         case trackhash, title, album, albumhash, duration, filepath, image
         case trackno = "track"
-        case disc, date, bitrate, genres, artists, albumartists, artisthashes, color, blurhash
+        case disc, date, bitrate, genres, artists, albumartists, artisthashes, color, blurhash, explicit
+        case extra
     }
 
     init(from decoder: Decoder) throws {
@@ -55,6 +58,73 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
         artisthashes = try? c.decode([String].self, forKey: .artisthashes)
         color = try? c.decode(String.self, forKey: .color)
         blurhash = try? c.decode(String.self, forKey: .blurhash)
+        var ex: Bool?
+        if let b = try? c.decode(Bool.self, forKey: .explicit) { ex = b }
+        else if let i = try? c.decode(Int.self, forKey: .explicit) { ex = i != 0 }
+        else if let s = try? c.decode(String.self, forKey: .explicit) {
+            ex = ["1", "true", "yes", "explicit"].contains(s.lowercased())
+        }
+        if ex != true, let extra = try? c.decode(ExtraTags.self, forKey: .extra), extra.isExplicit {
+            ex = true
+        }
+        explicit = ex
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(trackhash, forKey: .trackhash)
+        try c.encode(title, forKey: .title)
+        try c.encode(album, forKey: .album)
+        try c.encode(albumhash, forKey: .albumhash)
+        try c.encode(duration, forKey: .duration)
+        try c.encode(filepath, forKey: .filepath)
+        try c.encode(image, forKey: .image)
+        try c.encodeIfPresent(trackno, forKey: .trackno)
+        try c.encodeIfPresent(disc, forKey: .disc)
+        try c.encodeIfPresent(date, forKey: .date)
+        try c.encodeIfPresent(bitrate, forKey: .bitrate)
+        try c.encodeIfPresent(genres, forKey: .genres)
+        try c.encodeIfPresent(artists, forKey: .artists)
+        try c.encodeIfPresent(albumartists, forKey: .albumartists)
+        try c.encodeIfPresent(artisthashes, forKey: .artisthashes)
+        try c.encodeIfPresent(color, forKey: .color)
+        try c.encodeIfPresent(blurhash, forKey: .blurhash)
+        try c.encodeIfPresent(explicit, forKey: .explicit)
+    }
+}
+
+private struct ExtraTags: Decodable {
+    let isExplicit: Bool
+
+    private struct Key: CodingKey {
+        var stringValue: String; var intValue: Int? { nil }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Key.self)
+        func value(_ k: Key) -> String? {
+            if let a = try? c.decode([String].self, forKey: k) { return a.first }
+            if let s = try? c.decode(String.self, forKey: k) { return s }
+            if let i = try? c.decode(Int.self, forKey: k) { return String(i) }
+            if let b = try? c.decode(Bool.self, forKey: k) { return b ? "1" : "0" }
+            return nil
+        }
+        var explicit = false
+        for k in c.allKeys {
+            let name = k.stringValue.lowercased()
+            guard let v = value(k)?.trimmingCharacters(in: .whitespaces).lowercased() else { continue }
+            switch name {
+            case "itunesadvisory", "advisory", "rtng", "contentrating":
+                if v == "1" || v == "4" || v == "explicit" { explicit = true }
+            case "explicit", "explicit_lyrics", "parental_advisory":
+                if ["1", "true", "yes", "explicit"].contains(v) { explicit = true }
+            default:
+                break
+            }
+        }
+        isExplicit = explicit
     }
 }
 
@@ -103,7 +173,6 @@ struct Artist: Codable, Identifiable, Hashable {
 }
 
 extension Artist {
-
     init(stub hash: String, name: String, image: String) {
         self.init(artisthash: hash, name: name, image: image,
                   trackcount: nil, albumcount: nil, duration: nil, genres: nil, color: nil)
@@ -111,7 +180,6 @@ extension Artist {
 }
 
 extension Album {
-
     init(stub hash: String, title: String, image: String, date: Int?, albumartists: [TrackArtist]?) {
         self.init(albumhash: hash, title: title, image: image, date: date,
                   duration: nil, trackcount: nil, albumartists: albumartists,
@@ -313,7 +381,6 @@ struct Folder: Decodable, Identifiable, Hashable {
 }
 
 extension Folder {
-
     init(path: String, name: String, trackcount: Int? = nil, foldercount: Int? = nil) {
         self.path = path
         self.name = name
@@ -323,7 +390,6 @@ extension Folder {
 }
 
 extension Playlist {
-
     init(stub id: String, name: String, image: String?) {
         self.id = id
         self.name = name
@@ -336,7 +402,6 @@ extension Playlist {
 }
 
 extension Mix {
-
     init(stub id: String, title: String, image: String) {
         self.id = id
         self.title = title
@@ -361,9 +426,7 @@ struct Mix: Decodable, Identifiable, Hashable {
     let sourcehash: String
     let trackcount: Int?
     let extra: Extra
-
     let tagline: String?
-
     let time: String?
 
     struct Extra: Decodable, Hashable {
@@ -378,7 +441,6 @@ struct Mix: Decodable, Identifiable, Hashable {
     }
 
     var imageFile: String? { extra.image?.image ?? extra.images?.first?.image }
-
     var ogSourcehash: String { extra.og_sourcehash ?? sourcehash }
 
     enum CodingKeys: String, CodingKey {

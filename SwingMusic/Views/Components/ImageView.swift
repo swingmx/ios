@@ -43,12 +43,10 @@ enum ImageDiskCache {
 }
 
 struct Img: View {
-
     static var cache: [String: UIImage] = [:]
 
     let urls: [URL]
     var radius: CGFloat = 8
-
     var blurhash: String? = nil
     var placeholderColor: String? = nil
 
@@ -117,7 +115,7 @@ struct Img: View {
         for url in urls {
             var req = URLRequest(url: url)
             if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
-            guard let (data, resp) = try? await URLSession.shared.data(for: req) else { continue }
+            guard let (data, resp) = try? await Net.session.data(for: req) else { continue }
             if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) { continue }
             guard let ui = UIImage(data: data) else { continue }
             Img.cache[key] = ui
@@ -133,7 +131,6 @@ struct AlbumArt: View {
     let track: Track
     var size: CGFloat = 48
     var body: some View {
-
         let sizes = size > 200 ? ["original", "", "medium"] : ["medium", "small"]
         Img(urls: sizes.compactMap { API.shared.img(track.image, size: $0) },
             radius: size > 100 ? 12 : 6,

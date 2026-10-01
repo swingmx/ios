@@ -1,55 +1,68 @@
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/871b4942-a21e-440a-bf86-ff52b54897f3" width="96" height="96" style="border-radius: 1.25rem">
-</div>
-<div align="center" style="font-size: 2rem"><b>Swing Music iOS Client</b></div>
+# Swing Music Client
 
-<div align="center"><b><sub><code>v1.0.0 (Beta 1)</code></sub></b></div>
+A native iOS and iPadOS client for [Swing Music](https://github.com/swingmx/swingmusic), built with SwiftUI and the iOS 26 Liquid Glass design. Developed together with the Swing Music team.
 
-<div align="center" style="padding-top: 1rem">
-<br>
+> **Current release:** 1.0.0 Beta 10 (TestFlight)
 
-[![Download on TestFlight](https://img.shields.io/badge/Download_on-TestFlight-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://testflight.apple.com/join/68bWKBss)
+<p align="center">
+  <img src=".github/images/readme.webp" width="100%">
+</p>
 
-</div>
+<p align="center">
+  <img src=".github/images/readme-lyrics.webp" width="100%">
+</p>
 
-**<div align="center" style="padding-top: 0.5rem"><a href="https://github.com/sponsors/swingmx" target="_blank">Sponsor Us ❤️</a> • [Swing Music Docs](https://swingmx.com/guide/introduction.html) • [r/SwingMusicApp](https://www.reddit.com/r/SwingMusicApp)</div>**
+<p align="center">
+  <img src="screenshots/ipad-player.png" width="49%">
+  <img src="screenshots/ipad-lyrics.png" width="49%">
+</p>
 
-##
+## Features
 
-![Image](https://github.com/user-attachments/assets/208abfcd-0c3f-401d-817f-0b67e5c44339)
-This client application allows you to stream music on your iPhone from your Swing Music server.
+- **Word-by-word lyrics** with an Apple Music–style animation (native CALayer port of AMLL), including background vocals and songwriter credits
+- **In-app lyrics fetching** from QQ Music, Kugou and NetEase (based on LDDC), with Musixmatch and LRCLIB as fallbacks
+- **iPad layout**: landscape player with lyrics and queue next to the artwork, sidebar navigation
+- **Streaming playback** that starts as soon as enough audio is buffered, plus offline downloads
+- **AutoMix**: beat-aware crossfades between songs (needs the server extension below)
+- **Queue**: Autoplay, Smart Shuffle and pull-to-reveal recently played
+- **Library**: albums, artists and playlists, with native search
+- **Artist pages**: About section from Wikipedia and listening stats
+- **Widgets, Live Activities and Lock Screen controls**
+- **Remote access**: Tailscale and custom domains supported, self-signed certificates optional
 
-### Features
+## Requirements
 
-Below is a list of the currently implemented features:
+- iOS / iPadOS 26 or later
+- Xcode 26 or later
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
+- A running [Swing Music](https://github.com/swingmx/swingmusic) server
 
-- Albums, Artists and Playlists view
-- Playback with a full-screen now playing
-- Synced lyrics
-- Search Tracks, Albums, Artists
-- Queue management
-- Equalizer and sleep timer
-- Offline downloads
-- Home Screen widget
-
-More features will be implemented in the future.
-
-### How to use
-
-Join the beta on [TestFlight](https://testflight.apple.com/join/68bWKBss) and install the app. When you launch it, you should be prompted to scan a QR code or enter your server details manually.
-
-You can go to `Settings > Pair device` on the webclient to get the QR code.
-
-### Building
-
-The Xcode project is generated from `project.yml` using [XcodeGen](https://github.com/yonyz/XcodeGen).
+## Building
 
 ```bash
-brew install xcodegen
 xcodegen generate
 open SwingMusicApp.xcodeproj
 ```
 
-### License
+Select your development team in *Signing & Capabilities* for both targets (`SwingMusic` and `SwingMusicWidgetsExtension`), then build and run.
 
-This software is provided to you with terms stated in the AGPLv3 License. Read the full text in the `LICENSE` file located at the root of this repository.
+## Server extensions
+
+`server-extensions/automix` adds an analysis endpoint to Swing Music that the app uses for AutoMix transitions. It builds on top of the official Docker image:
+
+```bash
+cd server-extensions/automix
+docker build -t swingmusic-automix .
+```
+
+Run this image instead of the regular `swingmusic` image. Without it, the app falls back to normal crossfades.
+
+## Thanks to
+
+- [MeloX](https://github.com/youshen2/MeloX): loose inspiration for the player
+- [Apple Music-like Lyrics (AMLL)](https://github.com/Steve-xmh/applemusic-like-lyrics): inspiration for the lyrics animation
+- [Spicy Lyrics](https://github.com/Spikerko/spicy-lyrics): lyrics style
+- [LDDC](https://github.com/chenmozhijin/LDDC): word-by-word lyrics fetching (QQ Music, Kugou, NetEase)
+- [LNPopupUI](https://github.com/LeoNatan/LNPopupUI): mini player
+- [LRCLIB](https://lrclib.net): synced lyrics
+- [MusicBrainz](https://musicbrainz.org) & [Wikipedia](https://www.wikipedia.org): songwriter credits and artist bios

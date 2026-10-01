@@ -37,7 +37,6 @@ struct MixDetailView: View {
         .task {
             tracks = (try? await API.shared.mixTracks(id: mix.id, sourcehash: mix.sourcehash, ogSourcehash: mix.ogSourcehash)) ?? []
             if tracks.isEmpty, let group = DownloadManager.shared.downloadGroups.first(where: { $0.id == "mix:\(mix.id)" }) {
-
                 tracks = DownloadManager.shared.tracks(in: group)
             }
             loading = false
@@ -63,7 +62,6 @@ struct MixDetailView: View {
 
     private var header: some View {
         VStack(spacing: 16) {
-
             Text(mix.title)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.secondary)
@@ -87,25 +85,10 @@ struct MixDetailView: View {
             }
 
             HStack(spacing: 12) {
-                Button { state.player.playAll(tracks, source: source) } label: {
-                    Label("Play", systemImage: "play.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color(.systemBackground))
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .background(Color.primary, in: Capsule())
-                }
-                .buttonStyle(Pressed())
-                .disabled(tracks.isEmpty)
-
-                Button { state.player.playAll(tracks, shuffled: true, source: source) } label: {
-                    Label("Shuffle", systemImage: "shuffle")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.primary.opacity(0.12), lineWidth: 0.5))
-                }
-                .buttonStyle(Pressed())
+                DetailPlayButtons(
+                    play: { state.player.playAll(tracks, source: source) },
+                    shuffle: { state.player.playAll(tracks, shuffled: true, source: source) }
+                )
                 .disabled(tracks.isEmpty)
 
                 if !tracks.isEmpty {
@@ -123,7 +106,7 @@ struct MixDetailView: View {
         for url in imageURLs("medium") {
             var req = URLRequest(url: url)
             if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
-            if let (data, _) = try? await URLSession.shared.data(for: req), let img = UIImage(data: data) {
+            if let (data, _) = try? await Net.session.data(for: req), let img = UIImage(data: data) {
                 bgImage = img
                 return
             }

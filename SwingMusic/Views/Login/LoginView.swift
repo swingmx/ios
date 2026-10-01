@@ -6,11 +6,13 @@ private let logger = Logger(subsystem: "com.swingmusic.app", category: "LoginVie
 
 struct LoginView: View {
     @EnvironmentObject var state: AppState
-    @State private var server = ""
+    @State private var server = UserDefaults.standard.string(forKey: "server") ?? ""
     @State private var user = ""
     @State private var pass = ""
     @State private var loading = false
     @State private var error: String?
+    @State private var tlsHint = false
+    @AppStorage(Net.allowInsecureTLSKey) private var allowInsecureTLS = false
     @State private var showScanner = false
 
     var body: some View {
@@ -88,6 +90,19 @@ struct LoginView: View {
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
                     }
+
+                    if tlsHint {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Toggle(isOn: $allowInsecureTLS) {
+                                Text("Allow self-signed certificate")
+                                    .font(.system(size: 15, weight: .semibold))
+                            }
+                            Text("Your server's certificate isn't trusted by iOS (e.g. mkcert or your own CA). Enabling this trusts it for this server only — then tap Sign In again.")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                        }
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    }
                 }
 
                 Section {
@@ -127,9 +142,31 @@ struct LoginView: View {
         do {
             try await state.login(server: trimmed, user: user, pass: pass)
         } catch {
-            withAnimation { self.error = error.localizedDescription }
+            withAnimation {
+                self.error = error.localizedDescription
+                if Self.looksLikeTLSFailure(error) { tlsHint = true }
+            }
         }
         loading = false
+    }
+
+    private static func looksLikeTLSFailure(_ error: Error) -> Bool {
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain {
+            switch ns.code {
+            case NSURLErrorSecureConnectionFailed,
+                 NSURLErrorServerCertificateUntrusted,
+                 NSURLErrorServerCertificateHasBadDate,
+                 NSURLErrorServerCertificateHasUnknownRoot,
+                 NSURLErrorServerCertificateNotYetValid,
+                 NSURLErrorClientCertificateRejected,
+                 NSURLErrorCannotLoadFromNetwork:
+                return true
+            default: break
+            }
+        }
+        let m = error.localizedDescription.lowercased()
+        return m.contains("tls") || m.contains("ssl") || m.contains("certificate") || m.contains("secure connection")
     }
 
     private func handleQR(_ payload: String) async {

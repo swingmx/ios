@@ -5,14 +5,13 @@ struct LibraryView: View {
     @State private var showingCreateAlert = false
     @State private var newPlaylistName = ""
     @State private var showSettings = false
+    @Namespace private var zoomNS
 
-    private let menu: [LibItem] = [.folders, .artists, .albums, .favorites, .downloads]
+    private let menu: [LibItem] = [.folders, .artists, .albums, .playlists, .favorites, .downloads]
 
     var body: some View {
         NavigationStack(path: $state.libraryPath) {
-
             List {
-
                 Section {
                     Button {
                         Task { await state.shuffleLibrary() }
@@ -87,7 +86,6 @@ struct LibraryView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 100) }
-
             .listRowBackground(Color(.secondarySystemGroupedBackground))
             .scrollContentBackground(.hidden)
             .squeezeMiniPlayer(state)
@@ -137,6 +135,7 @@ struct LibraryView: View {
                 case .artists: ArtistsGridView()
                 case .favoriteAlbums: AlbumsGridView()
                 case .albums: AlbumsGridView()
+                case .playlists: PlaylistsListView()
                 case .newestAlbums: RecentlyAddedView()
                 case .recentlyPlayed: AlbumsGridView()
                 case .songs: FavoriteTracksView()
@@ -144,17 +143,17 @@ struct LibraryView: View {
                 case .downloads: DownloadsView()
                 }
             }
-            .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
-            .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
-            .navigationDestination(for: Playlist.self) { PlaylistDetailView(id: $0.id, name: $0.name) }
+            .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash).navigationTransition(.zoom(sourceID: "album-\($0.albumhash)", in: zoomNS)) }
+            .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash).navigationTransition(.zoom(sourceID: "artist-\($0.artisthash)", in: zoomNS)) }
+            .navigationDestination(for: Playlist.self) { PlaylistDetailView(id: $0.id, name: $0.name).navigationTransition(.zoom(sourceID: "playlist-\($0.id)", in: zoomNS)) }
             .navigationDestination(for: Folder.self) { FolderBrowserView(path: $0.path, title: $0.name) }
             .navigationDestination(for: Mix.self) { MixDetailView(mix: $0) }
         }
+        .environment(\.zoomNamespace, zoomNS)
         .task {
             await state.loadAlbums()
             await state.loadArtists()
             await state.loadPlaylists()
-
             if state.recentAdded.isEmpty { await state.loadHome() }
         }
     }
@@ -247,6 +246,7 @@ enum LibItem: String, CaseIterable, Identifiable, Hashable {
     case artists = "Artists"
     case favoriteAlbums = "Favorite Albums"
     case albums = "Albums"
+    case playlists = "Playlists"
     case newestAlbums = "Newest Albums"
     case recentlyPlayed = "Recently Played"
     case songs = "Songs"
@@ -263,6 +263,7 @@ enum LibItem: String, CaseIterable, Identifiable, Hashable {
         case .artists: "music.mic"
         case .favoriteAlbums: "heart.fill"
         case .albums: "square.stack"
+        case .playlists: "music.note.list"
         case .newestAlbums: "sparkles"
         case .recentlyPlayed: "clock.arrow.circlepath"
         case .songs: "music.note"
@@ -277,6 +278,7 @@ enum LibItem: String, CaseIterable, Identifiable, Hashable {
         case .favorites, .favoriteArtists, .favoriteAlbums, .favoriteSongs: .pink
         case .artists: .blue
         case .albums: .blue
+        case .playlists: .purple
         case .newestAlbums: .orange
         case .recentlyPlayed: .green
         case .songs: .blue

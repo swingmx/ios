@@ -40,325 +40,247 @@ private let localGenres: [GenreInfo] = [
 struct SearchView: View {
     @EnvironmentObject var state: AppState
     @State private var query = ""
+    @State private var scope: SearchScope = .all
     @State private var result: SearchResult?
     @State private var searching = false
     @State private var task: Task<Void, Never>?
-    @State private var genreImages: [String: String] = GenreImageCache.load()
     @State private var recents: [RecentSearchItem] = SearchHistory.load()
+
+    enum SearchScope: String, CaseIterable, Identifiable {
+        case all = "All", songs = "Songs", albums = "Albums", artists = "Artists"
+        var id: String { rawValue }
+    }
 
     var body: some View {
         NavigationStack(path: $state.searchPath) {
-            VStack(spacing: 0) {
-                if query.isEmpty && result == nil {
-                    idleView
-                } else if searching {
-                    VStack { Spacer(); ProgressView(); Spacer() }
-                } else if let r = result {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        results(r).padding(.top, 8).padding(.bottom, 100)
-                    }
-                    .scrollDismissesKeyboard(.immediately)
-                    .squeezeMiniPlayer(state)
+            content
+                .navigationTitle("Search")
+                .searchable(text: $query, prompt: "Songs, Albums, Artists")
+                .searchScopes($scope, activation: .onSearchPresentation) {
+                    ForEach(SearchScope.allCases) { Text($0.rawValue).tag($0) }
                 }
-            }
-
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background { AmbientBackground() }
-            .navigationTitle("Search")
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Songs, Albums, Artists")
-            .onChange(of: query) { _, v in
-                task?.cancel()
-                if v.isEmpty { result = nil; return }
-                task = Task {
-                    try? await Task.sleep(nanoseconds: 350_000_000)
-                    guard !Task.isCancelled else { return }
-                    await doSearch(v)
-                }
-            }
-            .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
-            .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
-            .onChange(of: state.searchPath) { _, _ in
-
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            }
+                .onSubmit(of: .search) { runSearch(query, delay: 0) }
+                .onChange(of: query) { _, v in runSearch(v, delay: 300_000_000) }
+                .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
+                .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
         }
     }
 
-    private var idleView: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            if recents.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.secondary)
-                    Text("Search your library")
-                        .font(.system(size: 17, weight: .semibold))
-                    Text("Find songs, albums and artists.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 420)
+    @ViewBuilder
+    private var content: some View {
+        if query.isEmpty {
+            recentsList
+        } else if let r = result {
+            if isEmpty(r) {
+                ContentUnavailableView.search(text: query)
             } else {
-                VStack(alignment: .leading, spacing: 4) {
+                resultsList(r)
+            }
+        } else if searching {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Color.clear
+        }
+    }
+
+    @ViewBuilder
+    private var recentsList: some View {
+        if recents.isEmpty {
+            ContentUnavailableView(
+                "Search Your Library",
+                systemImage: "magnifyingglass",
+                description: Text("Find songs, albums and artists.")
+            )
+        } else {
+            List {
+                Section {
+                    ForEach(recents) { item in recentRow(item) }
+                        .onDelete { offsets in
+                            recents.remove(atOffsets: offsets)
+                            SearchHistory.save(recents)
+                        }
+                } header: {
                     HStack {
                         Text("Recent Searches")
-                            .font(.system(size: 20, weight: .bold))
                         Spacer()
                         Button("Clear") { SearchHistory.clear(); recents = [] }
-                            .font(.system(size: 14))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 6)
-
-                    ForEach(recents) { item in
-                        recentRow(item)
+                            .textCase(nil)
                     }
                 }
-                .padding(.top, 8)
-                .padding(.bottom, 100)
             }
+            .listStyle(.plain)
+            .squeezeMiniPlayer(state)
         }
-        .squeezeMiniPlayer(state)
     }
 
     @ViewBuilder
     private func recentRow(_ item: RecentSearchItem) -> some View {
-        let isArtist = item.kind == .artist
-        let label = HStack(spacing: 12) {
-            Img(url: isArtist ? API.shared.artistImg(item.image, size: "medium")
-                              : API.shared.img(item.image, size: "medium"),
-                radius: isArtist ? 22 : 8)
-                .frame(width: 44, height: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(item.subtitle)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            Image(systemName: item.kind == .track ? "play.circle.fill" : "chevron.right")
-                .font(.system(size: item.kind == .track ? 22 : 13, weight: .semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-
         switch item.kind {
         case .track:
             Button {
-                dismissKeyboard()
-                if let t = item.track {
-                    state.player.play(t, from: [t], source: .search(item.title))
-                }
-            } label: { label }
-            .buttonStyle(.plain)
+                if let t = item.track { state.player.play(t, from: [t], source: .search(item.title)) }
+            } label: {
+                row(image: API.shared.img(item.image, size: "small"), round: false,
+                    title: item.title, subtitle: "Song · " + item.subtitle)
+            }
+            .tint(.primary)
         case .album:
-            NavigationLink(value: Album(stub: item.hash, title: item.title, image: item.image, date: nil, albumartists: nil)) { label }
-                .buttonStyle(.plain)
-                .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
+            NavigationLink(value: Album(stub: item.hash, title: item.title, image: item.image, date: nil, albumartists: nil)) {
+                row(image: API.shared.img(item.image, size: "small"), round: false,
+                    title: item.title, subtitle: "Album · " + item.subtitle)
+            }
         case .artist:
-            NavigationLink(value: Artist(stub: item.hash, name: item.title, image: item.image)) { label }
-                .buttonStyle(.plain)
-                .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
+            NavigationLink(value: Artist(stub: item.hash, name: item.title, image: item.image)) {
+                row(image: API.shared.artistImg(item.image, size: "small"), round: true,
+                    title: item.title, subtitle: "Artist")
+            }
         }
     }
 
-    private var genreGrid: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Browse")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 18)
-
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    ForEach(localGenres) { genre in
-                        Button { query = genre.name } label: {
-                            ZStack(alignment: .bottomLeading) {
-                                genre.color
-
-                                if let imgPath = genreImages[genre.name] {
-                                    Img(url: API.shared.artistImg(imgPath, size: "medium"), radius: 0)
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    LinearGradient(
-                                        colors: [.clear, .black.opacity(0.7)],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                }
-
-                                Text(genre.name)
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
-                                    .padding(12)
-                            }
-                            .frame(height: 100)
-
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 16)
-
-                Color.clear.frame(height: 100)
-            }
-            .padding(.top, 8)
-        }
+    private func isEmpty(_ r: SearchResult) -> Bool {
+        (r.tracks ?? []).isEmpty && (r.albums ?? []).isEmpty && (r.artists ?? []).isEmpty
     }
 
-    private func loadGenreImages() async {
-        let missing = localGenres.filter { genreImages[$0.name] == nil }
-        guard !missing.isEmpty else { return }
-
-        await withTaskGroup(of: (String, String?).self) { group in
-            for genre in missing {
-                group.addTask {
-                    for artistName in genre.artists {
-                        if let result = try? await API.shared.search(artistName),
-                           let artist = result.artists?.first,
-                           !artist.image.isEmpty {
-                            return (genre.name, artist.image)
+    private func resultsList(_ r: SearchResult) -> some View {
+        let tracks = r.tracks ?? []
+        let albums = r.albums ?? []
+        let artists = r.artists ?? []
+        let limit = scope == .all ? 5 : .max
+        return List {
+            if scope == .all, let top = r.top_result, !top.displayName.isEmpty {
+                Section("Top Result") { topResultRow(top, tracks: tracks) }
+            }
+            if scope == .all || scope == .songs, !tracks.isEmpty {
+                Section("Songs") {
+                    ForEach(tracks.prefix(limit)) { t in
+                        Button {
+                            record(RecentSearchItem(kind: .track, hash: t.trackhash, title: t.title, subtitle: t.artist, image: t.image, track: t))
+                            state.player.play(t, from: tracks, source: .search(query))
+                        } label: {
+                            row(image: API.shared.img(t.image, size: "small"), round: false,
+                                title: t.title, subtitle: t.artist,
+                                playing: state.player.current == t, explicit: t.isExplicit)
+                        }
+                        .tint(.primary)
+                        .swipeActions(edge: .trailing) {
+                            Button { state.player.addNext(t) } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
+                                .tint(.indigo)
+                            Button { state.player.addLast(t) } label: { Label("Play Last", systemImage: "text.line.last.and.arrowtriangle.forward") }
+                                .tint(.orange)
                         }
                     }
-                    return (genre.name, nil)
                 }
             }
-            for await (name, image) in group {
-                if let image {
-                    genreImages[name] = image
-                }
-            }
-        }
-        GenreImageCache.save(genreImages)
-    }
-
-    private func results(_ r: SearchResult) -> some View {
-        VStack(alignment: .leading, spacing: 28) {
-            if let top = r.top_result, !top.displayName.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Top Result").font(.system(size: 20, weight: .bold)).foregroundStyle(.primary).padding(.horizontal, 16)
-                    topResultCard(top)
-                        .padding(.horizontal, 16)
-                }
-            }
-            if let tracks = r.tracks, !tracks.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Songs").font(.system(size: 20, weight: .bold)).foregroundStyle(.primary).padding(.horizontal, 16)
-                    VStack(spacing: 0) {
-                        ForEach(Array(tracks.prefix(8).enumerated()), id: \.element.id) { _, t in
-                            TrackRow(track: t, active: state.player.current == t) {
-                                record(RecentSearchItem(kind: .track, hash: t.trackhash, title: t.title, subtitle: t.artist, image: t.image, track: t))
-                                state.player.play(t, from: tracks, source: .search(query))
+            if scope == .all || scope == .albums, !albums.isEmpty {
+                Section("Albums") {
+                    ForEach(albums.prefix(limit)) { a in
+                        Button {
+                            record(RecentSearchItem(kind: .album, hash: a.albumhash, title: a.title, subtitle: a.artist, image: a.image, track: nil))
+                            state.searchPath.append(a)
+                        } label: {
+                            HStack {
+                                row(image: API.shared.img(a.image, size: "small"), round: false,
+                                    title: a.title, subtitle: "Album · " + a.artist)
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                             }
                         }
-                    }
-                    .nativeCard(18)
-                    .padding(.horizontal, 16)
-                }
-            }
-            if let albums = r.albums, !albums.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Albums").font(.system(size: 20, weight: .bold)).foregroundStyle(.primary).padding(.horizontal, 16)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 14) {
-                            ForEach(albums.prefix(10)) { a in
-                                NavigationLink(value: a) { AlbumCard(album: a, size: 140) }
-                                    .buttonStyle(.plain)
-                                    .simultaneousGesture(TapGesture().onEnded {
-                                        record(RecentSearchItem(kind: .album, hash: a.albumhash, title: a.title, subtitle: a.artist, image: a.image, track: nil))
-                                    })
-                            }
-                        }.padding(.horizontal, 16)
+                        .tint(.primary)
                     }
                 }
             }
-            if let artists = r.artists, !artists.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Artists").font(.system(size: 20, weight: .bold)).foregroundStyle(.primary).padding(.horizontal, 16)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 14) {
-                            ForEach(artists.prefix(8)) { a in
-                                NavigationLink(value: a) { ArtistCard(artist: a, size: 100) }
-                                    .buttonStyle(.plain)
-                                    .simultaneousGesture(TapGesture().onEnded {
-                                        record(RecentSearchItem(kind: .artist, hash: a.artisthash, title: a.name, subtitle: "Artist", image: a.image, track: nil))
-                                    })
+            if scope == .all || scope == .artists, !artists.isEmpty {
+                Section("Artists") {
+                    ForEach(artists.prefix(limit)) { a in
+                        Button {
+                            record(RecentSearchItem(kind: .artist, hash: a.artisthash, title: a.name, subtitle: "Artist", image: a.image, track: nil))
+                            state.searchPath.append(a)
+                        } label: {
+                            HStack {
+                                row(image: API.shared.artistImg(a.image, size: "small"), round: true,
+                                    title: a.name, subtitle: "Artist")
+                                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                             }
-                        }.padding(.horizontal, 16)
+                        }
+                        .tint(.primary)
                     }
                 }
             }
         }
+        .listStyle(.plain)
+        .scrollDismissesKeyboard(.immediately)
+        .squeezeMiniPlayer(state)
     }
 
     @ViewBuilder
-    private func topResultCard(_ top: TopResult) -> some View {
-        let isArtist = top.type == "artist"
-        let card = HStack(spacing: 14) {
-            Img(url: isArtist ? API.shared.artistImg(top.image ?? "", size: "medium")
-                              : API.shared.img(top.image ?? "", size: "medium"),
-                radius: isArtist ? 30 : 10)
-                .frame(width: 60, height: 60)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(top.displayName).font(.system(size: 17, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
-                Text(top.subtitle).font(.system(size: 14)).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.tertiary)
-        }
-        .padding(14)
-        .nativeCard(18)
-
+    private func topResultRow(_ top: TopResult, tracks: [Track]) -> some View {
         switch top.type {
         case "artist":
-            NavigationLink(value: Artist(stub: top.artisthash ?? "", name: top.displayName, image: top.image ?? "")) { card }
-                .buttonStyle(.plain)
-                .simultaneousGesture(TapGesture().onEnded {
-                    record(RecentSearchItem(kind: .artist, hash: top.artisthash ?? "", title: top.displayName, subtitle: "Artist", image: top.image ?? "", track: nil))
-                })
+            NavigationLink(value: Artist(stub: top.artisthash ?? "", name: top.displayName, image: top.image ?? "")) {
+                row(image: API.shared.artistImg(top.image ?? "", size: "medium"), round: true,
+                    title: top.displayName, subtitle: "Artist", size: 64)
+            }
         case "album":
-            NavigationLink(value: Album(stub: top.albumhash ?? "", title: top.displayName, image: top.image ?? "", date: nil, albumartists: nil)) { card }
-                .buttonStyle(.plain)
-                .simultaneousGesture(TapGesture().onEnded {
-                    record(RecentSearchItem(kind: .album, hash: top.albumhash ?? "", title: top.displayName, subtitle: "Album", image: top.image ?? "", track: nil))
-                })
+            NavigationLink(value: Album(stub: top.albumhash ?? "", title: top.displayName, image: top.image ?? "", date: nil, albumartists: nil)) {
+                row(image: API.shared.img(top.image ?? "", size: "medium"), round: false,
+                    title: top.displayName, subtitle: "Album", size: 64)
+            }
         default:
-
             Button {
-                let tracks = result?.tracks ?? []
                 guard let t = tracks.first(where: { $0.trackhash == top.trackhash }) ?? tracks.first else { return }
                 record(RecentSearchItem(kind: .track, hash: t.trackhash, title: t.title, subtitle: t.artist, image: t.image, track: t))
                 state.player.play(t, from: tracks, source: .search(query))
-            } label: { card }
-            .buttonStyle(.plain)
+            } label: {
+                row(image: API.shared.img(top.image ?? "", size: "medium"), round: false,
+                    title: top.displayName, subtitle: "Song", size: 64)
+            }
+            .tint(.primary)
         }
     }
 
-    private func doSearch(_ q: String) async {
-        searching = true
-        result = try? await API.shared.search(q)
-        searching = false
+    private func row(image: URL?, round: Bool, title: String, subtitle: String,
+                     playing: Bool = false, explicit: Bool = false, size: CGFloat = 48) -> some View {
+        HStack(spacing: 12) {
+            Img(url: image, radius: round ? size / 2 : 6)
+                .frame(width: size, height: size)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body)
+                    .foregroundStyle(playing ? Color.accentColor : .primary)
+                    .lineLimit(1)
+                    .explicitBadge(explicit)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            if playing {
+                Image(systemName: "speaker.wave.2.fill")
+                    .font(.footnote)
+                    .foregroundStyle(Color.accentColor)
+            }
+        }
+        .contentShape(.rect)
+    }
+
+    private func runSearch(_ q: String, delay: UInt64) {
+        task?.cancel()
+        let trimmed = q.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty { result = nil; searching = false; return }
+        task = Task {
+            if delay > 0 { try? await Task.sleep(nanoseconds: delay) }
+            guard !Task.isCancelled else { return }
+            searching = true
+            let r = try? await API.shared.search(trimmed)
+            guard !Task.isCancelled else { return }
+            result = r
+            searching = false
+        }
     }
 
     private func record(_ item: RecentSearchItem) {
         SearchHistory.add(item)
         recents = SearchHistory.load()
-        dismissKeyboard()
-    }
-
-    private func dismissKeyboard() {
-
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .forEach { $0.endEditing(true) }
     }
 }
 
@@ -410,5 +332,11 @@ enum SearchHistory {
 
     static func clear() {
         UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    static func save(_ items: [RecentSearchItem]) {
+        if let data = try? JSONEncoder().encode(items) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
     }
 }

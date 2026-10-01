@@ -30,12 +30,10 @@ extension API {
     }
 
     func artist(_ hash: String) async throws -> ArtistDetail {
-
         try await get("/artist/\(hash)", q: ["tracklimit": "100", "albumlimit": "100"])
     }
 
     func artistAlbums(_ hash: String) async throws -> [ArtistAlbumSection] {
-
         struct R: Decodable {
             let albums: [Album]?
             let singles_and_eps: [Album]?
@@ -52,12 +50,10 @@ extension API {
     }
 
     func similarArtists(_ hash: String, limit: Int = 12) async throws -> [Artist] {
-
         try await get("/artist/\(hash)/similar", q: ["limit": "\(limit)"])
     }
 
     func playlists() async throws -> [Playlist] {
-
         struct RData: Decodable { let data: [Playlist] }
         struct RPlaylists: Decodable { let playlists: [Playlist] }
         struct RItems: Decodable { let items: [Playlist] }
@@ -98,7 +94,7 @@ extension API {
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
         r.httpBody = try JSONEncoder().encode(B(trackhash: hash, filepath: path))
         if let t = token { r.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
-        let (data, resp) = try await URLSession.shared.data(for: r)
+        let (data, resp) = try await Net.session.data(for: r)
         if let h = resp as? HTTPURLResponse, h.statusCode >= 400 { throw APIError.server(h.statusCode) }
         return data
     }
@@ -126,7 +122,7 @@ extension API {
         guard let url = c?.url else { throw APIError.invalidURL }
         let (data, resp): (Data, URLResponse)
         do {
-            (data, resp) = try await URLSession.shared.data(from: url)
+            (data, resp) = try await Net.session.data(from: url)
         } catch {
             throw APIError.network(error)
         }
@@ -209,7 +205,7 @@ extension API {
         c.queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
         var r = URLRequest(url: c.url!)
         if let t = token { r.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
-        let (data, resp) = try await URLSession.shared.data(for: r)
+        let (data, resp) = try await Net.session.data(for: r)
         if let h = resp as? HTTPURLResponse, h.statusCode >= 400 { throw APIError.server(h.statusCode) }
         return data
     }

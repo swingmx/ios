@@ -16,7 +16,6 @@ enum LyricsContent: Codable {
         } else if let l = try? container.decode([ServerLyricLine].self) {
             self = .lines(l)
         } else {
-
             self = .string("")
         }
     }
@@ -149,7 +148,6 @@ func parseLyrics(_ response: LyricsResponse, trackDuration: Int? = nil, wordByWo
         }
         let res = parseLRC(response)
         if res.lines.isEmpty {
-
             return parseLyrics(LyricsResponse(lyrics: content, synced: false, copyright: response.copyright), trackDuration: trackDuration)
         }
         return res
@@ -214,7 +212,6 @@ func parseLRC(_ response: LyricsResponse) -> ParsedLyrics {
 
             var lastPos = 0
             for (idx, m) in matches.enumerated() {
-
                 let currentTextRange = NSRange(location: lastPos, length: m.range.location - lastPos)
                 let rawChunk = nsText.substring(with: currentTextRange)
                 let hasSpace = rawChunk.hasSuffix(" ") || rawChunk.hasSuffix("\t") || rawChunk.hasSuffix("\u{00A0}")
@@ -225,7 +222,6 @@ func parseLRC(_ response: LyricsResponse) -> ParsedLyrics {
                         components.append((time: lineTime, text: currentText, space: hasSpace))
                     }
                 } else if !currentText.isEmpty {
-
                 }
 
                 let wMin = Double(nsText.substring(with: m.range(at: 1))) ?? 0
@@ -244,7 +240,6 @@ func parseLRC(_ response: LyricsResponse) -> ParsedLyrics {
                 let nextTextRange = NSRange(location: nextPos, length: endOfText - nextPos)
                 let rawNext = nsText.substring(with: nextTextRange)
                 var nextHasSpace = rawNext.hasSuffix(" ") || rawNext.hasSuffix("\t") || rawNext.hasSuffix("\u{00A0}")
-
                 let nextText = rawNext.trimmingCharacters(in: .whitespaces)
 
                 components.append((time: currentTime, text: nextText, space: nextHasSpace))
@@ -253,7 +248,6 @@ func parseLRC(_ response: LyricsResponse) -> ParsedLyrics {
             }
 
             if !components.isEmpty {
-
                 lineWords = components.map { LyricWord(time: $0.time, text: $0.text, hasSpace: $0.space) }
             }
         }

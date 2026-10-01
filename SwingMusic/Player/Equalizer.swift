@@ -55,6 +55,5 @@ final class Equalizer: ObservableObject {
     }
 
     func applyToPlayer() {
-
     }
 }

@@ -10,12 +10,10 @@ struct TrackRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-
             Button(action: onTap) {
                 HStack(spacing: 12) {
                     if let n = num {
                         ZStack {
-
                             if active && !showArt {
                                 Bars(color: .accentColor)
                             } else {
@@ -43,6 +41,7 @@ struct TrackRow: View {
                             .font(.system(size: 15, weight: active ? .semibold : .regular))
                             .foregroundStyle(.primary.opacity(active ? 1 : 0.9))
                             .lineLimit(1)
+                            .explicitBadge(track.isExplicit)
                         HStack(spacing: 4) {
                             if downloadManager.isDownloaded(track) {
                                 Image(systemName: "arrow.down.circle.fill")

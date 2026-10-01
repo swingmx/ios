@@ -20,7 +20,7 @@ struct RecentProvider: TimelineProvider {
     func placeholder(in context: Context) -> RecentEntry { .preview }
 
     func getSnapshot(in context: Context, completion: @escaping (RecentEntry) -> Void) {
-        completion(readHistory())
+        completion(context.isPreview ? .preview : readHistory())
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<RecentEntry>) -> Void) {
@@ -30,9 +30,8 @@ struct RecentProvider: TimelineProvider {
     private func readHistory() -> RecentEntry {
         guard let d = UserDefaults(suiteName: "group.swingmusic"),
               let data = d.data(forKey: "w.history"),
-              let tracks = try? JSONDecoder().decode([RecentTrack].self, from: data),
-              !tracks.isEmpty
-        else { return .preview }
+              let tracks = try? JSONDecoder().decode([RecentTrack].self, from: data)
+        else { return RecentEntry(date: .now, tracks: []) }
         return RecentEntry(date: .now, tracks: tracks)
     }
 }
@@ -45,15 +44,13 @@ struct ArtTile: View {
     var accent: Color { Color(hex: track.accentHex) ?? .gray }
 
     var body: some View {
-        ZStack {
+        Color.clear.frame(width: size, height: size).overlay {
             if let d = track.imageData, let img = UIImage(data: d) {
                 Image(uiImage: img)
                     .resizable()
+                    .widgetAccentedRenderingMode(.accentedDesaturated)
                     .scaledToFill()
-                    .frame(width: size, height: size)
-                    .clipped()
             } else {
-
                 LinearGradient(
                     colors: [accent.opacity(0.7), accent.opacity(0.3)],
                     startPoint: .topLeading,
@@ -68,6 +65,37 @@ struct ArtTile: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
+        }
+    }
+}
+
+private struct RecentEmptyView: View {
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "music.note.list")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+            Text("Nothing played yet")
+                .font(.footnote.weight(.semibold))
+            Text("Songs you play appear here.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct RecentHeader: View {
+    var body: some View {
+        Label("Recently Played", systemImage: "clock.arrow.circlepath")
+            .font(.subheadline.weight(.semibold))
+            .labelStyle(.titleAndIcon)
+            .foregroundStyle(Color.accentColor)
+            .widgetAccentable()
     }
 }
 
@@ -75,14 +103,14 @@ struct RecentSmallView: View {
     let entry: RecentEntry
 
     var body: some View {
-        let track = entry.tracks.first ?? RecentEntry.preview.tracks[0]
-
+        Group {
+        if let track = entry.tracks.first {
         GeometryReader { geo in
             let w = geo.size.width
-            let artSize = w - 32
+            let artSize = min(w, geo.size.height - 38)
 
             VStack(alignment: .leading, spacing: 8) {
-                ArtTile(track: track, size: artSize, radius: 10)
+                ArtTile(track: track, size: artSize, radius: 12)
                     .frame(maxWidth: .infinity, alignment: .center)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -98,7 +126,10 @@ struct RecentSmallView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .padding(14)
+        } else {
+            RecentEmptyView()
+        }
+        }
         .containerBackground(for: .widget) {
             Color(.systemBackground)
         }
@@ -109,7 +140,7 @@ struct RecentMediumView: View {
     let entry: RecentEntry
 
     var body: some View {
-        let tracks = paddedTracks(entry.tracks, count: 4)
+        let tracks = Array(entry.tracks.prefix(4))
 
         GeometryReader { geo in
             let spacing: CGFloat = 10
@@ -118,18 +149,10 @@ struct RecentMediumView: View {
             let tileSize = floor(availableW / 4)
 
             VStack(alignment: .leading, spacing: 8) {
-
-                HStack(spacing: 5) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Text("Recently Played")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
-                }
+                RecentHeader()
 
                 HStack(spacing: spacing) {
-                    ForEach(0..<4, id: \.self) { i in
+                    ForEach(tracks.indices, id: \.self) { i in
                         let t = tracks[i]
                         VStack(alignment: .leading, spacing: 4) {
                             ArtTile(track: t, size: tileSize, radius: 8)
@@ -159,7 +182,7 @@ struct RecentLargeView: View {
     let entry: RecentEntry
 
     var body: some View {
-        let tracks = paddedTracks(entry.tracks, count: 4)
+        let tracks = Array(entry.tracks.prefix(4))
 
         GeometryReader { geo in
             let spacing: CGFloat = 12
@@ -169,21 +192,13 @@ struct RecentLargeView: View {
             let artSize = tileSize - 10
 
             VStack(alignment: .leading, spacing: 12) {
-
-                HStack(spacing: 5) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Text("Recently Played")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.primary)
-                }
+                RecentHeader()
 
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: spacing),
                     GridItem(.flexible(), spacing: spacing)
                 ], spacing: 14) {
-                    ForEach(0..<4, id: \.self) { i in
+                    ForEach(tracks.indices, id: \.self) { i in
                         let t = tracks[i]
                         VStack(alignment: .leading, spacing: 6) {
                             ArtTile(track: t, size: artSize, radius: 10)
@@ -241,6 +256,15 @@ struct RecentlyPlayedEntryView: View {
     let entry: RecentEntry
 
     var body: some View {
+        if entry.tracks.isEmpty {
+            RecentEmptyView()
+                .containerBackground(for: .widget) { Color(.systemBackground) }
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder private var content: some View {
         switch family {
         case .systemSmall: RecentSmallView(entry: entry)
         case .systemMedium: RecentMediumView(entry: entry)

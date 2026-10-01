@@ -55,7 +55,6 @@ struct DownloadsView: View {
                 .squeezeMiniPlayer(state)
             }
         }
-
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { AmbientBackground() }
         .navigationTitle("Downloads")

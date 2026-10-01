@@ -36,5 +36,6 @@ struct PlaylistImageGrid: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size / 8, style: .continuous))
+        .zoomSource("playlist-\(playlist?.id ?? "")")
     }
 }

@@ -4,6 +4,7 @@ struct HomeView: View {
     @EnvironmentObject var state: AppState
     @State private var showSettings = false
     @State private var heroes: [HeroPick] = []
+    @Namespace private var zoomNS
 
     private struct HeroPick: Identifiable {
         let album: Album
@@ -28,7 +29,6 @@ struct HomeView: View {
                     } else if state.homeSections.isEmpty {
                         emptyState
                     } else {
-
                         ForEach(state.homeSections) { serverSection($0) }
                     }
                     Color.clear.frame(height: 100)
@@ -61,12 +61,13 @@ struct HomeView: View {
                 case .allArtists: ArtistsGridView()
                 }
             }
-            .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
-            .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
-            .navigationDestination(for: Playlist.self) { PlaylistDetailView(id: $0.id, name: $0.name) }
+            .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash).navigationTransition(.zoom(sourceID: "album-\($0.albumhash)", in: zoomNS)) }
+            .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash).navigationTransition(.zoom(sourceID: "artist-\($0.artisthash)", in: zoomNS)) }
+            .navigationDestination(for: Playlist.self) { PlaylistDetailView(id: $0.id, name: $0.name).navigationTransition(.zoom(sourceID: "playlist-\($0.id)", in: zoomNS)) }
             .navigationDestination(for: Mix.self) { MixDetailView(mix: $0) }
             .navigationDestination(for: Folder.self) { FolderBrowserView(path: $0.path, title: $0.name) }
         }
+        .environment(\.zoomNamespace, zoomNS)
         .task {
             await state.loadHomeSections()
             didLoad = true
@@ -103,7 +104,6 @@ struct HomeView: View {
     }
 
     private func heroCard(_ album: Album, label: String) -> some View {
-
         NavigationLink(value: album) {
             ZStack(alignment: .bottomLeading) {
                 Img(url: API.shared.img(album.image, size: ""), radius: 0)
@@ -216,6 +216,7 @@ struct HomeView: View {
                         .font(.system(size: 16, weight: active ? .semibold : .medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .explicitBadge(track.isExplicit)
                     Text(track.artist)
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
@@ -273,6 +274,7 @@ struct HomeView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .explicitBadge(track.isExplicit)
                     Text(track.artist)
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
@@ -294,9 +296,7 @@ struct HomeView: View {
     private func serverSection(_ s: HomeSection) -> some View {
         section(s.title, subtitle: s.description) {
             ScrollView(.horizontal, showsIndicators: false) {
-
                 LazyHStack(alignment: .top, spacing: 14) {
-
                     ForEach(Array(s.items.enumerated()), id: \.offset) { _, item in
                         homeItemCard(item)
                     }
@@ -316,7 +316,6 @@ struct HomeView: View {
                 .buttonStyle(PressableCardStyle())
                 .contextMenu { albumMenuItems(a) }
         case .artist(let a):
-
             NavigationLink(value: a) {
                 VStack(alignment: .leading, spacing: 8) {
                     ArtistAvatar(artist: a, size: 150)
@@ -347,6 +346,7 @@ struct HomeView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(t.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
+                            .explicitBadge(t.isExplicit)
                         Text(t.artist).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
                     }
                     .frame(width: 150, alignment: .leading)
@@ -361,7 +361,6 @@ struct HomeView: View {
                         placeholderColor: m.extra.images?.first?.color ?? m.extra.image?.color)
                         .frame(width: 150, height: 150)
                     VStack(alignment: .leading, spacing: 2) {
-
                         Text(m.tagline?.isEmpty == false ? m.tagline! : m.title)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(.primary.opacity(0.9))

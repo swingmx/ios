@@ -120,7 +120,6 @@ struct FavoriteTracksView: View {
                     TrackRow(track: t, num: i + 1, active: state.player.current == t) {
                         state.player.play(t, from: state.favTracks, source: .favorite)
                     }
-
                     .onAppear {
                         if i >= state.favTracks.count - 5 {
                             Task { await state.loadMoreFavoriteTracks() }

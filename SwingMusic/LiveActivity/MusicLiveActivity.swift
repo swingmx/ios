@@ -33,7 +33,6 @@ struct MusicLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 10) {
-
                         HStack(spacing: 28) {
                             Button(intent: PreviousTrackIntent()) {
                                 Image(systemName: "backward.fill")
@@ -76,7 +75,6 @@ struct MusicLiveActivity: Widget {
                     Image(systemName: ctx.state.playing ? "pause.fill" : "play.fill")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(accent)
-
                     Circle()
                         .trim(from: 0, to: min(1, ctx.state.progress / max(ctx.state.duration, 1)))
                         .stroke(accent, style: StrokeStyle(lineWidth: 2, lineCap: .round))
@@ -98,7 +96,6 @@ struct MusicLiveActivity: Widget {
     }
 
     private func lockScreen(_ ctx: ActivityViewContext<MusicAttributes>) -> some View {
-
         EmptyView()
             .frame(width: 0, height: 0)
             .opacity(0)

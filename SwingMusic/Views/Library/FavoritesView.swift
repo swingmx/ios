@@ -38,6 +38,7 @@ struct FavoritesView: View {
             }
         }
         .squeezeMiniPlayer(state)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { AmbientBackground() }
         .navigationTitle("Favorites")
         .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }

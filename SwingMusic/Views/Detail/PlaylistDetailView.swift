@@ -23,12 +23,22 @@ struct PlaylistDetailView: View {
                 }
                 .padding(.top, 24)
 
+                if !tracks.isEmpty {
+                    DetailFooter(songCount: tracks.count, totalSeconds: tracks.reduce(0) { $0 + $1.duration })
+                }
                 Color.clear.frame(height: 100)
             }
         }
         .squeezeMiniPlayer(state)
         .background { AdaptiveDetailBackground(image: bgImage) }
-        .navigationBarTitleDisplayMode(.inline)
+        .detailScrollTitle(name, after: 300)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                DownloadControl(tracks: tracks, group: DownloadManager.DownloadGroup(
+                    id: "playlist:\(id)", kind: .playlist, name: name,
+                    image: tracks.first?.image ?? "", trackHashes: tracks.map { $0.trackhash }))
+            }
+        }
         .task { await load() }
     }
 
@@ -36,45 +46,35 @@ struct PlaylistDetailView: View {
         VStack(spacing: 14) {
             GeometryReader { geo in
                 let minY = geo.frame(in: .scrollView).minY
-                PlaylistImageGrid(playlist: state.allPlaylists.first { $0.id == id }, size: 180)
-                    .scaleEffect(max(1, 1 + minY / 600))
-                    .offset(y: minY > 0 ? -minY * 0.3 : 0)
+                PlaylistImageGrid(playlist: state.allPlaylists.first { $0.id == id }, size: coverSize)
+                    .scaleEffect(minY > 0 ? 1 + minY / 600 : 1 + minY / 2400, anchor: .bottom)
+                    .offset(y: minY > 0 ? -minY * 0.3 : -minY * 0.2)
+                    .opacity(minY < 0 ? max(0.25, 1 + minY / 500) : 1)
                     .frame(maxWidth: .infinity)
             }
-            .frame(height: 180)
+            .frame(height: coverSize)
             .padding(.top, 16)
 
             Text(name)
-                .font(.system(size: 22, weight: .bold))
+                .font(.title2.bold())
                 .foregroundStyle(.primary)
-            Text("\(tracks.isEmpty ? "..." : "\(tracks.count)") songs")
-                .font(.system(size: 13)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Text("Playlist")
+                .font(.caption.weight(.semibold))
+                .textCase(.uppercase)
+                .foregroundStyle(.secondary)
 
-            HStack(spacing: 12) {
-                Button { state.player.playAll(tracks, source: .playlist(id)) } label: {
-                    Label("Play", systemImage: "play.fill")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(Color(.systemBackground))
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .background(Color.primary, in: Capsule())
-                }
-                .buttonStyle(Pressed())
-
-                Button { state.player.playAll(tracks, shuffled: true, source: .playlist(id)) } label: {
-                    Label("Shuffle", systemImage: "shuffle")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.primary.opacity(0.12), lineWidth: 0.5))
-                }
-                .buttonStyle(Pressed())
-
-                DownloadControl(tracks: tracks, group: DownloadManager.DownloadGroup(
-                    id: "playlist:\(id)", kind: .playlist, name: name,
-                    image: tracks.first?.image ?? "", trackHashes: tracks.map { $0.trackhash }))
-            }
+            DetailPlayButtons(
+                play: { state.player.playAll(tracks, source: .playlist(id)) },
+                shuffle: { state.player.playAll(tracks, shuffled: true, source: .playlist(id)) }
+            )
             .padding(.horizontal, 24)
             .padding(.bottom, 8)
         }
+    }
+
+    private var coverSize: CGFloat {
+        UIDevice.current.userInterfaceIdiom == .pad ? 300 : 250
     }
 
     private func load() async {
@@ -82,21 +82,18 @@ struct PlaylistDetailView: View {
             tracks = d.tracks
             await loadBgImage(p: d.info)
         } else if let group = DownloadManager.shared.downloadGroups.first(where: { $0.id == "playlist:\(id)" }) {
-
             tracks = DownloadManager.shared.tracks(in: group)
         }
         loading = false
     }
 
     private func loadBgImage(p: Playlist) async {
-
         var hashes: [String] = []
         if let img = p.image, img != "None", !img.isEmpty { hashes.append(img) }
         hashes += (p.images ?? []).compactMap { $0.image }.filter { $0 != "None" && !$0.isEmpty }
         if hashes.count < 4 {
             hashes += tracks.map { $0.image }.filter { !$0.isEmpty }
         }
-
         var seen = Set<String>()
         let unique = hashes.filter { seen.insert($0).inserted }.prefix(9)
         guard !unique.isEmpty else { return }
@@ -107,7 +104,7 @@ struct PlaylistDetailView: View {
                     guard let url = API.shared.img(h, size: "small") else { return nil }
                     var req = URLRequest(url: url)
                     if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
-                    guard let (data, _) = try? await URLSession.shared.data(for: req),
+                    guard let (data, _) = try? await Net.session.data(for: req),
                           let img = UIImage(data: data) else { return nil }
                     return (i, img)
                 }

@@ -9,17 +9,14 @@ struct AmbientBackground: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
-
                 (isDark ? Color.black : Color(.systemGray5))
 
                 if let img = state.currentBGImage {
-
                     Image(uiImage: img)
                         .resizable()
                         .scaledToFill()
                         .frame(width: geo.size.width, height: 520)
                         .clipped()
-
                         .blur(radius: isDark ? 80 : 120, opaque: true)
                         .saturation(isDark ? 1.0 : 1.2)
                         .opacity(isDark ? 0.5 : 0.5)

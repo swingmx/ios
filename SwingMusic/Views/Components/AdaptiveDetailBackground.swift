@@ -2,7 +2,6 @@ import SwiftUI
 
 struct AdaptiveDetailBackground: View {
     let image: UIImage?
-
     var blendHeight: CGFloat = 0.45
     @Environment(\.colorScheme) var colorScheme
 
@@ -11,19 +10,17 @@ struct AdaptiveDetailBackground: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
-
                 (isDark ? Color.black : Color(.systemBackground))
 
                 if let image {
-
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
                         .frame(width: geo.size.width, height: isDark ? 440 : 620)
                         .clipped()
                         .blur(radius: isDark ? 70 : 110, opaque: true)
-                        .saturation(isDark ? 1.0 : 1.3)
-                        .opacity(isDark ? 0.6 : 0.7)
+                        .saturation(isDark ? 1.35 : 1.45)
+                        .opacity(isDark ? 0.75 : 0.8)
                         .mask(
                             LinearGradient(
                                 stops: isDark
@@ -42,11 +39,11 @@ struct AdaptiveDetailBackground: View {
 
                     if isDark {
                         LinearGradient(
-                            colors: [.black.opacity(0.35), .clear],
+                            colors: [.black.opacity(0.18), .clear],
                             startPoint: .top,
                             endPoint: .bottom
                         )
-                        .frame(height: geo.size.height * 0.3)
+                        .frame(height: geo.size.height * 0.25)
                         .frame(maxHeight: .infinity, alignment: .top)
                     }
                 }

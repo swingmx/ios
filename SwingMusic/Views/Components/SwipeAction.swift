@@ -11,7 +11,6 @@ struct SwipeAction: ViewModifier {
 
     func body(content: Content) -> some View {
         ZStack {
-
             HStack {
                 ZStack {
                     color
@@ -40,7 +39,6 @@ struct SwipeAction: ViewModifier {
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: willFire)
 
             content
-
                 .offset(x: offset)
                 .contentShape(Rectangle())
                 .highPriorityGesture(

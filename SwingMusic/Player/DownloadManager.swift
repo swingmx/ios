@@ -59,14 +59,12 @@ final class DownloadManager: ObservableObject {
         let items = downloadedTracks.filter { group.trackHashes.contains($0.trackhash) }
         switch group.kind {
         case .album:
-
             return items.sorted {
                 let d0 = $0.disc ?? 1, d1 = $1.disc ?? 1
                 if d0 != d1 { return d0 < d1 }
                 return ($0.trackno ?? 0) < ($1.trackno ?? 0)
             }
         case .folder, .playlist, .mix:
-
             let order = Dictionary(uniqueKeysWithValues: group.trackHashes.enumerated().map { ($1, $0) })
             return items.sorted { (order[$0.trackhash] ?? 0) < (order[$1.trackhash] ?? 0) }
         }
@@ -98,12 +96,27 @@ final class DownloadManager: ObservableObject {
         return String(format: "[%02d:%02d.%02d]", m, s, cs)
     }
 
+    private let maxConcurrent = 3
+    private var pendingQueue: [Track] = []
+    private var activeCount = 0
+
     func download(_ track: Track) {
         guard downloads[track.trackhash] == nil || downloads[track.trackhash] == .failed else { return }
         downloads[track.trackhash] = .queued
+        pendingQueue.append(track)
+        pumpQueue()
+    }
 
-        Task {
-            await performDownload(track)
+    private func pumpQueue() {
+        while activeCount < maxConcurrent, !pendingQueue.isEmpty {
+            let track = pendingQueue.removeFirst()
+            guard downloads[track.trackhash] == .queued else { continue }
+            activeCount += 1
+            Task {
+                await performDownload(track)
+                activeCount -= 1
+                pumpQueue()
+            }
         }
     }
 
@@ -132,6 +145,7 @@ final class DownloadManager: ObservableObject {
     }
 
     func removeDownload(_ track: Track) {
+        pendingQueue.removeAll { $0.trackhash == track.trackhash }
         let file = localURL(for: track)
         try? fileManager.removeItem(at: file)
         removeThumbnails(for: track)
@@ -142,6 +156,7 @@ final class DownloadManager: ObservableObject {
     }
 
     func removeAll() {
+        pendingQueue.removeAll()
         for track in downloadedTracks {
             let file = localURL(for: track)
             try? fileManager.removeItem(at: file)
@@ -153,15 +168,18 @@ final class DownloadManager: ObservableObject {
         saveGroups()
     }
 
-    var totalSize: String {
-        let bytes = downloadedTracks.reduce(Int64(0)) { total, track in
-            let file = localURL(for: track)
-            let size = (try? fileManager.attributesOfItem(atPath: file.path)[.size] as? Int64) ?? 0
-            return total + size
+    @Published private(set) var totalSize: String = "–"
+
+    private func refreshTotalSize() {
+        let files = downloadedTracks.map { localURL(for: $0).path }
+        Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            let bytes = files.reduce(Int64(0)) { total, path in
+                total + ((try? fm.attributesOfItem(atPath: path)[.size] as? Int64) ?? 0)
+            }
+            let text = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+            await MainActor.run { [weak self] in self?.totalSize = text }
         }
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
     }
 
     private func performDownload(_ track: Track) async {
@@ -182,7 +200,6 @@ final class DownloadManager: ObservableObject {
 
         do {
             let hash = track.trackhash
-
             let br = Double(track.bitrate ?? 0)
             let bps = br > 100_000 ? br : (br > 0 ? br * 1000 : 320_000)
             let estimatedBytes = Int64(bps / 8 * Double(max(track.duration, 1)))
@@ -193,7 +210,7 @@ final class DownloadManager: ObservableObject {
                     }
                 }
             }
-            let (localURLTemp, response) = try await URLSession.shared.download(for: req, delegate: progressDelegate)
+            let (localURLTemp, response) = try await Net.session.download(for: req, delegate: progressDelegate)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
                 let code = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -245,7 +262,7 @@ final class DownloadManager: ObservableObject {
             guard let url = API.shared.img(track.image, size: size) else { continue }
             var req = URLRequest(url: url)
             if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
-            guard let (data, resp) = try? await URLSession.shared.data(for: req),
+            guard let (data, resp) = try? await Net.session.data(for: req),
                   let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { continue }
             ImageDiskCache.storeOffline(data, for: url)
         }
@@ -257,9 +274,19 @@ final class DownloadManager: ObservableObject {
         }
     }
 
+    private var metadataSaveScheduled = false
+
     private func saveMetadata() {
-        guard let data = try? JSONEncoder().encode(downloadedTracks) else { return }
-        try? data.write(to: metadataURL)
+        guard !metadataSaveScheduled else { return }
+        metadataSaveScheduled = true
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            metadataSaveScheduled = false
+            refreshTotalSize()
+            guard let data = try? JSONEncoder().encode(downloadedTracks) else { return }
+            let url = metadataURL
+            Task.detached(priority: .utility) { try? data.write(to: url, options: .atomic) }
+        }
     }
 
     private func loadMetadata() {
@@ -276,6 +303,7 @@ final class DownloadManager: ObservableObject {
         for track in downloadedTracks {
             downloads[track.trackhash] = .completed
         }
+        refreshTotalSize()
     }
 
     private func saveGroups() {
@@ -286,7 +314,6 @@ final class DownloadManager: ObservableObject {
     private func loadGroups() {
         guard let data = try? Data(contentsOf: groupsURL),
               let groups = try? JSONDecoder().decode([DownloadGroup].self, from: data) else { return }
-
         downloadGroups = groups.compactMap { group in
             let present = group.trackHashes.filter { downloadedHashes.contains($0) }
             guard !present.isEmpty else { return nil }
@@ -298,6 +325,8 @@ final class DownloadManager: ObservableObject {
 final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
     private let onProgress: (Double) -> Void
     private let estimatedTotalBytes: Int64
+    private var lastReported: Double = -1
+    private let step = 0.02
 
     init(estimatedTotalBytes: Int64 = 0, onProgress: @escaping (Double) -> Void) {
         self.estimatedTotalBytes = estimatedTotalBytes
@@ -307,12 +336,17 @@ final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                     didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
                     totalBytesExpectedToWrite: Int64) {
+        let p: Double
         if totalBytesExpectedToWrite > 0 {
-            onProgress(min(max(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0), 1))
+            p = min(max(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0), 1)
         } else if estimatedTotalBytes > 0 {
-
-            onProgress(min(Double(totalBytesWritten) / Double(estimatedTotalBytes), 0.99))
+            p = min(Double(totalBytesWritten) / Double(estimatedTotalBytes), 0.99)
+        } else {
+            return
         }
+        guard p - lastReported >= step || (p >= 0.99 && lastReported < 0.99) else { return }
+        lastReported = p
+        onProgress(p)
     }
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,

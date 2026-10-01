@@ -1,54 +1,99 @@
 import SwiftUI
+import LNPopupUI
 
 struct ContentView: View {
     @EnvironmentObject var state: AppState
+    private let player = AudioPlayer.shared
+    @State private var currentTrack: Track?
+    @State private var isPlaying = false
+    @State private var barProgress: Float = 0
+    @Namespace private var playerTransitionNamespace
+    private let playerTransitionID = "now-playing"
+    @State private var barPresented = false
+    @State private var barImage: Image?
+    #if DEBUG
+    @State private var debugShowsEqualizer = false
+    @State private var debugShowsWidgets = false
+    #endif
+    @Environment(\.popupBarPlacement) private var popupBarPlacement
 
-    @State private var hasTrack = false
-
-    var body: some View {
-        nativeTabView
-        .onReceive(AudioPlayer.shared.$current) { hasTrack = ($0 != nil) }
-        .fullScreenCover(isPresented: $state.showPlayer, onDismiss: onPlayerDismissed) {
-            FullPlayerView(show: $state.showPlayer)
-                .environmentObject(state)
-                .presentationBackground(.clear)
-        }
-        .sheet(item: $state.requestedTrackForPlaylist) { track in
-            AddToPlaylistSheet(track: track)
-                .environmentObject(state)
-        }
-        .onChange(of: state.tab) { _, _ in
-            state.scroll.reset()
-        }
-        .onChange(of: state.navigationTarget) { _, target in
-            guard target != nil else { return }
-            if state.showPlayer {
-                state.showPlayer = false
-            } else {
-                navigateToTarget(target!)
-            }
+    private func loadBarImage(_ t: Track?) async {
+        guard let t, let url = API.shared.img(t.image, size: "small") else { barImage = nil; return }
+        var req = URLRequest(url: url)
+        if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
+        if let (data, _) = try? await Net.session.data(for: req), let ui = UIImage(data: data) {
+            barImage = Image(uiImage: ui)
         }
     }
 
-    @ViewBuilder
-    private var nativeTabView: some View {
-        if #available(iOS 26.0, *) {
-            if hasTrack {
-                tabView
-                    .tabBarMinimizeBehavior(.onScrollDown)
-                    .tabViewBottomAccessory {
-                        NowPlayingAccessory(expanded: $state.showPlayer)
+    var body: some View {
+        tabView
+            .popup(isBarPresented: $barPresented, isPopupOpen: $state.showPlayer) {
+                NowPlayingView()
+                    .environmentObject(state)
+                    .environment(PlayerStore.shared)
+                    .environment(AppSettings.shared)
+                    .environment(LyricsStore.shared)
+                    .environment(\.colorScheme, .dark)
+                    .popupTitle(verbatim: currentTrack?.title ?? "", subtitle: currentTrack?.allArtists)
+                    .popupImage(barImage)
+                    .popupProgress(barProgress)
+                    .popupBarItems {
+                        ToolbarItemGroup(placement: .popupBar) {
+                            Button {
+                                player.toggle()
+                            } label: {
+                                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                            }
+                            if popupBarPlacement != .inline {
+                                Button {
+                                    player.next()
+                                } label: {
+                                    Image(systemName: "forward.fill")
+                                }
+                            }
+                        }
                     }
-            } else {
-                tabView
-                    .tabBarMinimizeBehavior(.onScrollDown)
             }
-        } else {
-            tabView
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    MiniPlayerView(expanded: $state.showPlayer)
-                }
-        }
+            .popupCloseButtonStyle(.none)
+            .popupInteractionStyle(.drag)
+            .onReceive(player.$current) { track in
+                currentTrack = track
+                barPresented = (track != nil)
+                Task { await loadBarImage(track) }
+            }
+            .onReceive(player.$playing) { isPlaying = $0 }
+            .onReceive(
+                player.$time
+                    .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)
+            ) { t in
+                let total = player.total
+                barProgress = total > 0 ? Float(min(max(t / total, 0), 1)) : 0
+            }
+            .onChange(of: state.lyrics?.lines.count) { _, _ in
+                LyricsStore.shared.update(from: state.lyrics)
+            }
+            .onChange(of: state.showPlayer) { _, open in
+                if open { LyricsStore.shared.update(from: state.lyrics) }
+            }
+            .sheet(item: $state.requestedTrackForPlaylist) { track in
+                AddToPlaylistSheet(track: track)
+                    .environmentObject(state)
+            }
+            .onChange(of: state.tab) { _, _ in state.scroll.reset() }
+            #if DEBUG
+            .sheet(isPresented: $debugShowsEqualizer) { EqualizerSheet() }
+            .sheet(isPresented: $debugShowsWidgets) { WidgetDebugPreview() }
+            .onReceive(NotificationCenter.default.publisher(for: .init("debugShowWidgets"))) { _ in debugShowsWidgets = true }
+            .onReceive(NotificationCenter.default.publisher(for: .init("debugShowEqualizer"))) { _ in debugShowsEqualizer = true }
+            #endif
+            .onChange(of: state.navigationTarget) { _, target in
+                guard target != nil else { return }
+                if state.showPlayer { state.showPlayer = false } else { navigateToTarget(target!) }
+            }
+            .onChange(of: state.showPlayer) { _, open in
+                if !open, let target = state.navigationTarget { navigateToTarget(target) }
+            }
     }
 
     private var tabView: some View {
@@ -64,12 +109,8 @@ struct ContentView: View {
             }
         }
         .tint(.blue)
-    }
-
-    private func onPlayerDismissed() {
-        if let target = state.navigationTarget {
-            navigateToTarget(target)
-        }
+        .tabViewStyle(.sidebarAdaptable)
+        .tabBarMinimizeBehavior(.onScrollDown)
     }
 
     private func navigateToTarget(_ target: AppState.NavTarget) {

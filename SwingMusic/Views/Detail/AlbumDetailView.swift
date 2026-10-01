@@ -13,14 +13,12 @@ struct AlbumDetailView: View {
                 VStack(spacing: 0) {
                     header(d)
                     trackList(d)
-                    if let cr = d.info.copyright, !cr.trimmingCharacters(in: .whitespaces).isEmpty {
-                        Text(cr.uppercased())
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.tertiary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
-                            .padding(.top, 24)
-                    }
+                    DetailFooter(
+                        date: d.info.date.map { Date(timeIntervalSince1970: TimeInterval($0)).formatted(date: .long, time: .omitted) },
+                        songCount: d.tracks.count,
+                        totalSeconds: d.info.duration ?? d.tracks.reduce(0) { $0 + $1.duration },
+                        copyright: d.info.copyright
+                    )
                     Color.clear.frame(height: 100)
                 }
             } else {
@@ -30,7 +28,16 @@ struct AlbumDetailView: View {
         }
         .squeezeMiniPlayer(state)
         .background { AdaptiveDetailBackground(image: bgImage) }
-        .navigationBarTitleDisplayMode(.inline)
+        .detailScrollTitle(detail?.info.title ?? "", after: 330)
+        .toolbar {
+            if let d = detail {
+                ToolbarItem(placement: .topBarTrailing) {
+                    DownloadControl(tracks: d.tracks, group: DownloadManager.DownloadGroup(
+                        id: "album:\(hash)", kind: .album, name: d.info.title,
+                        image: d.info.image, trackHashes: d.tracks.map { $0.trackhash }))
+                }
+            }
+        }
         .task { await load() }
     }
 
@@ -38,64 +45,55 @@ struct AlbumDetailView: View {
         VStack(spacing: 16) {
             GeometryReader { geo in
                 let minY = geo.frame(in: .scrollView).minY
-                AlbumCover(album: d.info, size: 220)
+                AlbumCover(album: d.info, size: coverSize)
                     .shadow(color: .black.opacity(0.6), radius: 30, y: 10)
-                    .scaleEffect(max(1, 1 + minY / 600))
-                    .offset(y: minY > 0 ? -minY * 0.3 : 0)
+                    .scaleEffect(minY > 0 ? 1 + minY / 600 : 1 + minY / 2400, anchor: .bottom)
+                    .offset(y: minY > 0 ? -minY * 0.3 : -minY * 0.2)
+                    .opacity(minY < 0 ? max(0.25, 1 + minY / 500) : 1)
                     .frame(maxWidth: .infinity)
             }
-            .frame(height: 220)
+            .frame(height: coverSize)
             .padding(.top, 16)
 
             VStack(spacing: 6) {
                 Text(d.info.title)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.title2.bold())
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
+                    .explicitBadge(d.tracks.contains { $0.isExplicit })
                 Button {
                     let a = d.info.albumartists?.first
                     state.navigationTarget = .artist(Artist(stub: a?.artisthash ?? d.info.artisthash, name: a?.name ?? d.info.artist, image: d.info.image))
                 } label: {
                     Text(d.info.artist)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.blue)
+                        .font(.title3)
+                        .foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.plain)
-                HStack(spacing: 6) {
-                    if let dt = d.info.date { Text(Date(timeIntervalSince1970: TimeInterval(dt)).formatted(.dateTime.year())) }
-                    if let tc = d.info.trackcount { Text("·"); Text("\(tc) songs") }
-                    if let dur = d.info.duration { Text("·"); Text(dur.mmss) }
-                }
-                .font(.system(size: 13)).foregroundStyle(.tertiary)
+                Text(subtitleLine(d))
+                    .font(.caption.weight(.semibold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 12) {
-                Button { state.player.playAll(sortedTracks(d.tracks), source: .album(hash)) } label: {
-                    Label("Play", systemImage: "play.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color(.systemBackground))
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .background(Color.primary, in: Capsule())
-                }
-                .buttonStyle(Pressed())
-
-                Button { state.player.playAll(sortedTracks(d.tracks), shuffled: true, source: .album(hash)) } label: {
-                    Label("Shuffle", systemImage: "shuffle")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.primary.opacity(0.12), lineWidth: 0.5))
-                }
-                .buttonStyle(Pressed())
-
-                DownloadControl(tracks: d.tracks, group: DownloadManager.DownloadGroup(
-                    id: "album:\(hash)", kind: .album, name: d.info.title,
-                    image: d.info.image, trackHashes: d.tracks.map { $0.trackhash }))
-            }
+            DetailPlayButtons(
+                play: { state.player.playAll(sortedTracks(d.tracks), source: .album(hash)) },
+                shuffle: { state.player.playAll(sortedTracks(d.tracks), shuffled: true, source: .album(hash)) }
+            )
             .padding(.top, 4).padding(.bottom, 8)
         }
         .padding(.horizontal, 20)
+    }
+
+    private var coverSize: CGFloat {
+        UIDevice.current.userInterfaceIdiom == .pad ? 320 : 270
+    }
+
+    private func subtitleLine(_ d: AlbumDetail) -> String {
+        var parts: [String] = []
+        if let g = d.tracks.lazy.compactMap({ $0.genres?.first?.name }).first, !g.isEmpty { parts.append(g) }
+        if let dt = d.info.date { parts.append(Date(timeIntervalSince1970: TimeInterval(dt)).formatted(.dateTime.year())) }
+        return parts.joined(separator: " · ")
     }
 
     private func sortedTracks(_ tracks: [Track]) -> [Track] {
@@ -107,7 +105,6 @@ struct AlbumDetailView: View {
     }
 
     private func trackList(_ d: AlbumDetail) -> some View {
-
         let ordered = sortedTracks(d.tracks)
         let discs = Set(ordered.map { $0.disc ?? 1 })
         let multiDisc = discs.count > 1
@@ -139,7 +136,6 @@ struct AlbumDetailView: View {
         if let d = try? await API.shared.album(hash) {
             detail = d
         } else {
-
             let dl = DownloadManager.shared.downloadedTracks.filter { $0.albumhash == hash }
             if let t = dl.first {
                 detail = AlbumDetail(
@@ -156,7 +152,7 @@ struct AlbumDetailView: View {
               let url = API.shared.img(image) else { return }
         var req = URLRequest(url: url)
         if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
-        guard let (data, _) = try? await URLSession.shared.data(for: req),
+        guard let (data, _) = try? await Net.session.data(for: req),
               let img = UIImage(data: data) else { return }
         bgImage = img
     }

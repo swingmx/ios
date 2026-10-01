@@ -67,7 +67,7 @@ struct DownloadControl: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: allDone)
         }
         .buttonStyle(Pressed())
-        .accessibilityLabel(allDone ? "Heruntergeladen" : isActive ? "Lädt herunter" : "Herunterladen")
+        .accessibilityLabel(allDone ? "Downloaded" : isActive ? "Downloading" : "Download")
     }
 
     private func tap() {

@@ -139,7 +139,6 @@ struct ThinSlider: View {
     var expandOnDrag: Bool = true
 
     @State private var isDragging = false
-
     @State private var dragFraction: CGFloat = 0
 
     var body: some View {
@@ -151,7 +150,6 @@ struct ThinSlider: View {
             let height: CGFloat = isDragging && expandOnDrag ? 9 : trackHeight
 
             ZStack(alignment: .leading) {
-
                 Capsule()
                     .fill(inactiveColor)
                     .frame(height: height)
@@ -165,7 +163,6 @@ struct ThinSlider: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { drag in
-
                         let clamped = min(max(drag.location.x / total, 0), 1)
                         if !isDragging {
                             isDragging = true

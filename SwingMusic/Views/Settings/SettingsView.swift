@@ -3,10 +3,11 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var state: AppState
     @AppStorage("albumArtTapAction") private var albumArtTapAction = "album"
+    @AppStorage("musixmatchWordByWord") private var musixmatchWordByWord = true
+    @AppStorage(Net.allowInsecureTLSKey) private var allowInsecureTLS = false
 
     var body: some View {
         List {
-
             Section {
                 HStack(spacing: 16) {
                     Image(systemName: "person.circle.fill")
@@ -79,7 +80,7 @@ struct SettingsView: View {
                 }
 
                 NavigationLink {
-                    EqualizerSheet()
+                    EqualizerView()
                 } label: {
                     HStack {
                         Image(systemName: "slider.vertical.3")
@@ -103,6 +104,21 @@ struct SettingsView: View {
                         Text("Tap Artwork")
                     }
                 }
+
+                Toggle(isOn: $musixmatchWordByWord) {
+                    HStack {
+                        Image(systemName: "text.word.spacing")
+                            .foregroundStyle(.blue)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Word-by-Word Lyrics")
+                            Text("Fetches word timings from Musixmatch when the server has none.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
             }
 
             Section(header: Text("Storage")) {
@@ -128,6 +144,20 @@ struct SettingsView: View {
                             Text("Remove All Downloads")
                                 .foregroundColor(.red)
                         }
+                    }
+                }
+            }
+
+            Section(
+                header: Text("Connection"),
+                footer: Text("Only enable this if your server uses a self-signed certificate (e.g. mkcert or your own CA). It applies solely to your configured server — all other connections stay fully verified.")
+            ) {
+                Toggle(isOn: $allowInsecureTLS) {
+                    HStack {
+                        Image(systemName: "lock.trianglebadge.exclamationmark")
+                            .foregroundStyle(.orange)
+                            .frame(width: 28)
+                        Text("Allow Self-Signed Certificates")
                     }
                 }
             }
@@ -171,9 +201,25 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
+
+            Section(header: Text("Thanks to")) {
+                ForEach(ThanksTo.projects, id: \.name) { project in
+                    Link(destination: project.url) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(project.name).foregroundStyle(.primary)
+                                Text(project.note).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+            }
         }
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 100) }
-
         .listRowBackground(Color(.secondarySystemGroupedBackground))
         .scrollContentBackground(.hidden)
         .background { AmbientBackground() }
@@ -198,4 +244,22 @@ enum AppInfo {
         }
         return "\(shortVersion) (\(build))"
     }
+}
+
+enum ThanksTo {
+    struct Project { let name: String; let note: String; let url: URL }
+    static let projects: [Project] = [
+        Project(name: "MeloX", note: "Loose inspiration",
+                url: URL(string: "https://github.com/youshen2/MeloX")!),
+        Project(name: "Apple Music-like Lyrics (AMLL)", note: "Lyrics animation inspiration",
+                url: URL(string: "https://github.com/Steve-xmh/applemusic-like-lyrics")!),
+        Project(name: "Spicy Lyrics", note: "Lyrics font & style",
+                url: URL(string: "https://github.com/Spikerko/spicy-lyrics")!),
+        Project(name: "LDDC", note: "Word-by-word lyrics fetching",
+                url: URL(string: "https://github.com/chenmozhijin/LDDC")!),
+        Project(name: "LNPopupUI", note: "Mini player",
+                url: URL(string: "https://github.com/LeoNatan/LNPopupUI")!),
+        Project(name: "MusicBrainz & Wikipedia", note: "Songwriter credits & artist bios",
+                url: URL(string: "https://musicbrainz.org")!),
+    ]
 }

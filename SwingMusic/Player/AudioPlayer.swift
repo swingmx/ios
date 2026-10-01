@@ -1,4 +1,5 @@
 import AVFoundation
+import QuartzCore
 import Combine
 import MediaPlayer
 import os
@@ -14,7 +15,6 @@ final class AudioPlayer: ObservableObject {
     @Published var current: Track?
     @Published var queue: [Track] = []
     @Published var index: Int = 0
-
     private var baseOrder: [Track] = []
 
     @Published var source: PlaySource = .none
@@ -46,13 +46,24 @@ final class AudioPlayer: ObservableObject {
     @Published var playing = false
     @Published var time: Double = 0
     @Published var total: Double = 0
-    @Published var volume: Float = 0.8
+    @Published var volume: Float = 0.8 {
+        didSet { player?.volume = volume }
+    }
 
     private var timeAnchor: Double = 0
     private var timeAnchorDate: Date = .distantPast
     @Published var shuffle = false
     @Published var loop: LoopMode = .off
-    @Published var crossfadeDuration: Double = 0
+    @Published var crossfadeDuration: Double = UserDefaults.standard.double(forKey: "crossfadeDuration") {
+        didSet { UserDefaults.standard.set(crossfadeDuration, forKey: "crossfadeDuration") }
+    }
+    @Published var autoplay: Bool = UserDefaults.standard.bool(forKey: "autoplay") {
+        didSet {
+            UserDefaults.standard.set(autoplay, forKey: "autoplay")
+            if autoplay { extendForAutoplayIfNeeded() }
+        }
+    }
+    private var autoplayLoading = false
     @Published var audioQuality: AudioQuality = AudioQuality(rawValue: UserDefaults.standard.string(forKey: "audioQuality") ?? "high") ?? .high {
         didSet { UserDefaults.standard.set(audioQuality.rawValue, forKey: "audioQuality") }
     }
@@ -97,9 +108,7 @@ final class AudioPlayer: ObservableObject {
     private var crossfadePlayer: AVPlayer?
     private var crossfadeObs: Any?
     private var obs: Any?
-
     private var statusObs: NSKeyValueObservation?
-
     private var assetLoader: AuthStreamLoader?
     private var started: Date?
     private var startTS = 0
@@ -207,7 +216,6 @@ final class AudioPlayer: ObservableObject {
             if wasPlayingBeforeInterruption {
                 try? AVAudioSession.sharedInstance().setActive(true)
                 if options?.contains(.shouldResume) == true || wasPlayingBeforeInterruption {
-
                     Task {
                         try? await Task.sleep(nanoseconds: 300_000_000)
                         player?.play()
@@ -228,8 +236,7 @@ final class AudioPlayer: ObservableObject {
         if let list {
             baseOrder = list
             if shuffle {
-
-                queue = [track] + list.filter { $0 != track }.shuffled()
+                queue = [track] + SmartShuffle.shuffle(list.filter { $0 != track })
                 index = 0
             } else {
                 queue = list
@@ -246,7 +253,7 @@ final class AudioPlayer: ObservableObject {
         self.source = source
         baseOrder = tracks
         shuffle = shuffled
-        queue = shuffled ? tracks.shuffled() : tracks
+        queue = shuffled ? SmartShuffle.shuffle(tracks) : tracks
         index = 0
         current = queue[0]
         load(queue[0])
@@ -283,6 +290,13 @@ final class AudioPlayer: ObservableObject {
         shuffle.toggle()
         UISelectionFeedbackGenerator().selectionChanged()
         applyShuffleToUpcoming()
+        if shuffle { fillUpcoming(to: 10) }
+    }
+
+    func fillUpcoming(to count: Int) {
+        let missing = count - (queue.count - index - 1)
+        guard missing > 0, !autoplayLoading else { return }
+        appendLibraryTracks(missing)
     }
 
     private func applyShuffleToUpcoming() {
@@ -291,16 +305,21 @@ final class AudioPlayer: ObservableObject {
         let playedHashes = Set(head.map { $0.trackhash })
         let upcoming = Array(queue[(index + 1)...])
         if shuffle {
-
-            queue = head + upcoming.shuffled()
+            queue = head + SmartShuffle.shuffle(upcoming)
         } else {
-
             let baseSet = Set(baseOrder.map { $0.trackhash })
             let restored = baseOrder.filter { !playedHashes.contains($0.trackhash) }
             let extras = upcoming.filter { !baseSet.contains($0.trackhash) }
             queue = head + restored + extras
         }
+    }
 
+    private func reshuffleForNewRound() {
+        guard shuffle, queue.count > 2 else { return }
+        let last = queue[index]
+        var next = SmartShuffle.shuffle(queue)
+        if next.first == last, let i = next.indices.dropFirst().randomElement() { next.swapAt(0, i) }
+        queue = next
     }
 
     func cycleLoop() {
@@ -329,9 +348,8 @@ final class AudioPlayer: ObservableObject {
     func next() {
         guard !queue.isEmpty else { return }
         if loop == .one { seek(0); player?.play(); return }
-
         if index < queue.count - 1 { index += 1 }
-        else if loop == .all { index = 0 }
+        else if loop == .all { reshuffleForNewRound(); index = 0 }
         else {
             playing = false
             player?.pause()
@@ -355,7 +373,6 @@ final class AudioPlayer: ObservableObject {
 
     func toggle() {
         guard player != nil else {
-
             if let t = current { load(t); return }
             return
         }
@@ -375,7 +392,6 @@ final class AudioPlayer: ObservableObject {
     }
 
     func seek(_ t: Double) {
-
         let tol = CMTime(seconds: 0.2, preferredTimescale: 1000)
         player?.seek(to: CMTime(seconds: t, preferredTimescale: 1000), toleranceBefore: tol, toleranceAfter: tol)
         time = t
@@ -383,16 +399,77 @@ final class AudioPlayer: ObservableObject {
         timeAnchorDate = Date()
     }
 
+    private func resetClock(to seconds: Double) {
+        let t = seconds.isFinite ? seconds : 0
+        time = t
+        timeAnchor = t
+        timeAnchorDate = Date()
+    }
+
     func smoothTime(at date: Date = Date()) -> Double {
         guard playing else { return time }
-        let dt = min(max(0, date.timeIntervalSince(timeAnchorDate)), 0.12)
+        guard let p = player, p.timeControlStatus == .playing else { return timeAnchor }
+        let dt = min(max(0, date.timeIntervalSince(timeAnchorDate)), 0.5) * Double(p.rate)
         let t = timeAnchor + dt
         return total > 0 ? min(t, total) : t
     }
 
+    var currentSongID: Int {
+        guard let hash = current?.trackhash else { return 0 }
+        return abs(hash.hashValue)
+    }
+
+    func extendForAutoplayIfNeeded() {
+        guard autoplay, loop == .off, !autoplayLoading, !queue.isEmpty,
+              index >= queue.count - 3 else { return }
+        appendLibraryTracks(15)
+    }
+
+    private func appendLibraryTracks(_ count: Int) {
+        guard !autoplayLoading else { return }
+        autoplayLoading = true
+        let recent = queue.suffix(8)
+        let recentArtists = Set(recent.map { $0.artist.lowercased() })
+        let inQueue = Set(queue.map(\.trackhash))
+        Task { @MainActor in
+            defer { self.autoplayLoading = false }
+            var library = (try? await API.shared.topTracks("alltime", limit: 500)) ?? []
+            if let albums = try? await API.shared.albums(limit: 500).items, !albums.isEmpty {
+                await withTaskGroup(of: [Track].self) { group in
+                    for a in albums.shuffled().prefix(12) {
+                        group.addTask { (try? await API.shared.albumTracks(a.albumhash)) ?? [] }
+                    }
+                    for await tracks in group { library += tracks }
+                }
+            }
+            var seen = Set<String>()
+            library = library.filter { seen.insert($0.trackhash).inserted }
+            guard !library.isEmpty else { return }
+            let fresh = library.filter { !inQueue.contains($0.trackhash) }
+            let sameArtist = fresh.filter { recentArtists.contains($0.artist.lowercased()) }
+            let others = fresh.filter { !recentArtists.contains($0.artist.lowercased()) }
+            var pick = Array(sameArtist.shuffled().prefix(max(1, count / 3)))
+            pick += others.shuffled().prefix(count - pick.count)
+            guard !pick.isEmpty else { return }
+            self.appendToQueue(SmartShuffle.shuffle(pick))
+            print("∞ \(pick.count) Songs aus der Bibliothek angehängt")
+        }
+    }
+
     private func load(_ track: Track) {
+        extendForAutoplayIfNeeded()
+        if !isCrossfading {
+            discardPrepared()
+            fadeTimer?.invalidate(); fadeTimer = nil
+        }
         log()
         lastActivitySecond = -1
+
+        time = 0
+        total = 0
+        timeAnchor = 0
+        timeAnchorDate = Date()
+
         if let o = obs { player?.removeTimeObserver(o); obs = nil }
         statusObs?.invalidate(); statusObs = nil
         if !isCrossfading { player?.pause() }
@@ -405,10 +482,8 @@ final class AudioPlayer: ObservableObject {
     }
 
     private func startPlayback(_ track: Track) async {
-
         let localURL = DownloadManager.shared.localURL(for: track)
         if FileManager.default.fileExists(atPath: localURL.path) {
-
             streamCandidates = []
             streamCandidateIndex = 0
             let item = AVPlayerItem(url: localURL)
@@ -429,6 +504,7 @@ final class AudioPlayer: ObservableObject {
             updateNowPlaying()
             updateArtwork(track)
             setupCrossfadeObserver()
+            automixDidStart(track)
             await ActivityManager.shared.start(track: track, accentHex: "#FF375F")
             return
         }
@@ -465,17 +541,14 @@ final class AudioPlayer: ObservableObject {
             next()
             return
         }
-
         if let o = obs { player?.removeTimeObserver(o); obs = nil }
         NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)
 
         let url = streamCandidates[streamCandidateIndex]
-
         var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
         comps?.scheme = "swingstream"
         let assetURL = comps?.url ?? url
         let asset = AVURLAsset(url: assetURL)
-
         let ext = (track.filepath as NSString).pathExtension
         let loader = AuthStreamLoader(realURL: url, headers: streamHeaders, fileExtension: ext)
         asset.resourceLoader.setDelegate(loader, queue: AuthStreamLoader.queue)
@@ -484,7 +557,6 @@ final class AudioPlayer: ObservableObject {
         observeFailure(of: item, track: track)
         player = AVPlayer(playerItem: item)
         player?.volume = volume
-
         player?.allowsExternalPlayback = false
 
         NotificationCenter.default.addObserver(self, selector: #selector(ended), name: .AVPlayerItemDidPlayToEndTime, object: item)
@@ -498,28 +570,32 @@ final class AudioPlayer: ObservableObject {
         startTS = Int(Date().timeIntervalSince1970)
         total = Double(track.duration)
         time = 0
+        resetClock(to: 0)
         lastActivitySecond = -1
         updateNowPlaying()
         updateArtwork(track)
         setupCrossfadeObserver()
+        automixDidStart(track)
         Task { await ActivityManager.shared.start(track: track, accentHex: "#FF375F") }
     }
 
     private func setupTimeObserver() {
         obs = player?.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.05, preferredTimescale: 600), queue: .main) { [weak self] t in
-            Task { @MainActor [weak self] in
+            MainActor.assumeIsolated {
                 guard let s = self else { return }
-                s.time = t.seconds
-                s.timeAnchor = t.seconds
+                let seconds = t.seconds
+                s.time = seconds
+                s.timeAnchor = seconds
                 s.timeAnchorDate = Date()
                 if let d = s.player?.currentItem?.duration.seconds, d.isFinite { s.total = d }
 
-                let sec = max(0, Int(s.time))
+                let sec = max(0, Int(seconds))
                 if sec != s.lastActivitySecond {
                     s.lastActivitySecond = sec
                     s.updateNowPlaying()
                     s.checkCrossfade()
-                    await ActivityManager.shared.updateState(playing: s.playing, progress: s.time, duration: s.total)
+                    let playing = s.playing, progress = s.time, duration = s.total
+                    Task { await ActivityManager.shared.updateState(playing: playing, progress: progress, duration: duration) }
                 }
             }
         }
@@ -559,71 +635,155 @@ final class AudioPlayer: ObservableObject {
 
     private func setupCrossfadeObserver() {
         guard crossfadeDuration > 0 else { return }
-
     }
 
     private var isCrossfading = false
 
+    private var prepared: (track: Track, player: AVPlayer, item: AVPlayerItem, loader: AuthStreamLoader?)?
+    private var fadeTimer: Timer?
+
+    private func automixDidStart(_ track: Track) {
+        guard crossfadeDuration > 0 else { return }
+        AutoMixStore.shared.load(track.trackhash)
+        let upcoming = queue.dropFirst(index + 1).prefix(4).map(\.trackhash)
+        AutoMixStore.shared.prepare(Array(upcoming))
+    }
+
+    private var upcomingTrack: Track? {
+        index + 1 < queue.count ? queue[index + 1] : nil
+    }
+
     private func checkCrossfade() {
-        guard crossfadeDuration > 0, !isCrossfading, playing, total > crossfadeDuration else { return }
-        let remaining = total - time
-        if remaining <= crossfadeDuration && remaining > 0.5 {
-            beginCrossfade()
+        guard crossfadeDuration > 0, !isCrossfading, playing, loop != .one,
+              let cur = current, total > 20 else { return }
+        let info = AutoMixStore.shared.info(for: cur.trackhash)
+        let fade = info.map { min($0.mixDuration, 20) } ?? crossfadeDuration
+        let outPoint = info.map { min($0.mixOut, total - 1) } ?? (total - crossfadeDuration)
+
+        if prepared == nil, time >= outPoint - 12, time < outPoint { prepareNext() }
+        if time >= outPoint, total - time > 0.5 {
+            beginCrossfade(fade: fade)
         }
     }
 
-    private func beginCrossfade() {
+    private func makeItem(for track: Track) -> (AVPlayerItem, AuthStreamLoader?)? {
+        let localURL = DownloadManager.shared.localURL(for: track)
+        if FileManager.default.fileExists(atPath: localURL.path) {
+            return (AVPlayerItem(url: localURL), nil)
+        }
+        let p = streamParams
+        guard let url = API.shared.streamURLs(track.trackhash, filepath: track.filepath, container: p.container, quality: p.quality).first
+        else { return nil }
+        var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        comps?.scheme = "swingstream"
+        let asset = AVURLAsset(url: comps?.url ?? url)
+        let loader = AuthStreamLoader(realURL: url, headers: authHeaders(), fileExtension: (track.filepath as NSString).pathExtension)
+        asset.resourceLoader.setDelegate(loader, queue: AuthStreamLoader.queue)
+        return (AVPlayerItem(asset: asset), loader)
+    }
+
+    private func prepareNext() {
+        guard let next = upcomingTrack, let (item, loader) = makeItem(for: next) else { return }
+        item.audioTimePitchAlgorithm = .timeDomain
+        let p = AVPlayer(playerItem: item)
+        p.volume = 0
+        p.allowsExternalPlayback = false
+        if let cue = AutoMixStore.shared.info(for: next.trackhash)?.cueIn, cue > 0.05 {
+            p.seek(to: CMTime(seconds: cue, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        }
+        prepared = (next, p, item, loader)
+    }
+
+    private func discardPrepared() {
+        prepared?.player.pause()
+        prepared = nil
+    }
+
+    private func beginCrossfade(fade: Double) {
         guard !isCrossfading else { return }
         isCrossfading = true
 
         let oldPlayer = player
-        let fadeDuration = crossfadeDuration
-        let originalVol = volume
-
+        let oldInfo = current.flatMap { AutoMixStore.shared.info(for: $0.trackhash) }
         if let item = oldPlayer?.currentItem {
             NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: item)
         }
-
-        let fadeSteps = 20
-        let interval = fadeDuration / Double(fadeSteps)
-        let volumeStep = originalVol / Float(fadeSteps)
-
-        Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { timer in
-            Task { @MainActor [weak oldPlayer] in
-                guard let p = oldPlayer else { timer.invalidate(); return }
-                let newVol = p.volume - volumeStep
-                if newVol <= 0 {
-                    p.pause()
-                    timer.invalidate()
-                } else {
-                    p.volume = max(0, newVol)
-                }
-            }
-        }
+        if let o = obs { oldPlayer?.removeTimeObserver(o); obs = nil }
 
         log()
-
         guard !queue.isEmpty else { isCrossfading = false; return }
-        if shuffle { index = Int.random(in: 0..<queue.count) }
-        else if index < queue.count - 1 { index += 1 }
-        else if loop == .all { index = 0 }
+        if index < queue.count - 1 { index += 1 }
+        else if loop == .all { reshuffleForNewRound(); index = 0 }
         else { isCrossfading = false; return }
+        let next = queue[index]
+        current = next
 
-        current = queue[index]
+        let newInfo = AutoMixStore.shared.info(for: next.trackhash)
+        let startRate: Float = (oldInfo.flatMap { newInfo?.rateToMatch($0) }) ?? 1
 
-        if let o = obs { player?.removeTimeObserver(o); obs = nil }
+        if let prep = prepared, prep.track == next {
+            prepared = nil
+            player = prep.player
+            assetLoader = prep.loader
+            streamCandidates = []
+            streamCandidateIndex = 0
+            observeFailure(of: prep.item, track: next)
+            NotificationCenter.default.addObserver(self, selector: #selector(ended), name: .AVPlayerItemDidPlayToEndTime, object: prep.item)
+            setupTimeObserver()
+            prep.player.volume = 0
+            prep.player.playImmediately(atRate: startRate)
+            resetClock(to: prep.player.currentTime().seconds)
+            playing = true
+            started = Date()
+            startTS = Int(Date().timeIntervalSince1970)
+            total = Double(next.duration)
+            lastActivitySecond = -1
+            updateNowPlaying()
+            updateArtwork(next)
+            setupCrossfadeObserver()
+            automixDidStart(next)
+            Task { await ActivityManager.shared.start(track: next, accentHex: "#FF375F") }
+            runFade(from: oldPlayer, to: prep.player, duration: fade, startRate: startRate)
+        } else {
+            discardPrepared()
+            Task { [weak self] in
+                guard let self else { return }
+                await self.startPlayback(next)
+                self.player?.volume = 0
+                self.runFade(from: oldPlayer, to: self.player, duration: fade, startRate: 1)
+            }
+        }
+    }
 
-        Task { [weak self] in
-            guard let self else { return }
-            await self.startPlayback(self.queue[self.index])
-            self.isCrossfading = false
+    private func runFade(from old: AVPlayer?, to new: AVPlayer?, duration: Double, startRate: Float) {
+        fadeTimer?.invalidate()
+        let start = CACurrentMediaTime()
+        let d = max(0.5, duration)
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self, weak old, weak new] timer in
+            Task { @MainActor in
+                guard let self else { timer.invalidate(); return }
+                let x = min(1, (CACurrentMediaTime() - start) / d)
+                let v = self.volume
+                old?.volume = v * Float(cos(x * .pi / 2))
+                new?.volume = v * Float(sin(x * .pi / 2))
+                if startRate != 1, let n = new, n.rate > 0 {
+                    let e = x * x * (3 - 2 * x)
+                    n.rate = startRate + (1 - startRate) * Float(e)
+                }
+                if x >= 1 {
+                    timer.invalidate()
+                    old?.pause()
+                    new?.volume = v
+                    if let n = new, n.rate > 0 { n.rate = 1 }
+                    self.isCrossfading = false
+                }
+            }
         }
     }
 
     private func log() {
         guard let t = current, let s = started else { return }
         let d = Int(Date().timeIntervalSince(s))
-
         if d >= 5 {
             ScrobbleQueue.shared.record(trackhash: t.trackhash, timestamp: startTS, duration: d, source: source.token)
         }
@@ -674,16 +834,24 @@ final class AudioPlayer: ObservableObject {
         }
     }
 
-    private func updateNowPlaying() {
-        guard let t = current else { return }
-        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-        info[MPMediaItemPropertyTitle] = t.title
+    private var nowPlayingInfo: [String: Any] = [:]
 
+    private func updateNowPlaying() {
+        PerformanceTracer.shared.measure(.nowPlayingInfo) {
+            updateNowPlayingTraced()
+        }
+    }
+
+    private func updateNowPlayingTraced() {
+        guard let t = current else { return }
+        var info = nowPlayingInfo
+        info[MPMediaItemPropertyTitle] = t.title
         info[MPMediaItemPropertyArtist] = t.allArtists
         info[MPMediaItemPropertyAlbumTitle] = t.album
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = time
         info[MPMediaItemPropertyPlaybackDuration] = total
         info[MPNowPlayingInfoPropertyPlaybackRate] = playing ? 1.0 : 0.0
+        nowPlayingInfo = info
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
     }
 
@@ -705,14 +873,15 @@ final class AudioPlayer: ObservableObject {
                 req.timeoutInterval = 8
                 if let t = API.shared.token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
 
-                guard let (data, response) = try? await URLSession.shared.data(for: req),
+                guard let (data, response) = try? await Net.session.data(for: req),
                       let http = response as? HTTPURLResponse,
                       (200...299).contains(http.statusCode),
                       let img = UIImage(data: data) else { continue }
 
                 let art = MPMediaItemArtwork(boundsSize: img.size) { _ in img }
-                var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+                var info = self.nowPlayingInfo
                 info[MPMediaItemPropertyArtwork] = art
+                self.nowPlayingInfo = info
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = info
                 await ActivityManager.shared.updateImage(data)
                 return
@@ -727,7 +896,6 @@ final class AuthStreamLoader: NSObject, AVAssetResourceLoaderDelegate {
     private let realURL: URL
     private let headers: [String: String]
     private let fileExtension: String?
-    private let session = URLSession(configuration: .default)
     private let tag: String
     private var reqCounter = 0
 
@@ -735,7 +903,6 @@ final class AuthStreamLoader: NSObject, AVAssetResourceLoaderDelegate {
         self.realURL = realURL
         self.headers = headers
         self.fileExtension = (fileExtension?.isEmpty == false) ? fileExtension : nil
-
         self.tag = String(realURL.absoluteString.suffix(28))
         super.init()
         Log.info("stream", "Loader init — auth=\(headers["Authorization"] != nil ? "yes" : "NO") ext=\(self.fileExtension ?? "—") url=…\(tag)")
@@ -761,83 +928,136 @@ final class AuthStreamLoader: NSObject, AVAssetResourceLoaderDelegate {
                         shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest) -> Bool {
         reqCounter += 1
         let n = reqCounter
-        let info = loadingRequest.contentInformationRequest != nil ? "info" : "—"
+        var req = URLRequest(url: realURL)
+        for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
         if let d = loadingRequest.dataRequest {
-            Log.debug("stream", "[\(n)] ask data off=\(d.requestedOffset) len=\(d.requestedLength) toEnd=\(d.requestsAllDataToEndOfResource) \(info)")
+            let start = d.requestedOffset
+            let range = d.requestsAllDataToEndOfResource
+                ? "bytes=\(start)-" : "bytes=\(start)-\(start + Int64(d.requestedLength) - 1)"
+            req.setValue(range, forHTTPHeaderField: "Range")
+            Log.debug("stream", "[\(n)] \(range)\(loadingRequest.contentInformationRequest != nil ? " +info" : "")")
         } else {
-            Log.debug("stream", "[\(n)] ask \(info)-only")
+            req.setValue("bytes=0-1", forHTTPHeaderField: "Range")
         }
-        Task { await handle(loadingRequest, n: n) }
+        streamer.start(req, for: loadingRequest, n: n)
         return true
     }
 
     func resourceLoader(_ resourceLoader: AVAssetResourceLoader,
                         didCancel loadingRequest: AVAssetResourceLoadingRequest) {
-        Log.debug("stream", "request cancelled")
+        streamer.cancel(loadingRequest)
     }
 
-    private func handle(_ loadingRequest: AVAssetResourceLoadingRequest, n: Int) async {
-        var req = URLRequest(url: realURL)
-        for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
+    private lazy var streamer = StreamDelegate(owner: self)
+    private lazy var streamSession: URLSession = {
+        let q = OperationQueue()
+        q.maxConcurrentOperationCount = 1
+        q.underlyingQueue = Self.queue
+        return URLSession(configuration: .default, delegate: streamer, delegateQueue: q)
+    }()
 
-        var rangeDesc = "none"
-        if let dataReq = loadingRequest.dataRequest {
-            let start = dataReq.requestedOffset
-            if dataReq.requestsAllDataToEndOfResource {
-                let r = "bytes=\(start)-"; req.setValue(r, forHTTPHeaderField: "Range"); rangeDesc = r
+    deinit { streamSession.invalidateAndCancel() }
+
+    fileprivate func fillContentInfo(_ cinfo: AVAssetResourceLoadingContentInformationRequest,
+                                     from http: HTTPURLResponse, n: Int) {
+        let ctype = http.value(forHTTPHeaderField: "Content-Type") ?? ""
+        let mime = ctype.components(separatedBy: ";").first?.trimmingCharacters(in: .whitespaces) ?? ctype
+        if let uti = resolveUTI(mime: mime) { cinfo.contentType = uti }
+        cinfo.isByteRangeAccessSupported = true
+        let crange = http.value(forHTTPHeaderField: "Content-Range") ?? ""
+        if let totalStr = crange.components(separatedBy: "/").last, let total = Int64(totalStr) {
+            cinfo.contentLength = total
+        } else if let len = http.value(forHTTPHeaderField: "Content-Length"), let total = Int64(len) {
+            cinfo.contentLength = total
+        }
+        Log.debug("stream", "[\(n)] info mime=\(mime) length=\(cinfo.contentLength)")
+    }
+
+    fileprivate final class StreamDelegate: NSObject, URLSessionDataDelegate {
+        weak var owner: AuthStreamLoader?
+        private var requests: [Int: (AVAssetResourceLoadingRequest, Int)] = [:]
+
+        init(owner: AuthStreamLoader) { self.owner = owner }
+
+        func start(_ req: URLRequest, for loadingRequest: AVAssetResourceLoadingRequest, n: Int) {
+            guard let owner else { return }
+            let task = owner.streamSession.dataTask(with: req)
+            AuthStreamLoader.queue.async {
+                self.requests[task.taskIdentifier] = (loadingRequest, n)
+                task.resume()
+            }
+        }
+
+        func cancel(_ loadingRequest: AVAssetResourceLoadingRequest) {
+            guard let owner else { return }
+            AuthStreamLoader.queue.async {
+                guard let id = self.requests.first(where: { $0.value.0 === loadingRequest })?.key else { return }
+                self.requests[id] = nil
+                owner.streamSession.getAllTasks { tasks in tasks.first { $0.taskIdentifier == id }?.cancel() }
+            }
+        }
+
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+            guard let (lr, n) = requests[dataTask.taskIdentifier] else { completionHandler(.cancel); return }
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                Log.error("stream", "[\(n)] HTTP \(code) — failing request")
+                requests[dataTask.taskIdentifier] = nil
+                lr.finishLoading(with: NSError(domain: "AuthStreamLoader", code: code))
+                completionHandler(.cancel)
+                return
+            }
+            if let cinfo = lr.contentInformationRequest { owner?.fillContentInfo(cinfo, from: http, n: n) }
+            if lr.dataRequest == nil {
+                requests[dataTask.taskIdentifier] = nil
+                lr.finishLoading()
+                completionHandler(.cancel)
+                return
+            }
+            completionHandler(.allow)
+        }
+
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+            guard let (lr, _) = requests[dataTask.taskIdentifier], !lr.isCancelled else { return }
+            lr.dataRequest?.respond(with: data)
+        }
+
+        func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+            guard let (lr, n) = requests.removeValue(forKey: task.taskIdentifier), !lr.isCancelled, !lr.isFinished else { return }
+            if let error, (error as NSError).code != NSURLErrorCancelled {
+                Log.error("stream", "[\(n)] \(error.localizedDescription)")
+                lr.finishLoading(with: error)
             } else {
-                let end = start + Int64(dataReq.requestedLength) - 1
-                let r = "bytes=\(start)-\(end)"; req.setValue(r, forHTTPHeaderField: "Range"); rangeDesc = r
+                lr.finishLoading()
             }
-        } else {
-            req.setValue("bytes=0-1", forHTTPHeaderField: "Range"); rangeDesc = "bytes=0-1"
         }
 
-        let t0 = Date()
-        do {
-            let (data, response) = try await session.data(for: req)
-            let ms = Int(Date().timeIntervalSince(t0) * 1000)
-            guard let http = response as? HTTPURLResponse else {
-                Log.error("stream", "[\(n)] no HTTP response (range \(rangeDesc))")
-                loadingRequest.finishLoading(with: NSError(domain: "AuthStreamLoader", code: 1))
-                return
-            }
-            let ctype = http.value(forHTTPHeaderField: "Content-Type") ?? "—"
-            let crange = http.value(forHTTPHeaderField: "Content-Range") ?? "—"
-            Log.debug("stream", "[\(n)] → \(http.statusCode) \(data.count)B in \(ms)ms type=\(ctype) range=\(crange)")
-
-            guard (200...299).contains(http.statusCode) else {
-                Log.error("stream", "[\(n)] HTTP \(http.statusCode) — failing request")
-                loadingRequest.finishLoading(with: NSError(domain: "AuthStreamLoader", code: http.statusCode))
-                return
-            }
-
-            if let cinfo = loadingRequest.contentInformationRequest {
-                let mime = ctype.components(separatedBy: ";").first?
-                    .trimmingCharacters(in: .whitespaces) ?? ctype
-                if let uti = resolveUTI(mime: mime) {
-                    cinfo.contentType = uti
-                    Log.debug("stream", "[\(n)] contentType mime=\(mime) ext=\(fileExtension ?? "—") → UTI=\(uti)")
-                } else {
-                    Log.warn("stream", "[\(n)] no UTI for mime='\(mime)' ext='\(fileExtension ?? "—")' — AVPlayer muss raten")
-                }
-                cinfo.isByteRangeAccessSupported = true
-                if let totalStr = crange.components(separatedBy: "/").last, let total = Int64(totalStr) {
-                    cinfo.contentLength = total
-                    Log.debug("stream", "[\(n)] contentLength=\(total) (aus Content-Range)")
-                } else if let len = http.value(forHTTPHeaderField: "Content-Length"), let total = Int64(len) {
-                    cinfo.contentLength = total
-                    Log.debug("stream", "[\(n)] contentLength=\(total) (aus Content-Length)")
-                } else {
-                    Log.warn("stream", "[\(n)] keine Längeninfo (weder Content-Range noch -Length)")
-                }
-            }
-
-            loadingRequest.dataRequest?.respond(with: data)
-            loadingRequest.finishLoading()
-        } catch {
-            Log.error("stream", "[\(n)] URLSession error (range \(rangeDesc)): \(error.localizedDescription)")
-            loadingRequest.finishLoading(with: error)
+        func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
+                        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+            Net.shared.urlSession(session, didReceive: challenge, completionHandler: completionHandler)
         }
+    }
+}
+
+enum SmartShuffle {
+    static func shuffle(_ tracks: [Track]) -> [Track] {
+        guard tracks.count > 2 else { return tracks.shuffled() }
+        let groups = Dictionary(grouping: tracks) {
+            $0.artist.lowercased().trimmingCharacters(in: .whitespaces)
+        }
+        guard groups.count > 1 else { return tracks.shuffled() }
+        var placed: [(position: Double, track: Track)] = []
+        placed.reserveCapacity(tracks.count)
+        for (_, group) in groups {
+            let items = group.shuffled()
+            let n = Double(items.count)
+            let offset = Double.random(in: 0..<1) / n
+            for (i, t) in items.enumerated() {
+                let jitter = Double.random(in: -0.15...0.15) / n
+                placed.append((offset + Double(i) / n + jitter, t))
+            }
+        }
+        return placed.sorted { $0.position < $1.position }.map(\.track)
     }
 }

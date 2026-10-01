@@ -57,6 +57,7 @@ struct FolderBrowserView: View {
             }
         }
         .squeezeMiniPlayer(state)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { AmbientBackground() }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
@@ -115,7 +116,6 @@ struct FolderBrowserView: View {
             case .play:
                 state.player.playAll(all, source: .folder(folder.path))
             case .next:
-
                 all.reversed().forEach { state.player.addNext($0) }
             case .queue:
                 all.forEach { state.player.addLast($0) }
