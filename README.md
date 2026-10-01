@@ -1,5 +1,5 @@
 <div align="center" style="display: flex; justify-content: center; align-items: center;">
-  <img class="lo" src='screenshots/logo-fill.light.svg' style="height: 4rem">
+  <img class="lo" src='github/images/logo-fill.light.svg' style="height: 4rem">
 </div>
 <div align="center" style="font-size: 2rem"><b>Swing Music iOS Client</b></div>
 
@@ -9,7 +9,7 @@
 
 ##
 
-![Image](screenshots/readme.webp)
+![Image](github/images/readme.webp)
 This client application allows you to stream music on your iPhone and iPad from your Swing Music server.
 
 ### Features
