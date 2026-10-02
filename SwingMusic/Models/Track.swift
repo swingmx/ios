@@ -250,13 +250,30 @@ struct ArtistDetail: Decodable {
     let artist: Artist
     let tracks: [Track]
     let stats: [ArtistStat]?
+    let albumSections: [ArtistAlbumSection]
 
-    enum CodingKeys: String, CodingKey { case artist, tracks, stats }
+    enum CodingKeys: String, CodingKey { case artist, tracks, stats, albums }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         artist = try c.decode(Artist.self, forKey: .artist)
         tracks = (try? c.decode([Track].self, forKey: .tracks)) ?? []
         stats = try? c.decode([ArtistStat].self, forKey: .stats)
+        albumSections = (try? c.decode(ArtistAlbumGroups.self, forKey: .albums))?.sections ?? []
+    }
+}
+
+private struct ArtistAlbumGroups: Decodable {
+    let albums: [Album]?
+    let singles_and_eps: [Album]?
+    let appearances: [Album]?
+    let compilations: [Album]?
+
+    var sections: [ArtistAlbumSection] {
+        [("Albums", albums), ("Singles & EPs", singles_and_eps), ("Appearances", appearances), ("Compilations", compilations)]
+            .compactMap { title, list in
+                guard let list, !list.isEmpty else { return nil }
+                return ArtistAlbumSection(title: title, albums: list)
+            }
     }
 }
 

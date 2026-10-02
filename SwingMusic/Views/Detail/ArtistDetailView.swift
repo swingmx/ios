@@ -4,9 +4,9 @@ struct ArtistDetailView: View {
     let hash: String
     @EnvironmentObject var state: AppState
     @State private var detail: ArtistDetail?
-    @State private var albumSections: [ArtistAlbumSection] = []
     @State private var similar: [Artist] = []
     @State private var bgImage: UIImage?
+    @State private var fullTracks: Task<[Track]?, Never>?
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -15,7 +15,7 @@ struct ArtistDetailView: View {
                     heroSection(d)
                     topSongsList(d)
 
-                    ForEach(albumSections, id: \.self) { section in
+                    ForEach(d.albumSections, id: \.self) { section in
                         albumsSection(section)
                     }
 
@@ -76,8 +76,8 @@ struct ArtistDetailView: View {
                     .foregroundStyle(.secondary)
 
                 DetailPlayButtons(
-                    play: { state.player.playAll(d.tracks, source: .artist(hash)) },
-                    shuffle: { state.player.playAll(d.tracks, shuffled: true, source: .artist(hash)) }
+                    play: { Task { state.player.playAll(await allTracks(d), source: .artist(hash)) } },
+                    shuffle: { Task { state.player.playAll(await allTracks(d), shuffled: true, source: .artist(hash)) } }
                 )
             }
     }
@@ -92,7 +92,7 @@ struct ArtistDetailView: View {
                 Spacer()
                 if total > 5 {
                     NavigationLink {
-                        ArtistTracksView(hash: hash, artistName: d.artist.name)
+                        ArtistTracksView(hash: hash, artistName: d.artist.name, loadTracks: fetchAllTracks)
                     } label: {
                         Text("See All").font(.system(size: 14, weight: .semibold)).foregroundStyle(.blue)
                     }
@@ -104,7 +104,7 @@ struct ArtistDetailView: View {
             VStack(spacing: 0) {
                 ForEach(Array(d.tracks.prefix(5).enumerated()), id: \.element.id) { i, t in
                     TrackRow(track: t, num: i + 1, active: state.player.current == t) {
-                        state.player.play(t, from: d.tracks, source: .artist(hash))
+                        Task { state.player.play(t, from: await allTracks(d), source: .artist(hash)) }
                     }
                 }
             }
@@ -289,9 +289,28 @@ struct ArtistDetailView: View {
             .background(.ultraThinMaterial, in: Capsule())
     }
 
+    // Shared by playback and See All so the full list is downloaded once;
+    // a failed fetch is retried on next use.
+    private func fetchAllTracks() async -> [Track]? {
+        let task = fullTracks ?? Task { try? await API.shared.artistTracks(hash) }
+        fullTracks = task
+        guard let tracks = await task.value, !tracks.isEmpty else {
+            fullTracks = nil
+            return nil
+        }
+        return tracks
+    }
+
+    // d.tracks only holds the top n=5; fall back to it if the full fetch fails.
+    private func allTracks(_ d: ArtistDetail) async -> [Track] {
+        await fetchAllTracks() ?? d.tracks
+    }
+
     private func load() async {
         detail = try? await API.shared.artist(hash)
-        albumSections = (try? await API.shared.artistAlbums(hash)) ?? []
+        if fullTracks == nil {
+            fullTracks = Task { try? await API.shared.artistTracks(hash) }
+        }
         similar = (try? await API.shared.similarArtists(hash)) ?? []
         if let imagePath = detail?.artist.image {
             await loadBackgroundImage(path: imagePath)
@@ -315,6 +334,7 @@ struct ArtistDetailView: View {
 struct ArtistTracksView: View {
     let hash: String
     let artistName: String
+    let loadTracks: () async -> [Track]?
     @EnvironmentObject var state: AppState
     @State private var tracks: [Track] = []
     @State private var loading = true
@@ -346,7 +366,7 @@ struct ArtistTracksView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             guard tracks.isEmpty else { return }
-            tracks = (try? await API.shared.artistTracks(hash)) ?? []
+            tracks = await loadTracks() ?? []
             loading = false
         }
     }

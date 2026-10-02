@@ -30,27 +30,11 @@ extension API {
     }
 
     func artist(_ hash: String) async throws -> ArtistDetail {
-        try await get("/artist/\(hash)", q: ["tracklimit": "100", "albumlimit": "100"])
+        try await get("/artist/\(hash)", q: ["tracklimit": "5", "all": "true"])
     }
 
     func artistTracks(_ hash: String) async throws -> [Track] {
         try await get("/artist/\(hash)/tracks")
-    }
-
-    func artistAlbums(_ hash: String) async throws -> [ArtistAlbumSection] {
-        struct R: Decodable {
-            let albums: [Album]?
-            let singles_and_eps: [Album]?
-            let appearances: [Album]?
-            let compilations: [Album]?
-        }
-        let r: R = try await get("/artist/\(hash)/albums", q: ["limit": "100", "all": "true"])
-        var sections: [ArtistAlbumSection] = []
-        if let a = r.albums, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Albums", albums: a)) }
-        if let a = r.singles_and_eps, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Singles & EPs", albums: a)) }
-        if let a = r.appearances, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Appearances", albums: a)) }
-        if let a = r.compilations, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Compilations", albums: a)) }
-        return sections
     }
 
     func similarArtists(_ hash: String, limit: Int = 12) async throws -> [Artist] {
