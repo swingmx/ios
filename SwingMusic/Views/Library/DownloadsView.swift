@@ -98,6 +98,8 @@ struct DownloadsView: View {
             NavigationLink(value: Mix(stub: realID, title: group.name, image: group.image)) { groupRow(group) }
         case .folder:
             NavigationLink(value: group) { groupRow(group) }
+        case .artist:
+            NavigationLink(value: Artist(stub: realID, name: group.name, image: group.image)) { groupRow(group) }
         }
     }
 
@@ -108,6 +110,9 @@ struct DownloadsView: View {
                     RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.primary.opacity(0.08))
                         .frame(width: 44, height: 44)
                     Image(systemName: icon(group.kind)).font(.system(size: 18)).foregroundStyle(.blue)
+                } else if group.kind == .artist {
+                    Img(url: API.shared.artistImg(group.image, size: "small"), radius: 22)
+                        .frame(width: 44, height: 44)
                 } else {
                     Img(url: API.shared.img(group.image, size: "small"), radius: 8)
                         .frame(width: 44, height: 44)
@@ -131,6 +136,7 @@ struct DownloadsView: View {
         case .playlist: "music.note.list"
         case .folder: "folder.fill"
         case .mix: "square.stack.3d.up"
+        case .artist: "music.mic"
         }
     }
 

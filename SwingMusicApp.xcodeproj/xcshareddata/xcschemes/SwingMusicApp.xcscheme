@@ -37,6 +37,16 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "09721917F95EB9465D2BF5F6"
+               BuildableName = "SwingMusicTests.xctest"
+               BlueprintName = "SwingMusicTests"
+               ReferencedContainer = "container:SwingMusicApp.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

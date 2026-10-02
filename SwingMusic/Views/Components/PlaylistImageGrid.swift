@@ -6,8 +6,8 @@ struct PlaylistImageGrid: View {
 
     var body: some View {
         ZStack {
-            if let img = playlist?.image, img != "None" {
-                Img(url: API.shared.img(img), radius: size / 8)
+            if let img = playlist?.customImage {
+                Img(url: API.shared.playlistImg(img), radius: size / 8)
             } else if let grid = playlist?.images, !grid.isEmpty {
                 let items = grid.prefix(4)
                 let cols = [GridItem(.flexible(), spacing: 1), GridItem(.flexible(), spacing: 1)]

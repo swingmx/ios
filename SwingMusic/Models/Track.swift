@@ -199,9 +199,18 @@ struct Playlist: Codable, Identifiable, Hashable {
     let trackcount: Int
     let duration: Int
     let pinned: Bool
+    let hasImage: Bool?
+
+    // The uploaded cover's file name. The server sends "None" when there is none, and
+    // has_image false when the file is missing, in which case it would answer with an SVG fallback.
+    var customImage: String? {
+        guard let image, !image.isEmpty, image != "None", hasImage != false else { return nil }
+        return image
+    }
 
     enum CodingKeys: String, CodingKey {
         case id, name, image, images, trackcount, duration, pinned, count
+        case hasImage = "has_image"
     }
 
     init(from decoder: Decoder) throws {
@@ -217,6 +226,7 @@ struct Playlist: Codable, Identifiable, Hashable {
         trackcount = (try? container.decode(Int.self, forKey: .trackcount)) ?? (try? container.decode(Int.self, forKey: .count)) ?? 0
         duration = (try? container.decode(Int.self, forKey: .duration)) ?? 0
         pinned = (try? container.decode(Bool.self, forKey: .pinned)) ?? false
+        hasImage = try? container.decode(Bool.self, forKey: .hasImage)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -228,6 +238,7 @@ struct Playlist: Codable, Identifiable, Hashable {
         try container.encode(trackcount, forKey: .trackcount)
         try container.encode(duration, forKey: .duration)
         try container.encode(pinned, forKey: .pinned)
+        try container.encodeIfPresent(hasImage, forKey: .hasImage)
     }
 
     static func == (lhs: Playlist, rhs: Playlist) -> Bool { lhs.id == rhs.id }
@@ -415,6 +426,7 @@ extension Playlist {
         self.trackcount = 0
         self.duration = 0
         self.pinned = false
+        self.hasImage = nil
     }
 }
 

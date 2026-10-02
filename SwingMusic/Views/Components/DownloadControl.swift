@@ -101,21 +101,33 @@ struct DownloadRing: View {
 
 // The ⋯ toolbar menu on album, playlist, mix and artist screens.
 // `queueTracks` supplies what Play Next / Add to Queue use, for screens whose full list is fetched on demand.
+// `download` replaces downloading `tracks` into `group`, for screens that download more than they show.
 // A nil `group` shows Download disabled.
 struct CollectionActionsMenu: View {
     let tracks: [Track]
     var group: DownloadManager.DownloadGroup?
     var queueTracks: (() async -> [Track])?
+    var download: (() async -> Void)?
     @ObservedObject private var dm = DownloadManager.shared
     @Environment(\.displayScale) private var displayScale
 
+    private var savedGroup: DownloadManager.DownloadGroup? {
+        group.flatMap { g in dm.downloadGroups.first { $0.id == g.id } }
+    }
+
+    // Download state is measured over what the download covers, not only what is on screen.
+    private var hashes: [String] {
+        if let savedGroup { return savedGroup.trackHashes }
+        return download == nil ? tracks.map(\.trackhash) : []
+    }
+
     private var allDownloaded: Bool {
-        !tracks.isEmpty && tracks.allSatisfy { dm.downloads[$0.trackhash] == .completed }
+        !hashes.isEmpty && hashes.allSatisfy { dm.downloads[$0] == .completed }
     }
 
     private var isDownloading: Bool {
-        tracks.contains { t in
-            switch dm.downloads[t.trackhash] {
+        hashes.contains { hash in
+            switch dm.downloads[hash] {
             case .downloading, .queued: true
             default: false
             }
@@ -123,15 +135,15 @@ struct CollectionActionsMenu: View {
     }
 
     private var progress: Double {
-        guard !tracks.isEmpty else { return 0 }
-        let done = tracks.reduce(0.0) { acc, t in
-            switch dm.downloads[t.trackhash] {
+        guard !hashes.isEmpty else { return 0 }
+        let done = hashes.reduce(0.0) { acc, hash in
+            switch dm.downloads[hash] {
             case .completed: acc + 1
             case .downloading(let p): acc + p
             default: acc
             }
         }
-        return min(1, done / Double(tracks.count))
+        return min(1, done / Double(hashes.count))
     }
 
     // Menu items only take images, so the ring is rendered to one; it reflects progress when the menu opens.
@@ -160,13 +172,19 @@ struct CollectionActionsMenu: View {
             Divider()
             if let group {
                 if allDownloaded {
-                    Button(role: .destructive) { dm.removeGroup(group) } label: { Label("Remove Download", systemImage: "trash") }
+                    Button(role: .destructive) { dm.removeGroup(savedGroup ?? group) } label: { Label("Remove Download", systemImage: "trash") }
                 } else if isDownloading {
                     Button {} label: {
                         Label { Text("Downloading \(Int(progress * 100))%") } icon: { progressIcon }
                     }
                 } else {
-                    Button { dm.downloadAll(tracks, group: group) } label: { Label("Download", systemImage: "arrow.down.circle") }
+                    Button {
+                        if let download {
+                            Task { await download() }
+                        } else {
+                            dm.downloadAll(tracks, group: group)
+                        }
+                    } label: { Label("Download", systemImage: "arrow.down.circle") }
                 }
             } else {
                 Button {} label: { Label("Download", systemImage: "arrow.down.circle") }

@@ -29,8 +29,17 @@ extension API {
         return try await (get("/album/\(hash)/tracks") as R).tracks
     }
 
+    static let artistQuery = ["tracklimit": "5", "all": "true"]
+
     func artist(_ hash: String) async throws -> ArtistDetail {
-        try await get("/artist/\(hash)", q: ["tracklimit": "5", "all": "true"])
+        try await get("/artist/\(hash)", q: Self.artistQuery)
+    }
+
+    // The raw responses behind the artist screen, saved as-is for offline use.
+    func artistSnapshot(_ hash: String) async throws -> (detail: Data, tracks: Data) {
+        async let detail = getData("/artist/\(hash)", q: Self.artistQuery)
+        async let tracks = getData("/artist/\(hash)/tracks")
+        return try await (detail, tracks)
     }
 
     func artistTracks(_ hash: String) async throws -> [Track] {

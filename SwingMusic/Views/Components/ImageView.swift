@@ -37,6 +37,10 @@ enum ImageDiskCache {
         try? data.write(to: offlineDir.appendingPathComponent(key(for: url)), options: .atomic)
     }
 
+    static func hasOffline(for url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: offlineDir.appendingPathComponent(key(for: url)).path)
+    }
+
     static func removeOffline(for url: URL) {
         try? FileManager.default.removeItem(at: offlineDir.appendingPathComponent(key(for: url)))
     }

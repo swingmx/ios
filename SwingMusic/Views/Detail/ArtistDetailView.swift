@@ -7,6 +7,8 @@ struct ArtistDetailView: View {
     @State private var similar: [Artist] = []
     @State private var bgImage: UIImage?
     @State private var fullTracks: Task<[Track]?, Never>?
+    // True when the screen shows the copy saved at download time instead of live server data.
+    @State private var isOfflineCopy = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -25,7 +27,8 @@ struct ArtistDetailView: View {
                         similarArtistsSection
                     }
 
-                    if let stats = d.stats, !stats.isEmpty {
+                    // Saved stats are frozen at download time, so they are only shown live.
+                    if !isOfflineCopy, let stats = d.stats, !stats.isEmpty {
                         statsSection(stats, color: d.artist.color)
                     }
 
@@ -45,8 +48,14 @@ struct ArtistDetailView: View {
         .toolbar {
             if let d = detail {
                 ToolbarItem(placement: .topBarTrailing) {
-                    // Artist downloads are not wired up yet, so no download group is passed.
-                    CollectionActionsMenu(tracks: d.tracks, queueTracks: { await allTracks(d) })
+                    CollectionActionsMenu(
+                        tracks: d.tracks,
+                        group: DownloadManager.DownloadGroup(
+                            id: DownloadManager.artistGroupID(hash), kind: .artist,
+                            name: d.artist.name, image: d.artist.image, trackHashes: []),
+                        queueTracks: { await allTracks(d) },
+                        download: { await DownloadManager.shared.downloadArtist(hash) }
+                    )
                 }
             }
         }
@@ -299,8 +308,18 @@ struct ArtistDetailView: View {
 
     // Shared by playback and See All so the full list is downloaded once;
     // a failed fetch is retried on next use.
+    // Offline, a downloaded artist's saved list stands in, limited to tracks that finished downloading.
+    private func makeFullTracksTask() -> Task<[Track]?, Never> {
+        let hash = hash
+        return Task {
+            if let tracks = try? await API.shared.artistTracks(hash) { return tracks }
+            let saved = ArtistOfflineStore.shared.tracks(for: hash).filter { DownloadManager.shared.isDownloaded($0) }
+            return saved.isEmpty ? nil : saved
+        }
+    }
+
     private func fetchAllTracks() async -> [Track]? {
-        let task = fullTracks ?? Task { try? await API.shared.artistTracks(hash) }
+        let task = fullTracks ?? makeFullTracksTask()
         fullTracks = task
         guard let tracks = await task.value, !tracks.isEmpty else {
             fullTracks = nil
@@ -315,9 +334,14 @@ struct ArtistDetailView: View {
     }
 
     private func load() async {
-        detail = try? await API.shared.artist(hash)
+        if let online = try? await API.shared.artist(hash) {
+            detail = online
+        } else {
+            detail = ArtistOfflineStore.shared.detail(for: hash)
+            isOfflineCopy = detail != nil
+        }
         if fullTracks == nil {
-            fullTracks = Task { try? await API.shared.artistTracks(hash) }
+            fullTracks = makeFullTracksTask()
         }
         similar = (try? await API.shared.similarArtists(hash)) ?? []
         if let imagePath = detail?.artist.image {
@@ -334,7 +358,10 @@ struct ArtistDetailView: View {
         guard let (data, response) = try? await Net.session.data(for: req),
               let http = response as? HTTPURLResponse,
               (200...299).contains(http.statusCode),
-              let img = UIImage(data: data) else { return }
+              let img = UIImage(data: data) else {
+            bgImage = ImageDiskCache.image(for: url)
+            return
+        }
         bgImage = img
     }
 }
