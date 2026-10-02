@@ -252,8 +252,21 @@ final class AppState: ObservableObject {
 
     private let favPageSize = 50
     // The Favorites screen only previews each group; its See All pages load the rest, favPageSize at a time.
-    private let favPreviewTracks = 6
-    private let favPreviewCards = 24
+    // The Favorites screen shows only this many of each, newest first, even after its See All pages
+    // have loaded more into the same lists.
+    let favPreviewTracks = 6
+    let favPreviewCards = 24
+
+    // Plays a favorite straight away, then fills the queue with every favorite from one request.
+    // Nothing is kept: the list lives only in the queue. Falls back to the loaded favorites offline.
+    func playFavorite(_ track: Track) {
+        player.play(track, from: [track], source: .favorite)
+        Task {
+            let all = (try? await API.shared.allFavoriteTracks()) ?? favTracks
+            guard player.source == .favorite else { return }
+            player.expandQueue(around: track, with: all)
+        }
+    }
 
     func loadFavorites() async {
         async let summary = try? await API.shared.favoritesSummary()

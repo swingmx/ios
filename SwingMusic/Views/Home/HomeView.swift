@@ -238,60 +238,6 @@ struct HomeView: View {
         .accessibilityLabel("Play \(track.title) by \(track.artist), number \(rank)")
     }
 
-    private var favoritesGrid: some View {
-        let favs = Array(state.favTracks.prefix(12))
-        return ScrollView(.horizontal, showsIndicators: false) {
-            LazyHGrid(rows: [GridItem(.fixed(64), spacing: 10), GridItem(.fixed(64))], spacing: 10) {
-                ForEach(favs) { t in
-                    favoriteTile(t, queue: favs)
-                }
-            }
-            .scrollTargetLayout()
-        }
-        .scrollTargetBehavior(.viewAligned)
-        .contentMargins(.horizontal, 16, for: .scrollContent)
-        .scrollClipDisabled()
-        .frame(height: 138)
-    }
-
-    private func favoriteTile(_ track: Track, queue: [Track]) -> some View {
-        let active = state.player.current == track
-        return Button {
-            playTrack(track, from: queue)
-        } label: {
-            HStack(spacing: 10) {
-                ZStack {
-                    AlbumArt(track: track, size: 48)
-                    if active {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(.black.opacity(0.5))
-                            .frame(width: 48, height: 48)
-                        Bars(color: .white).scaleEffect(0.6)
-                    }
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(track.title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .explicitBadge(track.isExplicit)
-                    Text(track.artist)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(8)
-            .frame(width: 250, height: 64)
-            .nativeCard(14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableCardStyle())
-        .contextMenu { trackMenuItems(track) }
-        .accessibilityLabel("Play \(track.title) by \(track.artist)")
-    }
-
     @ViewBuilder
     private func serverSection(_ s: HomeSection) -> some View {
         section(s.title, subtitle: s.description) {

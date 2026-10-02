@@ -172,6 +172,11 @@ extension API {
         try await get("/favorites/tracks", q: ["start": "\(start)", "limit": "\(limit)"])
     }
 
+    // Every favorite track, newest first: the server returns all of them for limit -1 from the start.
+    func allFavoriteTracks() async throws -> [Track] {
+        try await favoriteTracks(start: 0, limit: -1).tracks
+    }
+
     func favoriteAlbums(start: Int = 0, limit: Int = 50) async throws -> FavoriteAlbumsPage {
         try await get("/favorites/albums", q: ["start": "\(start)", "limit": "\(limit)"])
     }

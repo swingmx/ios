@@ -118,7 +118,7 @@ struct FavoriteTracksView: View {
             LazyVStack(spacing: 0) {
                 ForEach(Array(state.favTracks.enumerated()), id: \.element.id) { i, t in
                     TrackRow(track: t, num: i + 1, active: state.player.current == t) {
-                        state.player.play(t, from: state.favTracks, source: .favorite)
+                        state.playFavorite(t)
                     }
                     .onAppear {
                         if i >= state.favTracks.count - 5 {

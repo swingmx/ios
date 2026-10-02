@@ -56,11 +56,11 @@ struct FavoritesView: View {
 
     private var tracksSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Songs", seeAll: state.favTracksTotal > state.favTracks.count ? .songs : nil)
+            sectionHeader("Songs", seeAll: state.favTracksTotal > state.favPreviewTracks ? .songs : nil)
             VStack(spacing: 0) {
-                ForEach(state.favTracks) { t in
+                ForEach(state.favTracks.prefix(state.favPreviewTracks)) { t in
                     TrackRow(track: t, active: state.player.current == t) {
-                        state.player.play(t, from: state.favTracks, source: .favorite)
+                        state.playFavorite(t)
                     }
                 }
             }
@@ -72,7 +72,7 @@ struct FavoritesView: View {
             sectionHeader("Albums", seeAll: .albums)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
-                    ForEach(state.favAlbums) { a in
+                    ForEach(state.favAlbums.prefix(state.favPreviewCards)) { a in
                         NavigationLink(value: a) { AlbumCard(album: a, size: 140) }.buttonStyle(.plain)
                     }
                 }
@@ -86,7 +86,7 @@ struct FavoritesView: View {
             sectionHeader("Artists", seeAll: .artists)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
-                    ForEach(state.favArtists) { a in
+                    ForEach(state.favArtists.prefix(state.favPreviewCards)) { a in
                         NavigationLink(value: a) { ArtistCard(artist: a, size: 100) }.buttonStyle(.plain)
                     }
                 }
