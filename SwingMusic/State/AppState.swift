@@ -301,6 +301,41 @@ final class AppState: ObservableObject {
         }
     }
 
+    // Albums and artists: the Favorites lists follow the change, which is undone if the server rejects it.
+    func setAlbumFavorite(_ album: Album, _ fav: Bool) async -> Bool {
+        do {
+            try await API.shared.toggleFavorite(hash: album.albumhash, type: "album", add: fav)
+        } catch {
+            return false
+        }
+        let present = favAlbums.contains { $0.albumhash == album.albumhash }
+        if fav && !present {
+            favAlbums.insert(album, at: 0)
+            favAlbumsTotal += 1
+        } else if !fav && present {
+            favAlbums.removeAll { $0.albumhash == album.albumhash }
+            favAlbumsTotal = max(0, favAlbumsTotal - 1)
+        }
+        return true
+    }
+
+    func setArtistFavorite(_ artist: Artist, _ fav: Bool) async -> Bool {
+        do {
+            try await API.shared.toggleFavorite(hash: artist.artisthash, type: "artist", add: fav)
+        } catch {
+            return false
+        }
+        let present = favArtists.contains { $0.artisthash == artist.artisthash }
+        if fav && !present {
+            favArtists.insert(artist, at: 0)
+            favArtistsTotal += 1
+        } else if !fav && present {
+            favArtists.removeAll { $0.artisthash == artist.artisthash }
+            favArtistsTotal = max(0, favArtistsTotal - 1)
+        }
+        return true
+    }
+
     // Favorite changes made in this session, which the track values already on screen do not reflect.
     @Published private(set) var favoriteTrackChanges: [String: Bool] = [:]
 

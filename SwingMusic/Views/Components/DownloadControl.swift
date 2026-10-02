@@ -99,6 +99,11 @@ struct DownloadRing: View {
     }
 }
 
+struct FavoriteToggle {
+    let isFavorite: Bool
+    let toggle: () -> Void
+}
+
 // The ⋯ toolbar menu on album, playlist, mix and artist screens.
 // `queueTracks` supplies what Play Next / Add to Queue use, for screens whose full list is fetched on demand.
 // `download` replaces downloading `tracks` into `group`, for screens that download more than they show.
@@ -108,6 +113,8 @@ struct CollectionActionsMenu: View {
     var group: DownloadManager.DownloadGroup?
     var queueTracks: (() async -> [Track])?
     var download: (() async -> Void)?
+    // Album and artist screens offer favoriting here too.
+    var favorite: FavoriteToggle?
     @ObservedObject private var dm = DownloadManager.shared
     @Environment(\.displayScale) private var displayScale
     @Environment(\.leavesAfterDownloadRemoval) private var leavesAfterRemoval
@@ -170,6 +177,12 @@ struct CollectionActionsMenu: View {
             }
             Button { enqueue { AudioPlayer.shared.addLast($0) } } label: {
                 Label("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward")
+            }
+            if let favorite {
+                Button(action: favorite.toggle) {
+                    Label(favorite.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                          systemImage: favorite.isFavorite ? "heart.slash" : "heart")
+                }
             }
             Divider()
             if let group {

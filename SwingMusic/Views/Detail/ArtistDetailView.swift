@@ -9,6 +9,7 @@ struct ArtistDetailView: View {
     @State private var fullTracks: Task<[Track]?, Never>?
     // True when the screen shows the copy saved at download time instead of live server data.
     @State private var isOfflineCopy = false
+    @State private var isFavorite = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -54,7 +55,8 @@ struct ArtistDetailView: View {
                             id: DownloadManager.artistGroupID(hash), kind: .artist,
                             name: d.artist.name, image: d.artist.image, trackHashes: []),
                         queueTracks: { await allTracks(d) },
-                        download: { await DownloadManager.shared.downloadArtist(hash) }
+                        download: { await DownloadManager.shared.downloadArtist(hash) },
+                        favorite: FavoriteToggle(isFavorite: isFavorite) { toggleFavorite(d.artist) }
                     )
                 }
             }
@@ -276,9 +278,20 @@ struct ArtistDetailView: View {
         await fetchAllTracks() ?? d.tracks
     }
 
+    // Shown straight away, and put back if the server rejects the change.
+    private func toggleFavorite(_ artist: Artist) {
+        let target = !isFavorite
+        isFavorite = target
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            if !(await state.setArtistFavorite(artist, target)) { isFavorite = !target }
+        }
+    }
+
     private func load() async {
         if let online = try? await API.shared.artist(hash) {
             detail = online
+            isFavorite = online.artist.isFavorite ?? false
         } else {
             detail = ArtistOfflineStore.shared.detail(for: hash)
             isOfflineCopy = detail != nil

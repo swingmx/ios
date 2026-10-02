@@ -137,7 +137,7 @@ struct HomeView: View {
             .shadow(color: .black.opacity(0.35), radius: 14, y: 8)
         }
         .buttonStyle(PressableCardStyle())
-        .contextMenu { albumMenuItems(album) }
+        .contextMenu { AlbumMenuItems(album: album) }
         .overlay(alignment: .bottomTrailing) {
             heroPlayButton(album)
                 .padding(18)
@@ -157,12 +157,6 @@ struct HomeView: View {
         }
         .buttonStyle(PressableCardStyle())
         .accessibilityLabel("Play \(album.title)")
-    }
-
-    @ViewBuilder
-    private func albumMenuItems(_ album: Album) -> some View {
-        Button { playAlbum(album) } label: { Label("Play", systemImage: "play.fill") }
-        Button { playAlbum(album, shuffled: true) } label: { Label("Shuffle", systemImage: "shuffle") }
     }
 
     @ViewBuilder
@@ -260,7 +254,6 @@ struct HomeView: View {
         case .album(let a):
             NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
                 .buttonStyle(PressableCardStyle())
-                .contextMenu { albumMenuItems(a) }
         case .artist(let a):
             NavigationLink(value: a) {
                 VStack(spacing: 8) {
@@ -329,7 +322,6 @@ struct HomeView: View {
                 ForEach(albums) { a in
                     NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
                         .buttonStyle(PressableCardStyle())
-                        .contextMenu { albumMenuItems(a) }
                 }
             }
             .scrollTargetLayout()

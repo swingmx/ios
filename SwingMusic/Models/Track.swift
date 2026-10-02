@@ -154,6 +154,13 @@ struct Album: Codable, Identifiable, Hashable {
     let color: String?
     let blurhash: String?
     let copyright: String?
+    // Sent with an album's own page; absent on cards.
+    var isFavorite: Bool? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case albumhash, title, image, date, duration, trackcount, albumartists, color, blurhash, copyright
+        case isFavorite = "is_favorite"
+    }
 
     var artist: String { albumartists?.first?.name ?? "Unknown Artist" }
     var artisthash: String { albumartists?.first?.artisthash ?? "" }
@@ -172,6 +179,14 @@ struct Artist: Codable, Identifiable, Hashable {
     let duration: Int?
     let genres: [Genre]?
     let color: String?
+    // Sent with an artist's own page; absent on cards.
+    var isFavorite: Bool? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case artisthash, name, image, trackcount, albumcount, duration, genres, color
+        case isFavorite = "is_favorite"
+    }
+
     var id: String { artisthash }
     static func == (lhs: Artist, rhs: Artist) -> Bool { lhs.artisthash == rhs.artisthash }
     func hash(into hasher: inout Hasher) { hasher.combine(artisthash) }

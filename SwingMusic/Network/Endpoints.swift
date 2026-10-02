@@ -25,8 +25,13 @@ extension API {
     }
 
     func albumTracks(_ hash: String) async throws -> [Track] {
-        struct R: Decodable { let tracks: [Track] }
-        return try await (get("/album/\(hash)/tracks") as R).tracks
+        try Self.decodeAlbumTracks(try await getData("/album/\(hash)/tracks"))
+    }
+
+    static func decodeAlbumTracks(_ data: Data) throws -> [Track] {
+        struct Wrapped: Decodable { let tracks: [Track] }
+        if let tracks = try? JSONDecoder().decode([Track].self, from: data) { return tracks }
+        return try JSONDecoder().decode(Wrapped.self, from: data).tracks
     }
 
     static let artistQuery = ["tracklimit": "5", "all": "true"]
