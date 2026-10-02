@@ -35,6 +35,15 @@ struct DownloadBookkeepingTests {
         #expect(DownloadBookkeeping.imagesToRemove([a, b], keeping: [b]) == [a])
     }
 
+    // MARK: Offline images
+
+    @Test func downloadedTracksKeepTheOriginalArtworkForHeadersAndNowPlaying() {
+        let paths = DownloadManager.thumbnailURLs(for: Fixtures.track("t1", image: "al1.webp")).map(\.path)
+
+        #expect(paths == ["/img/thumbnail/original/al1.webp", "/img/thumbnail/al1.webp",
+                          "/img/thumbnail/medium/al1.webp", "/img/thumbnail/small/al1.webp"])
+    }
+
     // MARK: Ordering
 
     @Test func albumTracksAreOrderedByDiscThenTrackNumber() {

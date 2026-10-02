@@ -57,6 +57,7 @@ final class DownloadManager: ObservableObject {
         loadGroups()
         savedMixes = Dictionary(MixOfflineStore.shared.all().map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         resumePending()
+        Task(priority: .utility) { await backfillOfflineImages() }
     }
 
     nonisolated static func artistGroupID(_ artisthash: String) -> String { "artist:\(artisthash)" }
@@ -347,21 +348,29 @@ final class DownloadManager: ObservableObject {
         }
     }
 
+    // Track artwork sizes kept offline: original for the album header and Now Playing, large ("") for
+    // album cards, medium and small for lists.
+    nonisolated static let trackImageSizes = ["original", "", "medium", "small"]
+
+    nonisolated static func thumbnailURLs(for track: Track) -> [URL] {
+        trackImageSizes.compactMap { API.shared.img(track.image, size: $0) }
+    }
+
+    // An album's tracks share one image, so images already saved are skipped rather than fetched per track.
     private func cacheThumbnails(for track: Track) async {
-        for size in ["small", "medium"] {
-            guard let url = API.shared.img(track.image, size: size) else { continue }
-            var req = URLRequest(url: url)
-            if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
-            guard let (data, resp) = try? await Net.session.data(for: req),
-                  let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { continue }
-            ImageDiskCache.storeOffline(data, for: url)
-        }
+        await cacheOfflineImages(Self.thumbnailURLs(for: track))
     }
 
     private func removeThumbnails(for track: Track) {
-        for size in ["small", "medium"] {
-            if let url = API.shared.img(track.image, size: size) { ImageDiskCache.removeOffline(for: url) }
-        }
+        for url in Self.thumbnailURLs(for: track) { ImageDiskCache.removeOffline(for: url) }
+    }
+
+    // Downloads saved before the sharper sizes were kept get them the next time the app can reach the server.
+    private func backfillOfflineImages() async {
+        var seen = Set<String>()
+        let urls = downloadedTracks.filter { seen.insert($0.image).inserted }.flatMap(Self.thumbnailURLs(for:))
+            + savedMixes.values.flatMap(\.offlineImageURLs)
+        await cacheOfflineImages(urls)
     }
 
     private var metadataSaveScheduled = false
@@ -498,9 +507,7 @@ final class DownloadManager: ObservableObject {
 
     // Track thumbnails remaining downloads still show, which removed groups must leave in place.
     private func thumbnailsInUse() -> Set<URL> {
-        Set(downloadedTracks.flatMap { t in
-            ["small", "medium"].compactMap { API.shared.img(t.image, size: $0) }
-        })
+        Set(downloadedTracks.flatMap(Self.thumbnailURLs(for:)))
     }
 
     private func cacheOfflineImages(_ urls: [URL]) async {

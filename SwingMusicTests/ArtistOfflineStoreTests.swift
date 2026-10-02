@@ -56,8 +56,8 @@ struct ArtistOfflineStoreTests {
 
         let expected = [
             "/img/artist/a1.webp", "/img/artist/medium/a1.webp", "/img/artist/small/a1.webp",
-            "/img/thumbnail/al1.webp", "/img/thumbnail/medium/al1.webp", "/img/thumbnail/small/al1.webp",
-            "/img/thumbnail/al2.webp", "/img/thumbnail/medium/al2.webp", "/img/thumbnail/small/al2.webp",
+            "/img/thumbnail/original/al1.webp", "/img/thumbnail/al1.webp", "/img/thumbnail/medium/al1.webp", "/img/thumbnail/small/al1.webp",
+            "/img/thumbnail/original/al2.webp", "/img/thumbnail/al2.webp", "/img/thumbnail/medium/al2.webp", "/img/thumbnail/small/al2.webp",
         ]
         #expect(paths == expected)
     }

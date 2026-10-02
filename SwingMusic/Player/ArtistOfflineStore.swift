@@ -8,8 +8,11 @@ struct ArtistOfflineStore {
             .appendingPathComponent("OfflineMusic/Artists", isDirectory: true)
     )
 
-    // The sizes the artist screen's views request: hero and avatar use "", cards use medium and small.
-    static let imageSizes = ["", "medium", "small"]
+    // The sizes the artist screen's views request. Artists: "" (the largest served, 500px) for the hero
+    // and avatar, medium and small for cards. Albums: original for their page's header, large ("") for
+    // their cards, medium and small as fallbacks.
+    static let artistImageSizes = ["", "medium", "small"]
+    static let albumImageSizes = ["original", "", "medium", "small"]
 
     let root: URL
 
@@ -41,9 +44,9 @@ struct ArtistOfflineStore {
 
     // Every image the artist screen requests: the artist's own, and each album card's cover.
     static func imageURLs(for detail: ArtistDetail, api: API = .shared) -> [URL] {
-        var urls = imageSizes.compactMap { api.artistImg(detail.artist.image, size: $0) }
+        var urls = artistImageSizes.compactMap { api.artistImg(detail.artist.image, size: $0) }
         for album in detail.albumSections.flatMap(\.albums) {
-            urls += imageSizes.compactMap { api.img(album.image, size: $0) }
+            urls += albumImageSizes.compactMap { api.img(album.image, size: $0) }
         }
         var seen = Set<URL>()
         return urls.filter { seen.insert($0).inserted }

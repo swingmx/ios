@@ -30,7 +30,7 @@ struct MixArtwork: View {
 
                 // Later images overlap earlier ones, each a quarter of the width further right.
                 ForEach(Array(refs.enumerated()), id: \.offset) { i, ref in
-                    Img(url: Mix.imageURL(for: ref), radius: 0, placeholderColor: ref.color)
+                    Img(urls: Mix.imageURLs(for: ref), radius: 0, placeholderColor: ref.color)
                         .frame(width: side, height: side)
                         .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
                         .offset(x: w * 0.25 * CGFloat(i), y: (h - side) / 2)
@@ -76,9 +76,17 @@ extension Mix {
         return [API.shared.mixImg(file, size: "medium"), API.shared.img(file, size: "medium")].compactMap { $0 }
     }
 
+    // Grid images use the large size (512px covers, 500px artists), which downloads keep offline.
     static func imageURL(for ref: MixImageRef) -> URL? {
         guard let file = ref.image, !file.isEmpty else { return nil }
-        return ref.type == "artist" ? API.shared.artistImg(file, size: "medium") : API.shared.img(file, size: "medium")
+        return ref.type == "artist" ? API.shared.artistImg(file, size: "") : API.shared.img(file, size: "")
+    }
+
+    // The large size first, then medium, which mixes downloaded before the large size was kept still have.
+    static func imageURLs(for ref: MixImageRef) -> [URL] {
+        guard let file = ref.image, !file.isEmpty else { return [] }
+        let medium = ref.type == "artist" ? API.shared.artistImg(file, size: "medium") : API.shared.img(file, size: "medium")
+        return [imageURL(for: ref), medium].compactMap { $0 }
     }
 
     // The image the mix page uses for its blurred background.

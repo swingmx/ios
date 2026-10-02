@@ -49,14 +49,22 @@ struct MixArtworkTests {
         let paths = trackMix.offlineImageURLs.map(\.path)
 
         #expect(!trackMix.hasOwnImage)
-        #expect(paths == ["/img/thumbnail/medium/al1.webp", "/img/artist/medium/ar1.webp", "/img/artist/medium/ar2.webp"])
-        #expect(trackMix.backgroundURLs.map(\.path) == ["/img/thumbnail/medium/al1.webp"])
+        // The large size: 512px covers and 500px artists, as the grid shows them.
+        #expect(paths == ["/img/thumbnail/al1.webp", "/img/artist/ar1.webp", "/img/artist/ar2.webp"])
+        #expect(trackMix.backgroundURLs.map(\.path) == ["/img/thumbnail/al1.webp"])
     }
 
     @Test func artistMixesUseTheirOwnImage() {
         #expect(artistMix.hasOwnImage)
         #expect(artistMix.coverURLs.map(\.path) == ["/img/mix/medium/lany.webp", "/img/thumbnail/medium/lany.webp"])
         #expect(artistMix.offlineImageURLs == artistMix.coverURLs)
+    }
+
+    @Test func gridImagesFallBackToMediumForOlderDownloads() {
+        let first = trackMix.extra.images![0], second = trackMix.extra.images![1]
+
+        #expect(Mix.imageURLs(for: first).map(\.path) == ["/img/thumbnail/al1.webp", "/img/thumbnail/medium/al1.webp"])
+        #expect(Mix.imageURLs(for: second).map(\.path) == ["/img/artist/ar1.webp", "/img/artist/medium/ar1.webp"])
     }
 
     @Test func imagesWithoutAFileHaveNoURL() {
