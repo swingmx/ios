@@ -175,7 +175,7 @@ struct CollectionActionsMenu: View {
                     Button(role: .destructive) { dm.removeGroup(savedGroup ?? group) } label: { Label("Remove Download", systemImage: "trash") }
                 } else if isDownloading {
                     Button {} label: {
-                        Label { Text("Downloading \(Int(progress * 100))%") } icon: { progressIcon }
+                        Label { Text("Downloading") } icon: { progressIcon }
                     }
                 } else {
                     Button {

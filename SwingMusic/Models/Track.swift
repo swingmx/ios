@@ -19,6 +19,8 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
     let color: String?
     let blurhash: String?
     let explicit: Bool?
+    // As of when the track was fetched; AppState.isTrackFavorite also accounts for later changes.
+    let isFavorite: Bool?
 
     var isExplicit: Bool { explicit == true }
     var artist: String { artists?.first?.name ?? "Unknown Artist" }
@@ -36,6 +38,7 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
         case trackhash, title, album, albumhash, duration, filepath, image
         case trackno = "track"
         case disc, date, bitrate, genres, artists, albumartists, artisthashes, color, blurhash, explicit
+        case isFavorite = "is_favorite"
         case extra
     }
 
@@ -68,6 +71,7 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
             ex = true
         }
         explicit = ex
+        isFavorite = try? c.decode(Bool.self, forKey: .isFavorite)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -90,6 +94,7 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
         try c.encodeIfPresent(color, forKey: .color)
         try c.encodeIfPresent(blurhash, forKey: .blurhash)
         try c.encodeIfPresent(explicit, forKey: .explicit)
+        try c.encodeIfPresent(isFavorite, forKey: .isFavorite)
     }
 }
 

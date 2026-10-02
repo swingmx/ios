@@ -62,6 +62,10 @@ struct TrackRow: View {
             .buttonStyle(.plain)
 
             Menu {
+                Button { AudioPlayer.shared.addNext(track) } label: {
+                    Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+                }
+                Divider()
                 Button { state.navigationTarget = .album(Album(stub: track.albumhash, title: track.album, image: track.image, date: track.date, albumartists: track.albumartists)) } label: { Label("View Album", systemImage: "square.stack") }
                 if let artists = track.artists, artists.count > 1 {
                     Menu {
@@ -72,10 +76,6 @@ struct TrackRow: View {
                 } else {
                     Button { state.navigationTarget = .artist(Artist(stub: track.artisthash, name: track.artist, image: track.image)) } label: { Label("View Artist", systemImage: "music.mic") }
                 }
-                Button {
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    Task { await state.setTrackFavorite(track, true) }
-                } label: { Label("Add to Favorites", systemImage: "heart") }
                 Button { state.requestedTrackForPlaylist = track } label: { Label("Add to Playlist", systemImage: "text.badge.plus") }
                 let parent = (track.filepath as NSString).deletingLastPathComponent
                 if !parent.isEmpty {
@@ -100,13 +100,26 @@ struct TrackRow: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
         .background(active ? Color.primary.opacity(0.06) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .onSwipeRight {
-            AudioPlayer.shared.addLast(track)
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        }
+        .pullActions(
+            leading: PullAction(label: "Add to queue", icon: "text.badge.plus", armedColor: .green) {
+                AudioPlayer.shared.addLast(track)
+            },
+            trailing: favoritePullAction
+        )
     }
 
     @EnvironmentObject var state: AppState
+
+    private var favoritePullAction: PullAction {
+        let isFavorite = state.isTrackFavorite(track)
+        return PullAction(
+            label: isFavorite ? "Remove" : "Add to favorites",
+            icon: isFavorite ? "heart.slash.fill" : "heart.fill",
+            armedColor: .red
+        ) {
+            Task { await state.setTrackFavorite(track, !isFavorite) }
+        }
+    }
 
     @ViewBuilder
     private var downloadIndicator: some View {
@@ -130,12 +143,6 @@ struct TrackRow: View {
                     .foregroundStyle(.blue)
             }
         }
-    }
-}
-
-extension View {
-    func onSwipeRight(action: @escaping () -> Void, label: String = "Queue", willFireLabel: String = "Added!", icon: String = "text.badge.plus", color: Color = .blue) -> some View {
-        modifier(SwipeAction(action: action, label: label, willFireLabel: willFireLabel, icon: icon, color: color))
     }
 }
 

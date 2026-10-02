@@ -284,7 +284,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    // Favorite changes made in this session, which the track values already on screen do not reflect.
+    @Published private(set) var favoriteTrackChanges: [String: Bool] = [:]
+
+    func isTrackFavorite(_ track: Track) -> Bool {
+        favoriteTrackChanges[track.trackhash]
+            ?? track.isFavorite
+            ?? favTracks.contains { $0.trackhash == track.trackhash }
+    }
+
     private func applyFavorite(_ track: Track, _ fav: Bool) {
+        favoriteTrackChanges[track.trackhash] = fav
         let present = favTracks.contains { $0.trackhash == track.trackhash }
         if fav && !present {
             favTracks.insert(track, at: 0)
