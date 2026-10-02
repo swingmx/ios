@@ -20,9 +20,10 @@ struct TrackRow: View {
                                 Text("\(n)")
                                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                                     .foregroundStyle(.secondary)
+                                    .fixedSize()
                             }
                         }
-                        .frame(width: 26)
+                        .frame(minWidth: 26)
                     }
 
                     if showArt {
