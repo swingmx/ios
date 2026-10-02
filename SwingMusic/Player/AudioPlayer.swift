@@ -278,6 +278,26 @@ final class AudioPlayer: ObservableObject {
         }
     }
 
+    func addNext(_ tracks: [Track]) {
+        guard !tracks.isEmpty else { return }
+        if queue.isEmpty {
+            addLast(tracks)
+        } else {
+            withAnimation(Self.queueAnim) { queue.insert(contentsOf: tracks, at: index + 1) }
+        }
+    }
+
+    func addLast(_ tracks: [Track]) {
+        guard !tracks.isEmpty else { return }
+        let start = queue.count
+        withAnimation(Self.queueAnim) { queue.append(contentsOf: tracks) }
+        if current == nil {
+            index = start
+            current = queue[start]
+            load(queue[start])
+        }
+    }
+
     func jump(to i: Int) {
         guard queue.indices.contains(i) else { return }
         log()

@@ -32,7 +32,7 @@ struct AlbumDetailView: View {
         .toolbar {
             if let d = detail {
                 ToolbarItem(placement: .topBarTrailing) {
-                    DownloadControl(tracks: d.tracks, group: DownloadManager.DownloadGroup(
+                    AlbumActionsMenu(tracks: sortedTracks(d.tracks), group: DownloadManager.DownloadGroup(
                         id: "album:\(hash)", kind: .album, name: d.info.title,
                         image: d.info.image, trackHashes: d.tracks.map { $0.trackhash }))
                 }
@@ -155,5 +155,72 @@ struct AlbumDetailView: View {
         guard let (data, _) = try? await Net.session.data(for: req),
               let img = UIImage(data: data) else { return }
         bgImage = img
+    }
+}
+
+private struct AlbumActionsMenu: View {
+    let tracks: [Track]
+    let group: DownloadManager.DownloadGroup
+    @EnvironmentObject var state: AppState
+    @ObservedObject private var dm = DownloadManager.shared
+    @Environment(\.displayScale) private var displayScale
+
+    private var allDownloaded: Bool {
+        !tracks.isEmpty && tracks.allSatisfy { dm.downloads[$0.trackhash] == .completed }
+    }
+
+    private var isDownloading: Bool {
+        tracks.contains { t in
+            switch dm.downloads[t.trackhash] {
+            case .downloading, .queued: true
+            default: false
+            }
+        }
+    }
+
+    private var progress: Double {
+        guard !tracks.isEmpty else { return 0 }
+        let done = tracks.reduce(0.0) { acc, t in
+            switch dm.downloads[t.trackhash] {
+            case .completed: acc + 1
+            case .downloading(let p): acc + p
+            default: acc
+            }
+        }
+        return min(1, done / Double(tracks.count))
+    }
+
+    // Menu items only take images, so the ring is rendered to one; it reflects progress when the menu opens.
+    private var progressIcon: Image {
+        let renderer = ImageRenderer(content: DownloadRing(progress: progress, lineWidth: 2.5).frame(width: 22, height: 22))
+        renderer.scale = displayScale
+        guard let image = renderer.uiImage else { return Image(systemName: "arrow.down.circle.dotted") }
+        return Image(uiImage: image.withRenderingMode(.alwaysOriginal))
+    }
+
+    var body: some View {
+        Menu {
+            Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                state.player.addNext(tracks)
+            } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
+            Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                state.player.addLast(tracks)
+            } label: { Label("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward") }
+            Divider()
+            if allDownloaded {
+                Button(role: .destructive) { dm.removeGroup(group) } label: { Label("Remove Download", systemImage: "trash") }
+            } else if isDownloading {
+                Button {} label: {
+                    Label { Text("Downloading \(Int(progress * 100))%") } icon: { progressIcon }
+                }
+            } else {
+                Button { dm.downloadAll(tracks, group: group) } label: { Label("Download", systemImage: "arrow.down.circle") }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+        }
+        .accessibilityLabel("Album actions")
     }
 }

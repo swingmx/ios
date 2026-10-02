@@ -203,16 +203,17 @@ final class DownloadManager: ObservableObject {
             let br = Double(track.bitrate ?? 0)
             let bps = br > 100_000 ? br : (br > 0 ? br * 1000 : 320_000)
             let estimatedBytes = Int64(bps / 8 * Double(max(track.duration, 1)))
-            let progressDelegate = DownloadProgressDelegate(estimatedTotalBytes: estimatedBytes) { [weak self] p in
+            let reporter = DownloadProgressReporter(estimatedTotalBytes: estimatedBytes) { [weak self] p in
                 Task { @MainActor in
                     if case .downloading = self?.downloads[hash] {
                         self?.downloads[hash] = .downloading(progress: p)
                     }
                 }
             }
-            let (localURLTemp, response) = try await Net.session.download(for: req, delegate: progressDelegate)
+            let (localURLTemp, response) = try await downloadFile(req, reporter: reporter)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
+                try? fileManager.removeItem(at: localURLTemp)
                 let code = (response as? HTTPURLResponse)?.statusCode ?? -1
                 Log.error("download", "Audio failed for \(track.title) → HTTP \(code)")
                 downloads[track.trackhash] = .failed
@@ -254,6 +255,35 @@ final class DownloadManager: ObservableObject {
         } catch {
             Log.error("download", "Failed \(track.title): \(error.localizedDescription)")
             downloads[track.trackhash] = .failed
+        }
+    }
+
+    // URLSession's async download(for:delegate:) never calls didWriteData on the task delegate,
+    // so progress is read from the task's byte counters instead.
+    private nonisolated func downloadFile(_ request: URLRequest, reporter: DownloadProgressReporter) async throws -> (URL, URLResponse) {
+        final class ObservationBox: @unchecked Sendable { var observation: NSKeyValueObservation? }
+        let box = ObservationBox()
+        return try await withCheckedThrowingContinuation { continuation in
+            let task = Net.session.downloadTask(with: request) { url, response, error in
+                box.observation?.invalidate()
+                if let error { continuation.resume(throwing: error); return }
+                guard let url, let response else {
+                    continuation.resume(throwing: URLError(.badServerResponse))
+                    return
+                }
+                // The system deletes `url` as soon as this handler returns.
+                let kept = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                do {
+                    try FileManager.default.moveItem(at: url, to: kept)
+                    continuation.resume(returning: (kept, response))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+            box.observation = task.observe(\.countOfBytesReceived) { task, _ in
+                reporter.report(written: task.countOfBytesReceived, expected: task.countOfBytesExpectedToReceive)
+            }
+            task.resume()
         }
     }
 
@@ -322,7 +352,7 @@ final class DownloadManager: ObservableObject {
     }
 }
 
-final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
+final class DownloadProgressReporter: @unchecked Sendable {
     private let onProgress: (Double) -> Void
     private let estimatedTotalBytes: Int64
     private var lastReported: Double = -1
@@ -333,14 +363,12 @@ final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
         self.onProgress = onProgress
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
-                    totalBytesExpectedToWrite: Int64) {
+    func report(written: Int64, expected: Int64) {
         let p: Double
-        if totalBytesExpectedToWrite > 0 {
-            p = min(max(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0), 1)
+        if expected > 0 {
+            p = min(max(Double(written) / Double(expected), 0), 1)
         } else if estimatedTotalBytes > 0 {
-            p = min(Double(totalBytesWritten) / Double(estimatedTotalBytes), 0.99)
+            p = min(Double(written) / Double(estimatedTotalBytes), 0.99)
         } else {
             return
         }
@@ -348,7 +376,4 @@ final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
         lastReported = p
         onProgress(p)
     }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didFinishDownloadingTo location: URL) {}
 }

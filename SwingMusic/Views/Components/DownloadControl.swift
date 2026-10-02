@@ -81,3 +81,20 @@ struct DownloadControl: View {
         }
     }
 }
+
+struct DownloadRing: View {
+    let progress: Double
+    var lineWidth: CGFloat = 1.5
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.gray.opacity(0.35), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: max(0.02, min(progress, 1)))
+                .stroke(.green, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .padding(lineWidth / 2)
+    }
+}

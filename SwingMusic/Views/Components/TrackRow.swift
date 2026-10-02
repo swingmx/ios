@@ -43,11 +43,7 @@ struct TrackRow: View {
                             .lineLimit(1)
                             .explicitBadge(track.isExplicit)
                         HStack(spacing: 4) {
-                            if downloadManager.isDownloaded(track) {
-                                Image(systemName: "arrow.down.circle.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.blue)
-                            }
+                            downloadIndicator
                             Text(track.allArtists)
                                 .font(.system(size: 13))
                                 .foregroundStyle(.secondary)
@@ -111,6 +107,30 @@ struct TrackRow: View {
     }
 
     @EnvironmentObject var state: AppState
+
+    @ViewBuilder
+    private var downloadIndicator: some View {
+        switch downloadManager.downloads[track.trackhash] {
+        case .queued:
+            Image(systemName: "arrow.down.circle.dotted")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+        case .downloading(let progress):
+            DownloadRing(progress: progress)
+                .frame(width: 10, height: 10)
+                .animation(.linear(duration: 0.2), value: progress)
+        case .failed:
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(.red)
+        default:
+            if downloadManager.isDownloaded(track) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.blue)
+            }
+        }
+    }
 }
 
 extension View {
