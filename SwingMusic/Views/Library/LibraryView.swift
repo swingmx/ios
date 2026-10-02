@@ -202,6 +202,7 @@ struct PlaylistsListView: View {
                             Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.tertiary)
                         }
                         .padding(.horizontal, 16).padding(.vertical, 10)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
