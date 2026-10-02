@@ -34,6 +34,15 @@ struct MixDetailView: View {
         .background { AdaptiveDetailBackground(image: bgImage) }
         .navigationTitle(mix.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !tracks.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    CollectionActionsMenu(tracks: tracks, group: DownloadManager.DownloadGroup(
+                        id: "mix:\(mix.id)", kind: .mix, name: mix.title,
+                        image: "", trackHashes: tracks.map { $0.trackhash }))
+                }
+            }
+        }
         .task {
             tracks = (try? await API.shared.mixTracks(id: mix.id, sourcehash: mix.sourcehash, ogSourcehash: mix.ogSourcehash)) ?? []
             if tracks.isEmpty, let group = DownloadManager.shared.downloadGroups.first(where: { $0.id == "mix:\(mix.id)" }) {
@@ -90,12 +99,6 @@ struct MixDetailView: View {
                     shuffle: { state.player.playAll(tracks, shuffled: true, source: source) }
                 )
                 .disabled(tracks.isEmpty)
-
-                if !tracks.isEmpty {
-                    DownloadControl(tracks: tracks, group: DownloadManager.DownloadGroup(
-                        id: "mix:\(mix.id)", kind: .mix, name: mix.title,
-                        image: "", trackHashes: tracks.map { $0.trackhash }))
-                }
             }
             .padding(.top, 4).padding(.bottom, 8)
         }

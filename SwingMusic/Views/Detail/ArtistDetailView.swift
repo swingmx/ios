@@ -42,6 +42,14 @@ struct ArtistDetailView: View {
         .squeezeMiniPlayer(state)
         .background { AdaptiveDetailBackground(image: bgImage) }
         .detailScrollTitle(detail?.artist.name ?? "", after: 380)
+        .toolbar {
+            if let d = detail {
+                ToolbarItem(placement: .topBarTrailing) {
+                    // Artist downloads are not wired up yet, so no download group is passed.
+                    CollectionActionsMenu(tracks: d.tracks, queueTracks: { await allTracks(d) })
+                }
+            }
+        }
                 .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
                 .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
                 .navigationDestination(for: ArtistAlbumSection.self) { section in

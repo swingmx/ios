@@ -34,7 +34,7 @@ struct PlaylistDetailView: View {
         .detailScrollTitle(name, after: 300)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                DownloadControl(tracks: tracks, group: DownloadManager.DownloadGroup(
+                CollectionActionsMenu(tracks: tracks, group: DownloadManager.DownloadGroup(
                     id: "playlist:\(id)", kind: .playlist, name: name,
                     image: tracks.first?.image ?? "", trackHashes: tracks.map { $0.trackhash }))
             }
