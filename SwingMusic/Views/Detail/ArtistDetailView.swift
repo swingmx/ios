@@ -64,6 +64,7 @@ struct ArtistDetailView: View {
                 .navigationDestination(for: ArtistAlbumSection.self) { section in
                     ArtistAlbumsGridView(title: section.title, albums: section.albums)
                 }
+        .environment(\.leavesAfterDownloadRemoval, isOfflineCopy)
         .task { await load() }
     }
 

@@ -7,6 +7,7 @@ struct PlaylistDetailView: View {
     @State private var tracks: [Track] = []
     @State private var loading = true
     @State private var bgImage: UIImage?
+    @State private var isOfflineCopy = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -39,6 +40,7 @@ struct PlaylistDetailView: View {
                     image: tracks.first?.image ?? "", trackHashes: tracks.map { $0.trackhash }))
             }
         }
+        .environment(\.leavesAfterDownloadRemoval, isOfflineCopy)
         .task { await load() }
     }
 
@@ -83,6 +85,7 @@ struct PlaylistDetailView: View {
             await loadBgImage(p: d.info)
         } else if let group = DownloadManager.shared.downloadGroups.first(where: { $0.id == "playlist:\(id)" }) {
             tracks = DownloadManager.shared.tracks(in: group)
+            isOfflineCopy = !tracks.isEmpty
         }
         loading = false
     }

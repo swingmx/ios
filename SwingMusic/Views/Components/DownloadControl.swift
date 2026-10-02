@@ -110,6 +110,8 @@ struct CollectionActionsMenu: View {
     var download: (() async -> Void)?
     @ObservedObject private var dm = DownloadManager.shared
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.leavesAfterDownloadRemoval) private var leavesAfterRemoval
+    @Environment(\.dismiss) private var dismiss
 
     private var savedGroup: DownloadManager.DownloadGroup? {
         group.flatMap { g in dm.downloadGroups.first { $0.id == g.id } }
@@ -172,7 +174,10 @@ struct CollectionActionsMenu: View {
             Divider()
             if let group {
                 if allDownloaded {
-                    Button(role: .destructive) { dm.removeGroup(savedGroup ?? group) } label: { Label("Remove Download", systemImage: "trash") }
+                    Button(role: .destructive) {
+                        dm.removeGroup(savedGroup ?? group)
+                        if leavesAfterRemoval { dismiss() }
+                    } label: { Label("Remove Download", systemImage: "trash") }
                 } else if isDownloading {
                     Button {} label: {
                         Label { Text("Downloading") } icon: { progressIcon }
@@ -195,4 +200,10 @@ struct CollectionActionsMenu: View {
         }
         .accessibilityLabel("More actions")
     }
+}
+
+extension EnvironmentValues {
+    // Set by screens showing their downloaded copy: once the download is removed there is nothing
+    // left to show, so removing it goes back to the previous screen.
+    @Entry var leavesAfterDownloadRemoval = false
 }

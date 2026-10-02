@@ -6,6 +6,7 @@ struct AlbumDetailView: View {
     @State private var detail: AlbumDetail?
     @State private var loading = true
     @State private var bgImage: UIImage?
+    @State private var isOfflineCopy = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -38,6 +39,7 @@ struct AlbumDetailView: View {
                 }
             }
         }
+        .environment(\.leavesAfterDownloadRemoval, isOfflineCopy)
         .task { await load() }
     }
 
@@ -141,6 +143,7 @@ struct AlbumDetailView: View {
                 detail = AlbumDetail(
                     info: Album(stub: hash, title: t.album, image: t.image, date: t.date, albumartists: t.albumartists),
                     tracks: dl)
+                isOfflineCopy = true
             }
         }
         loading = false

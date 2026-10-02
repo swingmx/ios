@@ -6,6 +6,7 @@ struct MixDetailView: View {
     @State private var tracks: [Track] = []
     @State private var loading = true
     @State private var bgImage: UIImage?
+    @State private var isOfflineCopy = false
 
     private var source: AudioPlayer.PlaySource { .mix(id: mix.id, sourcehash: mix.sourcehash) }
 
@@ -41,10 +42,12 @@ struct MixDetailView: View {
                 }
             }
         }
+        .environment(\.leavesAfterDownloadRemoval, isOfflineCopy)
         .task {
             tracks = (try? await API.shared.mixTracks(id: mix.id, sourcehash: mix.sourcehash, ogSourcehash: mix.ogSourcehash)) ?? []
             if tracks.isEmpty, let group = DownloadManager.shared.downloadGroups.first(where: { $0.id == DownloadManager.mixGroupID(mix.id) }) {
                 tracks = DownloadManager.shared.tracks(in: group)
+                isOfflineCopy = !tracks.isEmpty
             }
             loading = false
             await loadBg()
