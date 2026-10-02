@@ -137,7 +137,7 @@ struct HomeView: View {
             .shadow(color: .black.opacity(0.35), radius: 14, y: 8)
         }
         .buttonStyle(PressableCardStyle())
-        .contextMenu { albumMenuItems(album) }
+        .contextMenu { AlbumMenuItems(album: album) }
         .overlay(alignment: .bottomTrailing) {
             heroPlayButton(album)
                 .padding(18)
@@ -157,12 +157,6 @@ struct HomeView: View {
         }
         .buttonStyle(PressableCardStyle())
         .accessibilityLabel("Play \(album.title)")
-    }
-
-    @ViewBuilder
-    private func albumMenuItems(_ album: Album) -> some View {
-        Button { playAlbum(album) } label: { Label("Play", systemImage: "play.fill") }
-        Button { playAlbum(album, shuffled: true) } label: { Label("Shuffle", systemImage: "shuffle") }
     }
 
     @ViewBuilder
@@ -238,65 +232,11 @@ struct HomeView: View {
         .accessibilityLabel("Play \(track.title) by \(track.artist), number \(rank)")
     }
 
-    private var favoritesGrid: some View {
-        let favs = Array(state.favTracks.prefix(12))
-        return ScrollView(.horizontal, showsIndicators: false) {
-            LazyHGrid(rows: [GridItem(.fixed(64), spacing: 10), GridItem(.fixed(64))], spacing: 10) {
-                ForEach(favs) { t in
-                    favoriteTile(t, queue: favs)
-                }
-            }
-            .scrollTargetLayout()
-        }
-        .scrollTargetBehavior(.viewAligned)
-        .contentMargins(.horizontal, 16, for: .scrollContent)
-        .scrollClipDisabled()
-        .frame(height: 138)
-    }
-
-    private func favoriteTile(_ track: Track, queue: [Track]) -> some View {
-        let active = state.player.current == track
-        return Button {
-            playTrack(track, from: queue)
-        } label: {
-            HStack(spacing: 10) {
-                ZStack {
-                    AlbumArt(track: track, size: 48)
-                    if active {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(.black.opacity(0.5))
-                            .frame(width: 48, height: 48)
-                        Bars(color: .white).scaleEffect(0.6)
-                    }
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(track.title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .explicitBadge(track.isExplicit)
-                    Text(track.artist)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(8)
-            .frame(width: 250, height: 64)
-            .nativeCard(14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PressableCardStyle())
-        .contextMenu { trackMenuItems(track) }
-        .accessibilityLabel("Play \(track.title) by \(track.artist)")
-    }
-
     @ViewBuilder
     private func serverSection(_ s: HomeSection) -> some View {
         section(s.title, subtitle: s.description) {
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
                     ForEach(Array(s.items.enumerated()), id: \.offset) { _, item in
                         homeItemCard(item)
                     }
@@ -314,16 +254,15 @@ struct HomeView: View {
         case .album(let a):
             NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
                 .buttonStyle(PressableCardStyle())
-                .contextMenu { albumMenuItems(a) }
         case .artist(let a):
             NavigationLink(value: a) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(spacing: 8) {
                     ArtistAvatar(artist: a, size: 150)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(spacing: 2) {
                         Text(a.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
                         Text("Artist").font(.system(size: 13)).foregroundStyle(.secondary)
                     }
-                    .frame(width: 150, alignment: .leading)
+                    .frame(width: 150)
                 }
             }
             .buttonStyle(PressableCardStyle())
@@ -357,17 +296,17 @@ struct HomeView: View {
         case .mix(let m):
             NavigationLink(value: m) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Img(urls: mixImageURLs(m), radius: 12,
-                        placeholderColor: m.extra.images?.first?.color ?? m.extra.image?.color)
+                    MixArtwork(mix: m, cornerRadius: 12)
                         .frame(width: 150, height: 150)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(m.tagline?.isEmpty == false ? m.tagline! : m.title)
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.primary.opacity(0.9))
+                            .foregroundStyle(.secondary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
+                        // Only recently played mixes carry a play time; the type label takes its place there.
                         if let time = m.time, !time.isEmpty {
-                            Text(time).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                            Text(m.typeLabel).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
                     .frame(width: 150, alignment: .leading)
@@ -377,18 +316,12 @@ struct HomeView: View {
         }
     }
 
-    private func mixImageURLs(_ m: Mix) -> [URL] {
-        guard let file = m.imageFile else { return [] }
-        return [API.shared.mixImg(file, size: "medium"), API.shared.img(file, size: "medium")].compactMap { $0 }
-    }
-
     private func albumRail(_ albums: [Album]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 14) {
                 ForEach(albums) { a in
                     NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
                         .buttonStyle(PressableCardStyle())
-                        .contextMenu { albumMenuItems(a) }
                 }
             }
             .scrollTargetLayout()

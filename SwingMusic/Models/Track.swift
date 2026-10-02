@@ -19,6 +19,8 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
     let color: String?
     let blurhash: String?
     let explicit: Bool?
+    // As of when the track was fetched; AppState.isTrackFavorite also accounts for later changes.
+    let isFavorite: Bool?
 
     var isExplicit: Bool { explicit == true }
     var artist: String { artists?.first?.name ?? "Unknown Artist" }
@@ -36,6 +38,7 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
         case trackhash, title, album, albumhash, duration, filepath, image
         case trackno = "track"
         case disc, date, bitrate, genres, artists, albumartists, artisthashes, color, blurhash, explicit
+        case isFavorite = "is_favorite"
         case extra
     }
 
@@ -68,6 +71,7 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
             ex = true
         }
         explicit = ex
+        isFavorite = try? c.decode(Bool.self, forKey: .isFavorite)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -90,6 +94,7 @@ struct Track: Codable, Identifiable, Equatable, Hashable {
         try c.encodeIfPresent(color, forKey: .color)
         try c.encodeIfPresent(blurhash, forKey: .blurhash)
         try c.encodeIfPresent(explicit, forKey: .explicit)
+        try c.encodeIfPresent(isFavorite, forKey: .isFavorite)
     }
 }
 
@@ -149,6 +154,13 @@ struct Album: Codable, Identifiable, Hashable {
     let color: String?
     let blurhash: String?
     let copyright: String?
+    // Sent with an album's own page; absent on cards.
+    var isFavorite: Bool? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case albumhash, title, image, date, duration, trackcount, albumartists, color, blurhash, copyright
+        case isFavorite = "is_favorite"
+    }
 
     var artist: String { albumartists?.first?.name ?? "Unknown Artist" }
     var artisthash: String { albumartists?.first?.artisthash ?? "" }
@@ -167,6 +179,14 @@ struct Artist: Codable, Identifiable, Hashable {
     let duration: Int?
     let genres: [Genre]?
     let color: String?
+    // Sent with an artist's own page; absent on cards.
+    var isFavorite: Bool? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case artisthash, name, image, trackcount, albumcount, duration, genres, color
+        case isFavorite = "is_favorite"
+    }
+
     var id: String { artisthash }
     static func == (lhs: Artist, rhs: Artist) -> Bool { lhs.artisthash == rhs.artisthash }
     func hash(into hasher: inout Hasher) { hasher.combine(artisthash) }
@@ -199,9 +219,18 @@ struct Playlist: Codable, Identifiable, Hashable {
     let trackcount: Int
     let duration: Int
     let pinned: Bool
+    let hasImage: Bool?
+
+    // The uploaded cover's file name. The server sends "None" when there is none, and
+    // has_image false when the file is missing, in which case it would answer with an SVG fallback.
+    var customImage: String? {
+        guard let image, !image.isEmpty, image != "None", hasImage != false else { return nil }
+        return image
+    }
 
     enum CodingKeys: String, CodingKey {
         case id, name, image, images, trackcount, duration, pinned, count
+        case hasImage = "has_image"
     }
 
     init(from decoder: Decoder) throws {
@@ -217,6 +246,7 @@ struct Playlist: Codable, Identifiable, Hashable {
         trackcount = (try? container.decode(Int.self, forKey: .trackcount)) ?? (try? container.decode(Int.self, forKey: .count)) ?? 0
         duration = (try? container.decode(Int.self, forKey: .duration)) ?? 0
         pinned = (try? container.decode(Bool.self, forKey: .pinned)) ?? false
+        hasImage = try? container.decode(Bool.self, forKey: .hasImage)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -228,6 +258,7 @@ struct Playlist: Codable, Identifiable, Hashable {
         try container.encode(trackcount, forKey: .trackcount)
         try container.encode(duration, forKey: .duration)
         try container.encode(pinned, forKey: .pinned)
+        try container.encodeIfPresent(hasImage, forKey: .hasImage)
     }
 
     static func == (lhs: Playlist, rhs: Playlist) -> Bool { lhs.id == rhs.id }
@@ -237,9 +268,11 @@ struct Playlist: Codable, Identifiable, Hashable {
 struct AlbumDetail: Codable {
     let info: Album
     let tracks: [Track]
+    // Same shape as the artist's, minus the top album and plus how complete the album is.
+    var stats: [ArtistStat]? = nil
 }
 
-struct ArtistStat: Decodable, Hashable {
+struct ArtistStat: Codable, Hashable {
     let cssclass: String
     let value: String
     let text: String
@@ -250,13 +283,30 @@ struct ArtistDetail: Decodable {
     let artist: Artist
     let tracks: [Track]
     let stats: [ArtistStat]?
+    let albumSections: [ArtistAlbumSection]
 
-    enum CodingKeys: String, CodingKey { case artist, tracks, stats }
+    enum CodingKeys: String, CodingKey { case artist, tracks, stats, albums }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         artist = try c.decode(Artist.self, forKey: .artist)
         tracks = (try? c.decode([Track].self, forKey: .tracks)) ?? []
         stats = try? c.decode([ArtistStat].self, forKey: .stats)
+        albumSections = (try? c.decode(ArtistAlbumGroups.self, forKey: .albums))?.sections ?? []
+    }
+}
+
+private struct ArtistAlbumGroups: Decodable {
+    let albums: [Album]?
+    let singles_and_eps: [Album]?
+    let appearances: [Album]?
+    let compilations: [Album]?
+
+    var sections: [ArtistAlbumSection] {
+        [("Albums", albums), ("Singles & EPs", singles_and_eps), ("Appearances", appearances), ("Compilations", compilations)]
+            .compactMap { title, list in
+                guard let list, !list.isEmpty else { return nil }
+                return ArtistAlbumSection(title: title, albums: list)
+            }
     }
 }
 
@@ -398,6 +448,7 @@ extension Playlist {
         self.trackcount = 0
         self.duration = 0
         self.pinned = false
+        self.hasImage = nil
     }
 }
 
@@ -420,7 +471,7 @@ struct FolderResponse: Decodable {
     let path: String?
 }
 
-struct Mix: Decodable, Identifiable, Hashable {
+struct Mix: Codable, Identifiable, Hashable {
     let id: String
     let title: String
     let sourcehash: String
@@ -429,15 +480,17 @@ struct Mix: Decodable, Identifiable, Hashable {
     let tagline: String?
     let time: String?
 
-    struct Extra: Decodable, Hashable {
+    struct Extra: Codable, Hashable {
         let type: String?
         let og_sourcehash: String?
         let image: MixImageRef?
         let images: [MixImageRef]?
     }
-    struct MixImageRef: Decodable, Hashable {
+    struct MixImageRef: Codable, Hashable {
         let image: String?
         let color: String?
+        // "artist" images come from the artist image endpoint, anything else from track thumbnails.
+        var type: String? = nil
     }
 
     var imageFile: String? { extra.image?.image ?? extra.images?.first?.image }
@@ -458,6 +511,17 @@ struct Mix: Decodable, Identifiable, Hashable {
         extra = (try? c.decode(Extra.self, forKey: .extra)) ?? Extra(type: nil, og_sourcehash: nil, image: nil, images: nil)
         tagline = try? c.decode(String.self, forKey: .tagline)
         time = try? c.decode(String.self, forKey: .time)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(title, forKey: .title)
+        try c.encode(sourcehash, forKey: .sourcehash)
+        try c.encodeIfPresent(trackcount, forKey: .trackcount)
+        try c.encode(extra, forKey: .extra)
+        try c.encodeIfPresent(tagline, forKey: .tagline)
+        try c.encodeIfPresent(time, forKey: .time)
     }
 
     static func == (lhs: Mix, rhs: Mix) -> Bool { lhs.id == rhs.id }

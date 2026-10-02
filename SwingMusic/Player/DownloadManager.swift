@@ -9,9 +9,11 @@ final class DownloadManager: ObservableObject {
     @Published var downloadedTracks: [Track] = []
     @Published var downloadedHashes: Set<String> = []
     @Published var downloadGroups: [DownloadGroup] = []
+    // Downloaded mixes by mix id, for showing and opening them from Downloads.
+    @Published private(set) var savedMixes: [String: Mix] = [:]
 
     struct DownloadGroup: Codable, Identifiable, Hashable {
-        enum Kind: String, Codable { case album, playlist, folder, mix }
+        enum Kind: String, Codable { case album, playlist, folder, mix, artist }
         let id: String
         let kind: Kind
         let name: String
@@ -45,9 +47,26 @@ final class DownloadManager: ObservableObject {
         downloadsDir.appendingPathComponent("groups.json")
     }
 
+    private var pendingURL: URL {
+        downloadsDir.appendingPathComponent("pending.json")
+    }
+
     private init() {
         loadMetadata()
+        loadPending()
         loadGroups()
+        savedMixes = Dictionary(MixOfflineStore.shared.all().map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        resumePending()
+        Task(priority: .utility) { await backfillOfflineImages() }
+    }
+
+    nonisolated static func artistGroupID(_ artisthash: String) -> String { "artist:\(artisthash)" }
+    nonisolated static func mixGroupID(_ mixID: String) -> String { "mix:\(mixID)" }
+
+    // The album hash, artist hash, mix id, etc. a group was created for: its id after the "kind:" prefix.
+    nonisolated static func itemID(of group: DownloadGroup) -> String {
+        guard let colon = group.id.firstIndex(of: ":") else { return group.id }
+        return String(group.id[group.id.index(after: colon)...])
     }
 
     var ungroupedTracks: [Track] {
@@ -56,18 +75,7 @@ final class DownloadManager: ObservableObject {
     }
 
     func tracks(in group: DownloadGroup) -> [Track] {
-        let items = downloadedTracks.filter { group.trackHashes.contains($0.trackhash) }
-        switch group.kind {
-        case .album:
-            return items.sorted {
-                let d0 = $0.disc ?? 1, d1 = $1.disc ?? 1
-                if d0 != d1 { return d0 < d1 }
-                return ($0.trackno ?? 0) < ($1.trackno ?? 0)
-            }
-        case .folder, .playlist, .mix:
-            let order = Dictionary(uniqueKeysWithValues: group.trackHashes.enumerated().map { ($1, $0) })
-            return items.sorted { (order[$0.trackhash] ?? 0) < (order[$1.trackhash] ?? 0) }
-        }
+        DownloadBookkeeping.ordered(downloadedTracks, in: group)
     }
 
     func isDownloaded(_ track: Track) -> Bool {
@@ -104,6 +112,7 @@ final class DownloadManager: ObservableObject {
         guard downloads[track.trackhash] == nil || downloads[track.trackhash] == .failed else { return }
         downloads[track.trackhash] = .queued
         pendingQueue.append(track)
+        rememberUnfinished(track)
         pumpQueue()
     }
 
@@ -134,25 +143,56 @@ final class DownloadManager: ObservableObject {
         }
     }
 
+    // Tracks that another downloaded group also contains are kept.
     func removeGroup(_ group: DownloadGroup) {
-        for hash in group.trackHashes {
-            if let t = downloadedTracks.first(where: { $0.trackhash == hash }) {
-                removeDownload(t)
+        let group = downloadGroups.first { $0.id == group.id } ?? group
+        downloadGroups.removeAll { $0.id == group.id }
+        let byHash = Dictionary(downloadedTracks.map { ($0.trackhash, $0) }, uniquingKeysWith: { a, _ in a })
+        for hash in DownloadBookkeeping.tracksToDelete(removing: group, remaining: downloadGroups) {
+            if let track = byHash[hash] {
+                removeDownload(track)
+            } else {
+                cancelPending(hash)
             }
         }
-        downloadGroups.removeAll { $0.id == group.id }
+        switch group.kind {
+        case .artist: removeArtistSnapshot(Self.itemID(of: group))
+        case .mix: removeMixSnapshot(Self.itemID(of: group))
+        case .album, .playlist, .folder: break
+        }
         saveGroups()
     }
 
     func removeDownload(_ track: Track) {
         pendingQueue.removeAll { $0.trackhash == track.trackhash }
+        forgetUnfinished(track.trackhash)
         let file = localURL(for: track)
         try? fileManager.removeItem(at: file)
-        removeThumbnails(for: track)
         downloads.removeValue(forKey: track.trackhash)
         downloadedTracks.removeAll { $0.trackhash == track.trackhash }
         downloadedHashes.remove(track.trackhash)
+        if !DownloadBookkeeping.isImageInUse(track.image, by: downloadedTracks) {
+            removeThumbnails(for: track)
+        }
         saveMetadata()
+    }
+
+    // Stops a track that has not finished downloading. One already transferring is discarded when it completes.
+    private func markFailed(_ track: Track) {
+        if cancelled.remove(track.trackhash) != nil {
+            downloads.removeValue(forKey: track.trackhash)
+        } else {
+            downloads[track.trackhash] = .failed
+        }
+    }
+
+    private func cancelPending(_ hash: String) {
+        pendingQueue.removeAll { $0.trackhash == hash }
+        forgetUnfinished(hash)
+        if case .downloading = downloads[hash] {
+            cancelled.insert(hash)
+        }
+        downloads.removeValue(forKey: hash)
     }
 
     func removeAll() {
@@ -161,11 +201,26 @@ final class DownloadManager: ObservableObject {
             let file = localURL(for: track)
             try? fileManager.removeItem(at: file)
         }
+        for group in downloadGroups {
+            switch group.kind {
+            case .artist: ArtistOfflineStore.shared.remove(Self.itemID(of: group))
+            case .mix: MixOfflineStore.shared.remove(Self.itemID(of: group))
+            case .album, .playlist, .folder: break
+            }
+        }
+        savedMixes.removeAll()
+        cancelled.formUnion(downloads.compactMap { hash, state in
+            if case .downloading = state { return hash }
+            return nil
+        })
         downloads.removeAll()
         downloadedTracks.removeAll()
+        downloadedHashes.removeAll()
         downloadGroups.removeAll()
+        unfinished.removeAll()
         saveMetadata()
         saveGroups()
+        savePending()
     }
 
     @Published private(set) var totalSize: String = "–"
@@ -186,7 +241,7 @@ final class DownloadManager: ObservableObject {
         let urls = API.shared.streamURLs(track.trackhash, filepath: track.filepath)
         guard let url = urls.first else {
             Log.error("download", "No stream URL for \(track.title)")
-            downloads[track.trackhash] = .failed
+            markFailed(track)
             return
         }
         Log.info("download", "Starting \(track.title)")
@@ -203,19 +258,20 @@ final class DownloadManager: ObservableObject {
             let br = Double(track.bitrate ?? 0)
             let bps = br > 100_000 ? br : (br > 0 ? br * 1000 : 320_000)
             let estimatedBytes = Int64(bps / 8 * Double(max(track.duration, 1)))
-            let progressDelegate = DownloadProgressDelegate(estimatedTotalBytes: estimatedBytes) { [weak self] p in
+            let reporter = DownloadProgressReporter(estimatedTotalBytes: estimatedBytes) { [weak self] p in
                 Task { @MainActor in
                     if case .downloading = self?.downloads[hash] {
                         self?.downloads[hash] = .downloading(progress: p)
                     }
                 }
             }
-            let (localURLTemp, response) = try await Net.session.download(for: req, delegate: progressDelegate)
+            let (localURLTemp, response) = try await downloadFile(req, reporter: reporter)
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
+                try? fileManager.removeItem(at: localURLTemp)
                 let code = (response as? HTTPURLResponse)?.statusCode ?? -1
                 Log.error("download", "Audio failed for \(track.title) → HTTP \(code)")
-                downloads[track.trackhash] = .failed
+                markFailed(track)
                 return
             }
 
@@ -224,6 +280,11 @@ final class DownloadManager: ObservableObject {
                 try fileManager.removeItem(at: destinationURL)
             }
             try fileManager.moveItem(at: localURLTemp, to: destinationURL)
+
+            if cancelled.remove(track.trackhash) != nil {
+                try? fileManager.removeItem(at: destinationURL)
+                return
+            }
 
             do {
                 let response = try await API.shared.lyrics(hash: track.trackhash, path: track.filepath)
@@ -244,6 +305,7 @@ final class DownloadManager: ObservableObject {
             await cacheThumbnails(for: track)
 
             downloads[track.trackhash] = .completed
+            forgetUnfinished(track.trackhash)
             Log.info("download", "Completed \(track.title)")
 
             if !downloadedTracks.contains(where: { $0.trackhash == track.trackhash }) {
@@ -253,25 +315,62 @@ final class DownloadManager: ObservableObject {
             saveMetadata()
         } catch {
             Log.error("download", "Failed \(track.title): \(error.localizedDescription)")
-            downloads[track.trackhash] = .failed
+            markFailed(track)
         }
     }
 
-    private func cacheThumbnails(for track: Track) async {
-        for size in ["small", "medium"] {
-            guard let url = API.shared.img(track.image, size: size) else { continue }
-            var req = URLRequest(url: url)
-            if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
-            guard let (data, resp) = try? await Net.session.data(for: req),
-                  let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { continue }
-            ImageDiskCache.storeOffline(data, for: url)
+    // URLSession's async download(for:delegate:) never calls didWriteData on the task delegate,
+    // so progress is read from the task's byte counters instead.
+    private nonisolated func downloadFile(_ request: URLRequest, reporter: DownloadProgressReporter) async throws -> (URL, URLResponse) {
+        final class ObservationBox: @unchecked Sendable { var observation: NSKeyValueObservation? }
+        let box = ObservationBox()
+        return try await withCheckedThrowingContinuation { continuation in
+            let task = Net.session.downloadTask(with: request) { url, response, error in
+                box.observation?.invalidate()
+                if let error { continuation.resume(throwing: error); return }
+                guard let url, let response else {
+                    continuation.resume(throwing: URLError(.badServerResponse))
+                    return
+                }
+                // The system deletes `url` as soon as this handler returns.
+                let kept = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                do {
+                    try FileManager.default.moveItem(at: url, to: kept)
+                    continuation.resume(returning: (kept, response))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+            box.observation = task.observe(\.countOfBytesReceived) { task, _ in
+                reporter.report(written: task.countOfBytesReceived, expected: task.countOfBytesExpectedToReceive)
+            }
+            task.resume()
         }
+    }
+
+    // Track artwork sizes kept offline: original for the album header and Now Playing, large ("") for
+    // album cards, medium and small for lists.
+    nonisolated static let trackImageSizes = ["original", "", "medium", "small"]
+
+    nonisolated static func thumbnailURLs(for track: Track) -> [URL] {
+        trackImageSizes.compactMap { API.shared.img(track.image, size: $0) }
+    }
+
+    // An album's tracks share one image, so images already saved are skipped rather than fetched per track.
+    private func cacheThumbnails(for track: Track) async {
+        await cacheOfflineImages(Self.thumbnailURLs(for: track))
     }
 
     private func removeThumbnails(for track: Track) {
-        for size in ["small", "medium"] {
-            if let url = API.shared.img(track.image, size: size) { ImageDiskCache.removeOffline(for: url) }
-        }
+        for url in Self.thumbnailURLs(for: track) { ImageDiskCache.removeOffline(for: url) }
+    }
+
+    // Downloads saved before the sharper sizes were kept get them the next time the app can reach the server.
+    private func backfillOfflineImages() async {
+        var seen = Set<String>()
+        let urls = downloadedTracks.filter { seen.insert($0.image).inserted }.flatMap(Self.thumbnailURLs(for:))
+            + savedMixes.values.flatMap(\.offlineImageURLs)
+        await cacheOfflineImages(urls)
     }
 
     private var metadataSaveScheduled = false
@@ -314,15 +413,125 @@ final class DownloadManager: ObservableObject {
     private func loadGroups() {
         guard let data = try? Data(contentsOf: groupsURL),
               let groups = try? JSONDecoder().decode([DownloadGroup].self, from: data) else { return }
-        downloadGroups = groups.compactMap { group in
-            let present = group.trackHashes.filter { downloadedHashes.contains($0) }
-            guard !present.isEmpty else { return nil }
-            return DownloadGroup(id: group.id, kind: group.kind, name: group.name, image: group.image, trackHashes: present)
+        downloadGroups = DownloadBookkeeping.restoredGroups(
+            groups, downloaded: downloadedHashes, pending: Set(unfinished.map(\.trackhash)))
+    }
+
+    // MARK: Unfinished downloads
+    // The download queue lives in memory, so unfinished tracks are saved and resumed on the next launch.
+
+    private var unfinished: [Track] = []
+    private var cancelled: Set<String> = []
+    private var pendingSaveScheduled = false
+
+    private func rememberUnfinished(_ track: Track) {
+        guard !unfinished.contains(where: { $0.trackhash == track.trackhash }) else { return }
+        unfinished.append(track)
+        savePending()
+    }
+
+    private func forgetUnfinished(_ hash: String) {
+        guard let i = unfinished.firstIndex(where: { $0.trackhash == hash }) else { return }
+        unfinished.remove(at: i)
+        savePending()
+    }
+
+    private func savePending() {
+        guard !pendingSaveScheduled else { return }
+        pendingSaveScheduled = true
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            pendingSaveScheduled = false
+            guard let data = try? JSONEncoder().encode(unfinished) else { return }
+            let url = pendingURL
+            Task.detached(priority: .utility) { try? data.write(to: url, options: .atomic) }
         }
+    }
+
+    private func loadPending() {
+        guard let data = try? Data(contentsOf: pendingURL),
+              let tracks = try? JSONDecoder().decode([Track].self, from: data) else { return }
+        unfinished = DownloadBookkeeping.resumable(tracks, downloaded: downloadedHashes)
+    }
+
+    private func resumePending() {
+        let tracks = unfinished
+        guard !tracks.isEmpty else { return }
+        Log.info("download", "Resuming \(tracks.count) unfinished downloads")
+        for track in tracks { download(track) }
+    }
+
+    // MARK: Artists
+
+    // Saves what the artist screen needs offline, then downloads every track the artist has right now.
+    func downloadArtist(_ artisthash: String) async {
+        do {
+            let snapshot = try await API.shared.artistSnapshot(artisthash)
+            let detail = try JSONDecoder().decode(ArtistDetail.self, from: snapshot.detail)
+            let tracks = try JSONDecoder().decode([Track].self, from: snapshot.tracks)
+            try ArtistOfflineStore.shared.save(artistHash: artisthash, detail: snapshot.detail, tracks: snapshot.tracks)
+            downloadAll(tracks, group: DownloadGroup(
+                id: Self.artistGroupID(artisthash), kind: .artist, name: detail.artist.name,
+                image: detail.artist.image, trackHashes: tracks.map(\.trackhash)))
+            await cacheOfflineImages(ArtistOfflineStore.imageURLs(for: detail))
+        } catch {
+            Log.error("download", "Artist \(artisthash) download failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: Mixes
+
+    // Saves the mix as shown (title, description, artwork), then downloads its tracks.
+    func downloadMix(_ mix: Mix, tracks: [Track]) async {
+        do {
+            try MixOfflineStore.shared.save(mix)
+            savedMixes[mix.id] = mix
+        } catch {
+            Log.error("download", "Saving mix \(mix.id) failed: \(error.localizedDescription)")
+        }
+        downloadAll(tracks, group: DownloadGroup(
+            id: Self.mixGroupID(mix.id), kind: .mix, name: mix.title,
+            image: mix.imageFile ?? "", trackHashes: tracks.map(\.trackhash)))
+        await cacheOfflineImages(mix.offlineImageURLs)
+    }
+
+    private func removeMixSnapshot(_ mixID: String) {
+        if let mix = savedMixes[mixID] ?? MixOfflineStore.shared.mix(for: mixID) {
+            for url in DownloadBookkeeping.imagesToRemove(mix.offlineImageURLs, keeping: thumbnailsInUse()) {
+                ImageDiskCache.removeOffline(for: url)
+            }
+        }
+        MixOfflineStore.shared.remove(mixID)
+        savedMixes.removeValue(forKey: mixID)
+    }
+
+    // Track thumbnails remaining downloads still show, which removed groups must leave in place.
+    private func thumbnailsInUse() -> Set<URL> {
+        Set(downloadedTracks.flatMap(Self.thumbnailURLs(for:)))
+    }
+
+    private func cacheOfflineImages(_ urls: [URL]) async {
+        for url in urls where !ImageDiskCache.hasOffline(for: url) {
+            var req = URLRequest(url: url)
+            if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
+            guard let (data, resp) = try? await Net.session.data(for: req),
+                  let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { continue }
+            ImageDiskCache.storeOffline(data, for: url)
+        }
+    }
+
+    private func removeArtistSnapshot(_ artisthash: String) {
+        let store = ArtistOfflineStore.shared
+        if let detail = store.detail(for: artisthash) {
+            for url in DownloadBookkeeping.imagesToRemove(ArtistOfflineStore.imageURLs(for: detail), keeping: thumbnailsInUse()) {
+                ImageDiskCache.removeOffline(for: url)
+            }
+        }
+        store.remove(artisthash)
     }
 }
 
-final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
+final class DownloadProgressReporter: @unchecked Sendable {
     private let onProgress: (Double) -> Void
     private let estimatedTotalBytes: Int64
     private var lastReported: Double = -1
@@ -333,14 +542,12 @@ final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
         self.onProgress = onProgress
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
-                    totalBytesExpectedToWrite: Int64) {
+    func report(written: Int64, expected: Int64) {
         let p: Double
-        if totalBytesExpectedToWrite > 0 {
-            p = min(max(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0), 1)
+        if expected > 0 {
+            p = min(max(Double(written) / Double(expected), 0), 1)
         } else if estimatedTotalBytes > 0 {
-            p = min(Double(totalBytesWritten) / Double(estimatedTotalBytes), 0.99)
+            p = min(Double(written) / Double(estimatedTotalBytes), 0.99)
         } else {
             return
         }
@@ -348,7 +555,4 @@ final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate {
         lastReported = p
         onProgress(p)
     }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didFinishDownloadingTo location: URL) {}
 }

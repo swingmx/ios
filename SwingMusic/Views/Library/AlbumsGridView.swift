@@ -115,10 +115,15 @@ struct FavoriteTracksView: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
+            FavoritesListHeader(
+                title: "Favorite Songs",
+                tagline: FavoritesListHeader.tagline(count: state.favTracksTotal, singular: "song", plural: "songs"),
+                leading: 16)
             LazyVStack(spacing: 0) {
                 ForEach(Array(state.favTracks.enumerated()), id: \.element.id) { i, t in
-                    TrackRow(track: t, num: i + 1, active: state.player.current == t) {
-                        state.player.play(t, from: state.favTracks, source: .favorite)
+                    TrackRow(track: t, num: max(state.favTracksTotal, state.favTracks.count) - i,
+                             active: state.player.current == t) {
+                        state.playFavorite(t)
                     }
                     .onAppear {
                         if i >= state.favTracks.count - 5 {
@@ -134,17 +139,22 @@ struct FavoriteTracksView: View {
         }
         .squeezeMiniPlayer(state)
         .background { AmbientBackground() }
-        .navigationTitle("Songs")
+        .detailScrollTitle("Favorite Songs", after: 70)
         .task { if state.favTracks.isEmpty { await state.loadFavorites() } }
     }
 }
 
 struct FavoriteAlbumsGridView: View {
     @EnvironmentObject var state: AppState
-    private let cols = [GridItem(.adaptive(minimum: 150), spacing: 14)]
+    @State private var width: CGFloat = 0
+    private let cols = [GridItem(.adaptive(minimum: FavoritesListHeader.albumCard), spacing: FavoritesListHeader.gridSpacing)]
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
+            FavoritesListHeader(
+                title: "Favorite Albums",
+                tagline: FavoritesListHeader.tagline(count: state.favAlbumsTotal, singular: "album", plural: "albums"),
+                leading: FavoritesListHeader.firstAlbumInset(width: width))
             LazyVGrid(columns: cols, spacing: 18) {
                 ForEach(Array(state.favAlbums.enumerated()), id: \.element.id) { i, a in
                     NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
@@ -163,17 +173,23 @@ struct FavoriteAlbumsGridView: View {
         }
         .squeezeMiniPlayer(state)
         .background { AmbientBackground() }
-        .navigationTitle("Favorite Albums")
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .detailScrollTitle("Favorite Albums", after: 70)
         .task { if state.favAlbums.isEmpty { await state.loadFavorites() } }
     }
 }
 
 struct FavoriteArtistsGridView: View {
     @EnvironmentObject var state: AppState
+    @State private var width: CGFloat = 0
     private let cols = [GridItem(.adaptive(minimum: 120), spacing: 14)]
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
+            FavoritesListHeader(
+                title: "Favorite Artists",
+                tagline: FavoritesListHeader.tagline(count: state.favArtistsTotal, singular: "artist", plural: "artists"),
+                leading: FavoritesListHeader.firstAlbumInset(width: width))
             LazyVGrid(columns: cols, spacing: 18) {
                 ForEach(Array(state.favArtists.enumerated()), id: \.element.id) { i, a in
                     NavigationLink(value: a) { ArtistCard(artist: a, size: 110) }
@@ -192,7 +208,8 @@ struct FavoriteArtistsGridView: View {
         }
         .squeezeMiniPlayer(state)
         .background { AmbientBackground() }
-        .navigationTitle("Favorite Artists")
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .detailScrollTitle("Favorite Artists", after: 70)
         .task { if state.favArtists.isEmpty { await state.loadFavorites() } }
     }
 }
@@ -214,4 +231,42 @@ struct RecentlyAddedView: View {
         .background { AmbientBackground() }
         .navigationTitle("Recently Added")
             }
+}
+
+struct FavoritesListHeader: View {
+    let title: String
+    let tagline: String
+    let leading: CGFloat
+
+    static let margin: CGFloat = 16
+    static let albumCard: CGFloat = 150
+    static let gridSpacing: CGFloat = 14
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.largeTitle.bold())
+                .foregroundStyle(.primary)
+            Text(tagline)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, leading)
+        .padding(.trailing, Self.margin)
+        .padding(.top, 8)
+        .padding(.bottom, 14)
+    }
+
+    static func tagline(count: Int, singular: String, plural: String) -> String {
+        "You have \(count) favorited \(count == 1 ? singular : plural)"
+    }
+
+    static func firstAlbumInset(width: CGFloat) -> CGFloat {
+        let available = width - margin * 2
+        guard available >= albumCard else { return margin }
+        let columns = max(1, ((available + gridSpacing) / (albumCard + gridSpacing)).rounded(.down))
+        let columnWidth = (available - gridSpacing * (columns - 1)) / columns
+        return margin + (columnWidth - albumCard) / 2
+    }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct SwingMusicApp: App {
     @StateObject private var state = AppState()
+    @AppStorage(ShakeToReport.key) private var shakeToReport = false
     @Environment(\.scenePhase) private var scenePhase
 
     @MainActor
@@ -41,7 +42,7 @@ struct SwingMusicApp: App {
                     await reloadAfterServerSwitch()
                 }
             }
-            .onShake { state.beginBugReport() }
+            .onShake { if shakeToReport { state.beginBugReport() } }
             .sheet(isPresented: $state.showBugReport) {
                 if let report = state.currentBugReport {
                     BugReportSheet(report: report)

@@ -100,12 +100,19 @@ struct ContentView: View {
         TabView(selection: $state.tab) {
             Tab("Listening Now", systemImage: "house.fill", value: AppState.Tab.home) {
                 HomeView()
+                    .blocksTouchesBehindBottomBars()
             }
             Tab("Library", systemImage: "music.note.list", value: AppState.Tab.library) {
                 LibraryView()
+                    .blocksTouchesBehindBottomBars()
+            }
+            Tab("Favorites", systemImage: "heart.fill", value: AppState.Tab.favorites) {
+                FavoritesTabView()
+                    .blocksTouchesBehindBottomBars()
             }
             Tab(value: AppState.Tab.search, role: .search) {
                 SearchView()
+                    .blocksTouchesBehindBottomBars()
             }
         }
         .tint(.blue)
@@ -128,6 +135,12 @@ struct ContentView: View {
             case .artist(let a): state.libraryPath.append(a)
             case .folder(let f): state.libraryPath.append(f)
             }
+        case .favorites:
+            switch target {
+            case .album(let a): state.favoritesPath.append(a)
+            case .artist(let a): state.favoritesPath.append(a)
+            case .folder(let f): state.favoritesPath.append(f)
+            }
         default:
             state.tab = .home
             switch target {
@@ -136,5 +149,31 @@ struct ContentView: View {
             case .folder(let f): state.homePath.append(f)
             }
         }
+    }
+}
+
+// On iOS 26 the tab bar and the mini player float with gaps around them, and the mini player's bar
+// lets touches outside its glass pass through (LNPopupController's _LNTouchPassthroughView), so a tap
+// in a gap would reach the content scrolled underneath. This catches those taps. It sits under the
+// bars, so taps on the bars themselves still reach them.
+private struct BottomBarsTouchBlocker: ViewModifier {
+    func body(content: Content) -> some View {
+        content.overlay {
+            GeometryReader { geo in
+                let barsHeight = geo.safeAreaInsets.bottom
+                Color.clear
+                    .contentShape(Rectangle())
+                    .frame(height: barsHeight)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .offset(y: barsHeight)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+private extension View {
+    func blocksTouchesBehindBottomBars() -> some View {
+        modifier(BottomBarsTouchBlocker())
     }
 }

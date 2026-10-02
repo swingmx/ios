@@ -98,6 +98,11 @@ final class API {
     func mixImg(_ path: String, size: String = "medium") -> URL? {
         mediaImageURL(kind: "mix", path: path, size: size)
     }
+
+    // Custom playlist covers are served at one size only.
+    func playlistImg(_ path: String) -> URL? {
+        mediaImageURL(kind: "playlist", path: path, size: "")
+    }
     func stream(_ hash: String) -> URL? {
         streamURLs(hash).first
     }

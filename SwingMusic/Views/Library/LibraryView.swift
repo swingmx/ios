@@ -7,7 +7,7 @@ struct LibraryView: View {
     @State private var showSettings = false
     @Namespace private var zoomNS
 
-    private let menu: [LibItem] = [.folders, .artists, .albums, .playlists, .favorites, .downloads]
+    private let menu: [LibItem] = [.folders, .artists, .albums, .playlists, .downloads]
 
     var body: some View {
         NavigationStack(path: $state.libraryPath) {
@@ -130,7 +130,6 @@ struct LibraryView: View {
             .navigationDestination(for: LibItem.self) { item in
                 switch item {
                 case .folders: FolderBrowserView()
-                case .favorites: FavoritesView()
                 case .favoriteArtists: ArtistsGridView()
                 case .artists: ArtistsGridView()
                 case .favoriteAlbums: AlbumsGridView()
@@ -202,6 +201,7 @@ struct PlaylistsListView: View {
                             Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.tertiary)
                         }
                         .padding(.horizontal, 16).padding(.vertical, 10)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -241,7 +241,6 @@ struct PlaylistsListView: View {
 
 enum LibItem: String, CaseIterable, Identifiable, Hashable {
     case folders = "Folders"
-    case favorites = "Favorites"
     case favoriteArtists = "Favorite Artists"
     case artists = "Artists"
     case favoriteAlbums = "Favorite Albums"
@@ -258,7 +257,6 @@ enum LibItem: String, CaseIterable, Identifiable, Hashable {
     var icon: String {
         switch self {
         case .folders: "folder.fill"
-        case .favorites: "heart.fill"
         case .favoriteArtists: "heart.fill"
         case .artists: "music.mic"
         case .favoriteAlbums: "heart.fill"
@@ -275,7 +273,7 @@ enum LibItem: String, CaseIterable, Identifiable, Hashable {
     var tintColor: Color {
         switch self {
         case .folders: .blue
-        case .favorites, .favoriteArtists, .favoriteAlbums, .favoriteSongs: .pink
+        case .favoriteArtists, .favoriteAlbums, .favoriteSongs: .pink
         case .artists: .blue
         case .albums: .blue
         case .playlists: .purple

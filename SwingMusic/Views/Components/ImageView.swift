@@ -37,6 +37,10 @@ enum ImageDiskCache {
         try? data.write(to: offlineDir.appendingPathComponent(key(for: url)), options: .atomic)
     }
 
+    static func hasOffline(for url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: offlineDir.appendingPathComponent(key(for: url)).path)
+    }
+
     static func removeOffline(for url: URL) {
         try? FileManager.default.removeItem(at: offlineDir.appendingPathComponent(key(for: url)))
     }
@@ -97,19 +101,30 @@ struct Img: View {
         }
     }
 
-    private func load() async {
-        guard let key = primaryKey else { loading = false; return }
-        if let cached = Img.cache[key] { img = cached; loading = false; return }
-
-        for url in urls {
-            if let disk = ImageDiskCache.image(for: url) {
-                Img.cache[key] = disk
-                img = disk
-                loading = false
-                return
-            }
+    // Images are cached under the URL they came from, so a smaller fallback size is never served
+    // when the first (preferred) URL is asked for. A smaller size already on hand is only used when
+    // no listed size can be fetched (offline); online the preferred one shows directly, without a
+    // visible swap from low to high resolution.
+    static func cachedImage(for urls: [URL], memory: (URL) -> UIImage?, disk: (URL) -> UIImage?)
+        -> (exact: UIImage?, preview: UIImage?) {
+        guard let primary = urls.first else { return (nil, nil) }
+        if let exact = memory(primary) ?? disk(primary) { return (exact, nil) }
+        for url in urls.dropFirst() {
+            if let preview = memory(url) ?? disk(url) { return (nil, preview) }
         }
-        loading = true
+        return (nil, nil)
+    }
+
+    private func load() async {
+        guard primaryKey != nil else { loading = false; return }
+        let cached = Img.cachedImage(for: urls, memory: { Img.cache[$0.absoluteString] }, disk: ImageDiskCache.image(for:))
+        if let exact = cached.exact {
+            Img.cache[urls[0].absoluteString] = exact
+            img = exact
+            loading = false
+            return
+        }
+        loading = img == nil
 
         var token: String? { API.shared.token }
         for url in urls {
@@ -118,11 +133,12 @@ struct Img: View {
             guard let (data, resp) = try? await Net.session.data(for: req) else { continue }
             if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) { continue }
             guard let ui = UIImage(data: data) else { continue }
-            Img.cache[key] = ui
+            Img.cache[url.absoluteString] = ui
             ImageDiskCache.storeBrowse(data, for: url)
             withAnimation { img = ui; loading = false }
             return
         }
+        if img == nil, let fallback = cached.preview { img = fallback }
         loading = false
     }
 }
@@ -144,7 +160,8 @@ struct AlbumCover: View {
     let album: Album
     var size: CGFloat = 160
     var body: some View {
-        let sizes = size > 200 ? ["original", "", "medium"] : size > 100 ? ["medium", "small"] : ["small", "medium"]
+        // Headers use the 1200px original, cards the 512px large size (""), list rows the small sizes.
+        let sizes = size > 200 ? ["original", "", "medium"] : size > 100 ? ["", "medium"] : ["small", "medium"]
         Img(urls: sizes.compactMap { API.shared.img(album.image, size: $0) },
             radius: size > 100 ? 12 : 8,
             blurhash: album.blurhash,

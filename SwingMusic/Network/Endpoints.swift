@@ -25,28 +25,30 @@ extension API {
     }
 
     func albumTracks(_ hash: String) async throws -> [Track] {
-        struct R: Decodable { let tracks: [Track] }
-        return try await (get("/album/\(hash)/tracks") as R).tracks
+        try Self.decodeAlbumTracks(try await getData("/album/\(hash)/tracks"))
     }
+
+    static func decodeAlbumTracks(_ data: Data) throws -> [Track] {
+        struct Wrapped: Decodable { let tracks: [Track] }
+        if let tracks = try? JSONDecoder().decode([Track].self, from: data) { return tracks }
+        return try JSONDecoder().decode(Wrapped.self, from: data).tracks
+    }
+
+    static let artistQuery = ["tracklimit": "5", "all": "true"]
 
     func artist(_ hash: String) async throws -> ArtistDetail {
-        try await get("/artist/\(hash)", q: ["tracklimit": "100", "albumlimit": "100"])
+        try await get("/artist/\(hash)", q: Self.artistQuery)
     }
 
-    func artistAlbums(_ hash: String) async throws -> [ArtistAlbumSection] {
-        struct R: Decodable {
-            let albums: [Album]?
-            let singles_and_eps: [Album]?
-            let appearances: [Album]?
-            let compilations: [Album]?
-        }
-        let r: R = try await get("/artist/\(hash)/albums", q: ["limit": "100", "all": "true"])
-        var sections: [ArtistAlbumSection] = []
-        if let a = r.albums, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Albums", albums: a)) }
-        if let a = r.singles_and_eps, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Singles & EPs", albums: a)) }
-        if let a = r.appearances, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Appearances", albums: a)) }
-        if let a = r.compilations, !a.isEmpty { sections.append(ArtistAlbumSection(title: "Compilations", albums: a)) }
-        return sections
+    // The raw responses behind the artist screen, saved as-is for offline use.
+    func artistSnapshot(_ hash: String) async throws -> (detail: Data, tracks: Data) {
+        async let detail = getData("/artist/\(hash)", q: Self.artistQuery)
+        async let tracks = getData("/artist/\(hash)/tracks")
+        return try await (detail, tracks)
+    }
+
+    func artistTracks(_ hash: String) async throws -> [Track] {
+        try await get("/artist/\(hash)/tracks")
     }
 
     func similarArtists(_ hash: String, limit: Int = 12) async throws -> [Artist] {
@@ -173,6 +175,11 @@ extension API {
 
     func favoriteTracks(start: Int = 0, limit: Int = 50) async throws -> FavoriteTracksPage {
         try await get("/favorites/tracks", q: ["start": "\(start)", "limit": "\(limit)"])
+    }
+
+    // Every favorite track, newest first: the server returns all of them for limit -1 from the start.
+    func allFavoriteTracks() async throws -> [Track] {
+        try await favoriteTracks(start: 0, limit: -1).tracks
     }
 
     func favoriteAlbums(start: Int = 0, limit: Int = 50) async throws -> FavoriteAlbumsPage {

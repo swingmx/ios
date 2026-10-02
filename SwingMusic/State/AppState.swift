@@ -75,12 +75,13 @@ final class AppState: ObservableObject {
 
     @Published var homePath = NavigationPath()
     @Published var libraryPath = NavigationPath()
+    @Published var favoritesPath = NavigationPath()
     @Published var searchPath = NavigationPath()
 
     let player = AudioPlayer.shared
     private var bag = Set<AnyCancellable>()
 
-    enum Tab: String { case home, library, search, settings }
+    enum Tab: String { case home, library, favorites, search, settings }
 
     enum NavTarget: Equatable {
         case album(Album)
@@ -250,12 +251,28 @@ final class AppState: ObservableObject {
     }
 
     private let favPageSize = 50
+    // The Favorites screen only previews each group; its See All pages load the rest, favPageSize at a time.
+    // The Favorites screen shows only this many of each, newest first, even after its See All pages
+    // have loaded more into the same lists.
+    let favPreviewTracks = 6
+    let favPreviewCards = 24
+
+    // Plays a favorite straight away, then fills the queue with every favorite from one request.
+    // Nothing is kept: the list lives only in the queue. Falls back to the loaded favorites offline.
+    func playFavorite(_ track: Track) {
+        player.play(track, from: [track], source: .favorite)
+        Task {
+            let all = (try? await API.shared.allFavoriteTracks()) ?? favTracks
+            guard player.source == .favorite else { return }
+            player.expandQueue(around: track, with: all)
+        }
+    }
 
     func loadFavorites() async {
         async let summary = try? await API.shared.favoritesSummary()
-        async let tracksPage = try? await API.shared.favoriteTracks(start: 0, limit: favPageSize)
-        async let albumsPage = try? await API.shared.favoriteAlbums(start: 0, limit: favPageSize)
-        async let artistsPage = try? await API.shared.favoriteArtists(start: 0, limit: favPageSize)
+        async let tracksPage = try? await API.shared.favoriteTracks(start: 0, limit: favPreviewTracks)
+        async let albumsPage = try? await API.shared.favoriteAlbums(start: 0, limit: favPreviewCards)
+        async let artistsPage = try? await API.shared.favoriteArtists(start: 0, limit: favPreviewCards)
 
         favTracks = (await tracksPage)?.tracks ?? []
         favAlbums = (await albumsPage)?.albums ?? []
@@ -284,7 +301,52 @@ final class AppState: ObservableObject {
         }
     }
 
+    // Albums and artists: the Favorites lists follow the change, which is undone if the server rejects it.
+    func setAlbumFavorite(_ album: Album, _ fav: Bool) async -> Bool {
+        do {
+            try await API.shared.toggleFavorite(hash: album.albumhash, type: "album", add: fav)
+        } catch {
+            return false
+        }
+        let present = favAlbums.contains { $0.albumhash == album.albumhash }
+        if fav && !present {
+            favAlbums.insert(album, at: 0)
+            favAlbumsTotal += 1
+        } else if !fav && present {
+            favAlbums.removeAll { $0.albumhash == album.albumhash }
+            favAlbumsTotal = max(0, favAlbumsTotal - 1)
+        }
+        return true
+    }
+
+    func setArtistFavorite(_ artist: Artist, _ fav: Bool) async -> Bool {
+        do {
+            try await API.shared.toggleFavorite(hash: artist.artisthash, type: "artist", add: fav)
+        } catch {
+            return false
+        }
+        let present = favArtists.contains { $0.artisthash == artist.artisthash }
+        if fav && !present {
+            favArtists.insert(artist, at: 0)
+            favArtistsTotal += 1
+        } else if !fav && present {
+            favArtists.removeAll { $0.artisthash == artist.artisthash }
+            favArtistsTotal = max(0, favArtistsTotal - 1)
+        }
+        return true
+    }
+
+    // Favorite changes made in this session, which the track values already on screen do not reflect.
+    @Published private(set) var favoriteTrackChanges: [String: Bool] = [:]
+
+    func isTrackFavorite(_ track: Track) -> Bool {
+        favoriteTrackChanges[track.trackhash]
+            ?? track.isFavorite
+            ?? favTracks.contains { $0.trackhash == track.trackhash }
+    }
+
     private func applyFavorite(_ track: Track, _ fav: Bool) {
+        favoriteTrackChanges[track.trackhash] = fav
         let present = favTracks.contains { $0.trackhash == track.trackhash }
         if fav && !present {
             favTracks.insert(track, at: 0)

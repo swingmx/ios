@@ -44,6 +44,46 @@ struct AlbumCard: View {
             }
             .frame(width: size, alignment: .leading)
         }
+        .contextMenu { AlbumMenuItems(album: album) }
+    }
+}
+
+// What holding an album card offers, wherever the card appears.
+struct AlbumMenuItems: View {
+    let album: Album
+
+    var body: some View {
+        Button { withTracks { AudioPlayer.shared.playAll($0, source: .album(album.albumhash)) } } label: {
+            Label("Play", systemImage: "play.fill")
+        }
+        Button { withTracks { AudioPlayer.shared.playAll($0, shuffled: true, source: .album(album.albumhash)) } } label: {
+            Label("Shuffle", systemImage: "shuffle")
+        }
+        Divider()
+        Button { withTracks { AudioPlayer.shared.addNext($0) } } label: {
+            Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+        }
+        Button { withTracks { AudioPlayer.shared.addLast($0) } } label: {
+            Label("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward")
+        }
+    }
+
+    // Cards only carry the album, so its tracks are fetched first, in disc and track order.
+    private func withTracks(_ use: @escaping @MainActor ([Track]) -> Void) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        let hash = album.albumhash
+        Task { @MainActor in
+            guard let tracks = try? await API.shared.albumTracks(hash), !tracks.isEmpty else { return }
+            use(Self.albumOrdered(tracks))
+        }
+    }
+
+    static func albumOrdered(_ tracks: [Track]) -> [Track] {
+        tracks.sorted { a, b in
+            let da = a.disc ?? 1, db = b.disc ?? 1
+            if da != db { return da < db }
+            return (a.trackno ?? 0) < (b.trackno ?? 0)
+        }
     }
 }
 

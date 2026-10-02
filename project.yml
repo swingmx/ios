@@ -17,6 +17,9 @@ schemes:
         SwingMusic: all
     run:
       target: SwingMusic
+    test:
+      targets:
+        - SwingMusicTests
   SwingMusicWidgetsExtension:
     build:
       targets:
@@ -82,3 +85,19 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
     entitlements:
       path: SwingMusicWidgetExtension/SwingMusicWidgetExtension.entitlements
+
+  SwingMusicTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - SwingMusicTests
+    dependencies:
+      - target: SwingMusic
+    settings:
+      base:
+        SWIFT_VERSION: "5.9"
+        PRODUCT_BUNDLE_IDENTIFIER: com.swingmusic.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Swing Music Client.app/Swing Music Client"
+        BUNDLE_LOADER: "$(TEST_HOST)"

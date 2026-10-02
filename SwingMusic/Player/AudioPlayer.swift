@@ -278,6 +278,58 @@ final class AudioPlayer: ObservableObject {
         }
     }
 
+    func addNext(_ tracks: [Track]) {
+        guard !tracks.isEmpty else { return }
+        if queue.isEmpty {
+            addLast(tracks)
+        } else {
+            withAnimation(Self.queueAnim) { queue.insert(contentsOf: tracks, at: index + 1) }
+        }
+    }
+
+    func addLast(_ tracks: [Track]) {
+        guard !tracks.isEmpty else { return }
+        let start = queue.count
+        withAnimation(Self.queueAnim) { queue.append(contentsOf: tracks) }
+        if current == nil {
+            index = start
+            current = queue[start]
+            load(queue[start])
+        }
+    }
+
+    // Fills in the rest of a list that started playing from one track (such as all favorites, fetched
+    // after playback began) without restarting playback. Ignored once that track is no longer playing.
+    func expandQueue(around track: Track, with full: [Track]) {
+        guard queue.indices.contains(index), queue[index] == track, current == track else { return }
+        let expanded = Self.expandedQueue(queue: queue, index: index, full: full, shuffled: shuffle)
+        baseOrder = full
+        withAnimation(Self.queueAnim) { queue = expanded.queue }
+        index = expanded.index
+    }
+
+    // The queue around the playing track once its full list is known. Tracks queued while the list
+    // loaded stay right after the playing one. Shuffled, everything else follows in a fresh shuffle;
+    // otherwise the full list keeps its order, positioned at the playing track.
+    nonisolated static func expandedQueue(queue: [Track], index: Int, full: [Track], shuffled: Bool)
+        -> (queue: [Track], index: Int) {
+        let current = queue[index]
+        let played = Array(queue[..<index])
+        let queuedSince = Array(queue[(index + 1)...])
+        var taken = Set((played + [current] + queuedSince).map(\.trackhash))
+        let rest = full.filter { taken.insert($0.trackhash).inserted }
+
+        if shuffled {
+            return (played + [current] + queuedSince + SmartShuffle.shuffle(rest), played.count)
+        }
+        let order = Dictionary(full.enumerated().map { ($1.trackhash, $0) }, uniquingKeysWith: min)
+        let position = order[current.trackhash] ?? -1
+        let before = rest.filter { order[$0.trackhash, default: 0] < position }
+        let after = rest.filter { order[$0.trackhash, default: 0] > position }
+        let head = played + before
+        return (head + [current] + queuedSince + after, head.count)
+    }
+
     func jump(to i: Int) {
         guard queue.indices.contains(i) else { return }
         log()

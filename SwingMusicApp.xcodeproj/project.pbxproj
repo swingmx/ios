@@ -134,6 +134,21 @@
 		F481A53CA707A8BFC485A51C /* AMLLLyricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 758E1FDDD4BE7FB97FA0C697 /* AMLLLyricsView.swift */; };
 		FB38CDE50A185684E4A9C215 /* DownloadControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF2E93B61880EE876F027A51 /* DownloadControl.swift */; };
 		FED6D9395EA79AD8B287BA78 /* NowPlayingArtworkPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF7C7A2AB25F761AE1A5940 /* NowPlayingArtworkPage.swift */; };
+		08CC2A538CFF3884AEB9835C /* DownloadBookkeeping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30872995913768DF15F2C68 /* DownloadBookkeeping.swift */; };
+		7594607CFF3D46D5DEBD6EF3 /* ArtistOfflineStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6615E861A2D0794093C123C4 /* ArtistOfflineStore.swift */; };
+		DC4C0227DC6C543E9EFF8039 /* Fixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CFE1B292CB7854D83D8E21 /* Fixtures.swift */; };
+		2661742A5DFCFC8EF41D3EDF /* DownloadBookkeepingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C4E719E0FA784B4BCAA0A1D /* DownloadBookkeepingTests.swift */; };
+		A3487D619B27F625A98A14C2 /* ArtistOfflineStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D1E88ADF18F6C9A76CB3537 /* ArtistOfflineStoreTests.swift */; };
+		24DFE11980BB28FC801D3659 /* PlaylistImageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E50E3CB3DBD40707EBAE74 /* PlaylistImageTests.swift */; };
+		C6F3368E3755D145B5A02072 /* TrackFavoriteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 925F75C15C9C8B977B6627B6 /* TrackFavoriteTests.swift */; };
+		7AA402406E2F0F6D847BABF5 /* MixArtworkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3661BB57C8518BA3AA446407 /* MixArtworkTests.swift */; };
+		AAC2C1EB9CEC466C9DAA9E08 /* MixOfflineStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78BE13D1C1FE4AB38B9175DA /* MixOfflineStoreTests.swift */; };
+		A5A42BDD6AE379128526AC2B /* ImageCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B17058825A36831DE142881C /* ImageCacheTests.swift */; };
+		49F3591CCCE4EB7CEB1BC189 /* AlbumStatsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2594A745A14807B71C1A8032 /* AlbumStatsTests.swift */; };
+		8707304D00841EB889821477 /* FavoritesQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B18F53B801F6D7EAF526F5F /* FavoritesQueueTests.swift */; };
+		3E92DE0F11930AA9C293D1DB /* FavoritesHeaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E1D0BAA679B46E6C16867C /* FavoritesHeaderTests.swift */; };
+		FC0D87A10A6B78DED124A4A3 /* MixOfflineStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A51CFC2D5D51840A1357BA3 /* MixOfflineStore.swift */; };
+		904EB21E68505C35E9FD6C86 /* MixArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9854AA384B8A4632939EE7C0 /* MixArtwork.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -143,6 +158,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = E42545C4AAA7F68D4FF438E1;
 			remoteInfo = SwingMusicWidgetsExtension;
+		};
+		F4DAADB712CA1646004F936F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5896B5064D7211C14D393585 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 868CA6D7B870CE83A88FEC02;
+			remoteInfo = SwingMusic;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -295,6 +317,22 @@
 		FBA7CE90E220DC32E9963928 /* AutoMix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMix.swift; sourceTree = "<group>"; };
 		FEF7C7A2AB25F761AE1A5940 /* NowPlayingArtworkPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingArtworkPage.swift; sourceTree = "<group>"; };
 		FF7B53B9B15A3FC6E96FB923 /* RecentlyPlayedWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentlyPlayedWidget.swift; sourceTree = "<group>"; };
+		A30872995913768DF15F2C68 /* DownloadBookkeeping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadBookkeeping.swift; sourceTree = "<group>"; };
+		6615E861A2D0794093C123C4 /* ArtistOfflineStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistOfflineStore.swift; sourceTree = "<group>"; };
+		E7CFE1B292CB7854D83D8E21 /* Fixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fixtures.swift; sourceTree = "<group>"; };
+		9C4E719E0FA784B4BCAA0A1D /* DownloadBookkeepingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadBookkeepingTests.swift; sourceTree = "<group>"; };
+		9D1E88ADF18F6C9A76CB3537 /* ArtistOfflineStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistOfflineStoreTests.swift; sourceTree = "<group>"; };
+		57E50E3CB3DBD40707EBAE74 /* PlaylistImageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistImageTests.swift; sourceTree = "<group>"; };
+		925F75C15C9C8B977B6627B6 /* TrackFavoriteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackFavoriteTests.swift; sourceTree = "<group>"; };
+		AAE271CF6DD5869BFB07E63F /* SwingMusicTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SwingMusicTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3661BB57C8518BA3AA446407 /* MixArtworkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixArtworkTests.swift; sourceTree = "<group>"; };
+		78BE13D1C1FE4AB38B9175DA /* MixOfflineStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixOfflineStoreTests.swift; sourceTree = "<group>"; };
+		B17058825A36831DE142881C /* ImageCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCacheTests.swift; sourceTree = "<group>"; };
+		2594A745A14807B71C1A8032 /* AlbumStatsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumStatsTests.swift; sourceTree = "<group>"; };
+		4B18F53B801F6D7EAF526F5F /* FavoritesQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesQueueTests.swift; sourceTree = "<group>"; };
+		C7E1D0BAA679B46E6C16867C /* FavoritesHeaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesHeaderTests.swift; sourceTree = "<group>"; };
+		0A51CFC2D5D51840A1357BA3 /* MixOfflineStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixOfflineStore.swift; sourceTree = "<group>"; };
+		9854AA384B8A4632939EE7C0 /* MixArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MixArtwork.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -303,6 +341,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				9C881951EA96943F082223C2 /* LNPopupUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8ABAC6BC10A5326E529CACC3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -367,6 +412,7 @@
 			children = (
 				7D5B577FC189E8C874456F53 /* SwingMusic.app */,
 				374F8522D51FF1F3DE4C0A8C /* SwingMusicWidgetsExtension.appex */,
+				AAE271CF6DD5869BFB07E63F /* SwingMusicTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -449,6 +495,9 @@
 				EB3D6D1C2E2F2AE9579A972D /* AudioPlayer.swift */,
 				FBA7CE90E220DC32E9963928 /* AutoMix.swift */,
 				147BA2C0B4FEE2E772D8559E /* DownloadManager.swift */,
+				A30872995913768DF15F2C68 /* DownloadBookkeeping.swift */,
+				6615E861A2D0794093C123C4 /* ArtistOfflineStore.swift */,
+				0A51CFC2D5D51840A1357BA3 /* MixOfflineStore.swift */,
 				1C42932DFE1E7FCC74205F5A /* Equalizer.swift */,
 				A4D8066B9F32F9D800B9B7A4 /* ScrobbleQueue.swift */,
 				8FBBD295F2B904EE2F8F5975 /* SleepTimer.swift */,
@@ -462,6 +511,7 @@
 				9AB6F9D51982A6E5E6006E48 /* AdaptiveDetailBackground.swift */,
 				30616FD40738DE88129D5132 /* AddToPlaylistSheet.swift */,
 				6D42E1AF0C8DCF7153AE49F9 /* AlbumCard.swift */,
+				9854AA384B8A4632939EE7C0 /* MixArtwork.swift */,
 				1250940564AB13A45D49807B /* AmbientBackground.swift */,
 				1329C8ACBEE78187F1844C5F /* ComponentExporter.swift */,
 				EF2E93B61880EE876F027A51 /* DownloadControl.swift */,
@@ -666,8 +716,27 @@
 			children = (
 				A148873D7F4FA825D88FD71F /* SwingMusic */,
 				451787FB04C4F9B56B2ACBAE /* SwingMusicWidgetExtension */,
+				1C7A7959C929DA7194F7BCCE /* SwingMusicTests */,
 				2F3D35C29FF33188494CFED9 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		1C7A7959C929DA7194F7BCCE /* SwingMusicTests */ = {
+			isa = PBXGroup;
+			children = (
+				E7CFE1B292CB7854D83D8E21 /* Fixtures.swift */,
+				9C4E719E0FA784B4BCAA0A1D /* DownloadBookkeepingTests.swift */,
+				9D1E88ADF18F6C9A76CB3537 /* ArtistOfflineStoreTests.swift */,
+				C7E1D0BAA679B46E6C16867C /* FavoritesHeaderTests.swift */,
+				4B18F53B801F6D7EAF526F5F /* FavoritesQueueTests.swift */,
+				2594A745A14807B71C1A8032 /* AlbumStatsTests.swift */,
+				B17058825A36831DE142881C /* ImageCacheTests.swift */,
+				78BE13D1C1FE4AB38B9175DA /* MixOfflineStoreTests.swift */,
+				3661BB57C8518BA3AA446407 /* MixArtworkTests.swift */,
+				57E50E3CB3DBD40707EBAE74 /* PlaylistImageTests.swift */,
+				925F75C15C9C8B977B6627B6 /* TrackFavoriteTests.swift */,
+			);
+			path = SwingMusicTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -713,6 +782,25 @@
 			productReference = 374F8522D51FF1F3DE4C0A8C /* SwingMusicWidgetsExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		09721917F95EB9465D2BF5F6 /* SwingMusicTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C9A3320EB645450B752E5929 /* Build configuration list for PBXNativeTarget "SwingMusicTests" */;
+			buildPhases = (
+				BD3F42585C9C1DCC1797AC54 /* Sources */,
+				8ABAC6BC10A5326E529CACC3 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CC770BF5458C3B211D6F24FB /* PBXTargetDependency */,
+			);
+			name = SwingMusicTests;
+			packageProductDependencies = (
+			);
+			productName = SwingMusicTests;
+			productReference = AAE271CF6DD5869BFB07E63F /* SwingMusicTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -729,6 +817,11 @@
 					E42545C4AAA7F68D4FF438E1 = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
+					};
+					09721917F95EB9465D2BF5F6 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+						TestTargetID = 868CA6D7B870CE83A88FEC02;
 					};
 				};
 			};
@@ -751,6 +844,7 @@
 			targets = (
 				868CA6D7B870CE83A88FEC02 /* SwingMusic */,
 				E42545C4AAA7F68D4FF438E1 /* SwingMusicWidgetsExtension */,
+				09721917F95EB9465D2BF5F6 /* SwingMusicTests */,
 			);
 		};
 /* End PBXProject section */
@@ -787,6 +881,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				904EB21E68505C35E9FD6C86 /* MixArtwork.swift in Sources */,
+				FC0D87A10A6B78DED124A4A3 /* MixOfflineStore.swift in Sources */,
+				08CC2A538CFF3884AEB9835C /* DownloadBookkeeping.swift in Sources */,
+				7594607CFF3D46D5DEBD6EF3 /* ArtistOfflineStore.swift in Sources */,
 				F481A53CA707A8BFC485A51C /* AMLLLyricsView.swift in Sources */,
 				E44C163C631C6CF4FA38AB4D /* AMLLModel.swift in Sources */,
 				5A7AA0E2206ABC948E668043 /* AMLLWordEmphasis.swift in Sources */,
@@ -904,6 +1002,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BD3F42585C9C1DCC1797AC54 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DC4C0227DC6C543E9EFF8039 /* Fixtures.swift in Sources */,
+				2661742A5DFCFC8EF41D3EDF /* DownloadBookkeepingTests.swift in Sources */,
+				A3487D619B27F625A98A14C2 /* ArtistOfflineStoreTests.swift in Sources */,
+				3E92DE0F11930AA9C293D1DB /* FavoritesHeaderTests.swift in Sources */,
+				8707304D00841EB889821477 /* FavoritesQueueTests.swift in Sources */,
+				49F3591CCCE4EB7CEB1BC189 /* AlbumStatsTests.swift in Sources */,
+				A5A42BDD6AE379128526AC2B /* ImageCacheTests.swift in Sources */,
+				AAC2C1EB9CEC466C9DAA9E08 /* MixOfflineStoreTests.swift in Sources */,
+				7AA402406E2F0F6D847BABF5 /* MixArtworkTests.swift in Sources */,
+				24DFE11980BB28FC801D3659 /* PlaylistImageTests.swift in Sources */,
+				C6F3368E3755D145B5A02072 /* TrackFavoriteTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -911,6 +1027,11 @@
 			isa = PBXTargetDependency;
 			target = E42545C4AAA7F68D4FF438E1 /* SwingMusicWidgetsExtension */;
 			targetProxy = DE9F99459956BF1B50CF1D9C /* PBXContainerItemProxy */;
+		};
+		CC770BF5458C3B211D6F24FB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 868CA6D7B870CE83A88FEC02 /* SwingMusic */;
+			targetProxy = F4DAADB712CA1646004F936F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1128,6 +1249,38 @@
 			};
 			name = Release;
 		};
+		D00598B37E5F957B17262577 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.swingmusic.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Swing Music Client.app/Swing Music Client";
+			};
+			name = Debug;
+		};
+		B4ACF7F1C41284353CAC9B3B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.swingmusic.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Swing Music Client.app/Swing Music Client";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1154,6 +1307,15 @@
 			buildConfigurations = (
 				61ABB1E3EDD2FFB3EA0F78F6 /* Debug */,
 				FA25F9991EC4EC533918DC0C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C9A3320EB645450B752E5929 /* Build configuration list for PBXNativeTarget "SwingMusicTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D00598B37E5F957B17262577 /* Debug */,
+				B4ACF7F1C41284353CAC9B3B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
