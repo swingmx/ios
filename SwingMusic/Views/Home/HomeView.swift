@@ -317,13 +317,13 @@ struct HomeView: View {
                 .contextMenu { albumMenuItems(a) }
         case .artist(let a):
             NavigationLink(value: a) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(spacing: 8) {
                     ArtistAvatar(artist: a, size: 150)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(spacing: 2) {
                         Text(a.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
                         Text("Artist").font(.system(size: 13)).foregroundStyle(.secondary)
                     }
-                    .frame(width: 150, alignment: .leading)
+                    .frame(width: 150)
                 }
             }
             .buttonStyle(PressableCardStyle())
@@ -365,9 +365,7 @@ struct HomeView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
-                        if let time = m.time, !time.isEmpty {
-                            Text(time).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
-                        }
+                        Text(m.typeLabel).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                     }
                     .frame(width: 150, alignment: .leading)
                 }
