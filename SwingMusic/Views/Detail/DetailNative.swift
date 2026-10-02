@@ -85,3 +85,69 @@ struct DetailFooter: View {
         return h > 0 ? "\(h) hr \(m) min" : "\(max(1, m)) minutes"
     }
 }
+
+// The "Stats" row on artist and album screens: listening stats the server computes for a group of tracks.
+struct StatsRow: View {
+    let stats: [ArtistStat]
+    // Tints stat icons; the screen's artist or album color.
+    let color: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Stats")
+                .font(.title2.bold())
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 18)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(stats, id: \.self) { stat in
+                        card(stat)
+                    }
+                }
+                .padding(.horizontal, 18)
+            }
+        }
+    }
+
+    private func card(_ stat: ArtistStat) -> some View {
+        let accent = color.flatMap { Color(rgbString: $0) } ?? .accentColor
+        return VStack(alignment: .leading, spacing: 0) {
+            if let image = stat.image, !image.isEmpty {
+                Img(url: API.shared.img(image, size: "small"), radius: 6)
+                    .frame(width: 32, height: 32)
+            } else {
+                Image(systemName: Self.icon(stat.cssclass))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(accent.gradient, in: .circle)
+            }
+            Spacer(minLength: 12)
+            Text(stat.value)
+                .font(.title3.weight(.bold))
+                .fontDesign(.rounded)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(stat.text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .padding(14)
+        .frame(width: 150, height: 130, alignment: .topLeading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+    }
+
+    static func icon(_ cssclass: String) -> String {
+        switch cssclass {
+        case "play_duration": "clock.fill"
+        case "played": "play.circle.fill"
+        case "toptrack": "music.note"
+        case "topalbum": "square.stack.fill"
+        case "completeness": "checkmark.circle.fill"
+        default: "chart.bar.fill"
+        }
+    }
+}

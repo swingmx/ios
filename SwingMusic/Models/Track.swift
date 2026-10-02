@@ -253,9 +253,11 @@ struct Playlist: Codable, Identifiable, Hashable {
 struct AlbumDetail: Codable {
     let info: Album
     let tracks: [Track]
+    // Same shape as the artist's, minus the top album and plus how complete the album is.
+    var stats: [ArtistStat]? = nil
 }
 
-struct ArtistStat: Decodable, Hashable {
+struct ArtistStat: Codable, Hashable {
     let cssclass: String
     let value: String
     let text: String

@@ -29,7 +29,7 @@ struct ArtistDetailView: View {
 
                     // Saved stats are frozen at download time, so they are only shown live.
                     if !isOfflineCopy, let stats = d.stats, !stats.isEmpty {
-                        statsSection(stats, color: d.artist.color)
+                        StatsRow(stats: stats, color: d.artist.color)
                     }
 
                     ArtistAboutSection(artistName: d.artist.name, hint: d.tracks.first?.title)
@@ -202,70 +202,12 @@ struct ArtistDetailView: View {
         }
     }
 
-    private func statsSection(_ stats: [ArtistStat], color: String?) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Stats")
-                .font(.title2.bold())
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 18)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(stats, id: \.self) { stat in
-                        statCard(stat, color: color)
-                    }
-                }
-                .padding(.horizontal, 18)
-            }
-        }
-    }
-
     private func statsLine(_ a: Artist) -> String {
         var parts: [String] = []
         if let tc = a.trackcount { parts.append("\(tc) \(tc == 1 ? "Song" : "Songs")") }
         if let ac = a.albumcount { parts.append("\(ac) \(ac == 1 ? "Album" : "Albums")") }
         if let dur = a.duration, dur > 0 { parts.append(DetailFooter.duration(dur)) }
         return parts.joined(separator: " · ")
-    }
-
-    private func statCard(_ stat: ArtistStat, color: String?) -> some View {
-        let accent = color.flatMap { Color(rgbString: $0) } ?? .accentColor
-        return VStack(alignment: .leading, spacing: 0) {
-            if let image = stat.image, !image.isEmpty {
-                Img(url: API.shared.img(image, size: "small"), radius: 6)
-                    .frame(width: 32, height: 32)
-            } else {
-                Image(systemName: statIcon(stat.cssclass))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 32, height: 32)
-                    .background(accent.gradient, in: .circle)
-            }
-            Spacer(minLength: 12)
-            Text(stat.value)
-                .font(.title3.weight(.bold))
-                .fontDesign(.rounded)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(stat.text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
-        .padding(14)
-        .frame(width: 150, height: 130, alignment: .topLeading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
-    }
-
-    private func statIcon(_ cssclass: String) -> String {
-        switch cssclass {
-        case "play_duration": "clock.fill"
-        case "played": "play.circle.fill"
-        case "toptrack": "music.note"
-        case "topalbum": "square.stack.fill"
-        default: "chart.bar.fill"
-        }
     }
 
     private func textColor(forRGB rgb: String?) -> Color {

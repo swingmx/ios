@@ -20,6 +20,11 @@ struct AlbumDetailView: View {
                         totalSeconds: d.info.duration ?? d.tracks.reduce(0) { $0 + $1.duration },
                         copyright: d.info.copyright
                     )
+                    // Saved stats are frozen at download time, so they are only shown live.
+                    if !isOfflineCopy, let stats = d.stats, !stats.isEmpty {
+                        StatsRow(stats: stats, color: d.info.color)
+                            .padding(.top, 28)
+                    }
                     Color.clear.frame(height: 100)
                 }
             } else {
