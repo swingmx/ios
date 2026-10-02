@@ -33,6 +33,10 @@ extension API {
         try await get("/artist/\(hash)", q: ["tracklimit": "100", "albumlimit": "100"])
     }
 
+    func artistTracks(_ hash: String) async throws -> [Track] {
+        try await get("/artist/\(hash)/tracks")
+    }
+
     func artistAlbums(_ hash: String) async throws -> [ArtistAlbumSection] {
         struct R: Decodable {
             let albums: [Album]?

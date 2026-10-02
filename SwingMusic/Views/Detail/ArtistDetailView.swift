@@ -7,7 +7,6 @@ struct ArtistDetailView: View {
     @State private var albumSections: [ArtistAlbumSection] = []
     @State private var similar: [Artist] = []
     @State private var bgImage: UIImage?
-    @State private var showAllTracks = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -84,14 +83,26 @@ struct ArtistDetailView: View {
     }
 
     private func topSongsList(_ d: ArtistDetail) -> some View {
-        let shown = showAllTracks ? d.tracks : Array(d.tracks.prefix(5))
+        let total = d.artist.trackcount ?? d.tracks.count
         return VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("Top Songs", showsChevron: d.tracks.count > 5) {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.9)) { showAllTracks.toggle() }
+            HStack(alignment: .firstTextBaseline) {
+                Text("Top Songs")
+                    .font(.title2.bold())
+                    .foregroundStyle(.primary)
+                Spacer()
+                if total > 5 {
+                    NavigationLink {
+                        ArtistTracksView(hash: hash, artistName: d.artist.name)
+                    } label: {
+                        Text("See All").font(.system(size: 14, weight: .semibold)).foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(.horizontal, 18)
 
             VStack(spacing: 0) {
-                ForEach(Array(shown.enumerated()), id: \.element.id) { i, t in
+                ForEach(Array(d.tracks.prefix(5).enumerated()), id: \.element.id) { i, t in
                     TrackRow(track: t, num: i + 1, active: state.player.current == t) {
                         state.player.play(t, from: d.tracks, source: .artist(hash))
                     }
@@ -114,16 +125,6 @@ struct ArtistDetailView: View {
         }
         .padding(.horizontal, 18)
         .contentShape(.rect)
-    }
-
-    @ViewBuilder
-    private func sectionHeader(_ title: String, showsChevron: Bool, action: @escaping () -> Void) -> some View {
-        if showsChevron {
-            Button(action: action) { sectionHeaderLabel(title, showsChevron: true) }
-                .buttonStyle(.plain)
-        } else {
-            sectionHeaderLabel(title, showsChevron: false)
-        }
     }
 
     @ViewBuilder
@@ -308,6 +309,46 @@ struct ArtistDetailView: View {
               (200...299).contains(http.statusCode),
               let img = UIImage(data: data) else { return }
         bgImage = img
+    }
+}
+
+struct ArtistTracksView: View {
+    let hash: String
+    let artistName: String
+    @EnvironmentObject var state: AppState
+    @State private var tracks: [Track] = []
+    @State private var loading = true
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            if loading && tracks.isEmpty {
+                ProgressView().tint(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 400)
+            } else if tracks.isEmpty {
+                Text("Couldn't load songs")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 400)
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
+                        TrackRow(track: t, num: i + 1, active: state.player.current == t) {
+                            state.player.play(t, from: tracks, source: .artist(hash))
+                        }
+                    }
+                }
+                .padding(.bottom, 100)
+            }
+        }
+        .squeezeMiniPlayer(state)
+        .background { AmbientBackground() }
+        .navigationTitle(artistName)
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard tracks.isEmpty else { return }
+            tracks = (try? await API.shared.artistTracks(hash)) ?? []
+            loading = false
+        }
     }
 }
 
