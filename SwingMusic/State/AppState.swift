@@ -75,12 +75,13 @@ final class AppState: ObservableObject {
 
     @Published var homePath = NavigationPath()
     @Published var libraryPath = NavigationPath()
+    @Published var favoritesPath = NavigationPath()
     @Published var searchPath = NavigationPath()
 
     let player = AudioPlayer.shared
     private var bag = Set<AnyCancellable>()
 
-    enum Tab: String { case home, library, search, settings }
+    enum Tab: String { case home, library, favorites, search, settings }
 
     enum NavTarget: Equatable {
         case album(Album)
@@ -250,12 +251,15 @@ final class AppState: ObservableObject {
     }
 
     private let favPageSize = 50
+    // The Favorites screen only previews each group; its See All pages load the rest, favPageSize at a time.
+    private let favPreviewTracks = 6
+    private let favPreviewCards = 24
 
     func loadFavorites() async {
         async let summary = try? await API.shared.favoritesSummary()
-        async let tracksPage = try? await API.shared.favoriteTracks(start: 0, limit: favPageSize)
-        async let albumsPage = try? await API.shared.favoriteAlbums(start: 0, limit: favPageSize)
-        async let artistsPage = try? await API.shared.favoriteArtists(start: 0, limit: favPageSize)
+        async let tracksPage = try? await API.shared.favoriteTracks(start: 0, limit: favPreviewTracks)
+        async let albumsPage = try? await API.shared.favoriteAlbums(start: 0, limit: favPreviewCards)
+        async let artistsPage = try? await API.shared.favoriteArtists(start: 0, limit: favPreviewCards)
 
         favTracks = (await tracksPage)?.tracks ?? []
         favAlbums = (await albumsPage)?.albums ?? []

@@ -106,6 +106,10 @@ struct ContentView: View {
                 LibraryView()
                     .blocksTouchesBehindBottomBars()
             }
+            Tab("Favorites", systemImage: "heart.fill", value: AppState.Tab.favorites) {
+                FavoritesTabView()
+                    .blocksTouchesBehindBottomBars()
+            }
             Tab(value: AppState.Tab.search, role: .search) {
                 SearchView()
                     .blocksTouchesBehindBottomBars()
@@ -130,6 +134,12 @@ struct ContentView: View {
             case .album(let a): state.libraryPath.append(a)
             case .artist(let a): state.libraryPath.append(a)
             case .folder(let f): state.libraryPath.append(f)
+            }
+        case .favorites:
+            switch target {
+            case .album(let a): state.favoritesPath.append(a)
+            case .artist(let a): state.favoritesPath.append(a)
+            case .folder(let f): state.favoritesPath.append(f)
             }
         default:
             state.tab = .home
