@@ -296,7 +296,7 @@ struct HomeView: View {
     private func serverSection(_ s: HomeSection) -> some View {
         section(s.title, subtitle: s.description) {
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
                     ForEach(Array(s.items.enumerated()), id: \.offset) { _, item in
                         homeItemCard(item)
                     }

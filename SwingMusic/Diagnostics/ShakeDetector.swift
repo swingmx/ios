@@ -1,6 +1,11 @@
 import SwiftUI
 import UIKit
 
+// Whether shaking the device opens a bug report. Off unless turned on in Settings.
+enum ShakeToReport {
+    static let key = "shakeToReportEnabled"
+}
+
 extension Notification.Name {
     static let deviceDidShake = Notification.Name("deviceDidShake")
 }

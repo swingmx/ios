@@ -5,6 +5,7 @@ struct SettingsView: View {
     @AppStorage("albumArtTapAction") private var albumArtTapAction = "album"
     @AppStorage("musixmatchWordByWord") private var musixmatchWordByWord = true
     @AppStorage(Net.allowInsecureTLSKey) private var allowInsecureTLS = false
+    @AppStorage(ShakeToReport.key) private var shakeToReport = false
 
     var body: some View {
         List {
@@ -176,7 +177,15 @@ struct SettingsView: View {
                 }
             }
 
-            Section(header: Text("Support"), footer: Text("Tip: shake your device anywhere in the app to report a problem.")) {
+            Section {
+                Toggle(isOn: $shakeToReport) {
+                    HStack {
+                        Image(systemName: "iphone.radiowaves.left.and.right")
+                            .foregroundStyle(.orange)
+                            .frame(width: 28)
+                        Text("Shake to Report")
+                    }
+                }
                 Button {
                     state.beginBugReport()
                 } label: {
@@ -187,6 +196,12 @@ struct SettingsView: View {
                         Text("Report a Problem")
                             .foregroundStyle(.primary)
                     }
+                }
+            } header: {
+                Text("Support")
+            } footer: {
+                if shakeToReport {
+                    Text("Tip: shake your device anywhere in the app to report a problem.")
                 }
             }
 
