@@ -357,13 +357,12 @@ struct HomeView: View {
         case .mix(let m):
             NavigationLink(value: m) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Img(urls: mixImageURLs(m), radius: 12,
-                        placeholderColor: m.extra.images?.first?.color ?? m.extra.image?.color)
+                    MixArtwork(mix: m, cornerRadius: 12)
                         .frame(width: 150, height: 150)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(m.tagline?.isEmpty == false ? m.tagline! : m.title)
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.primary.opacity(0.9))
+                            .foregroundStyle(.secondary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                         if let time = m.time, !time.isEmpty {
@@ -375,11 +374,6 @@ struct HomeView: View {
             }
             .buttonStyle(PressableCardStyle())
         }
-    }
-
-    private func mixImageURLs(_ m: Mix) -> [URL] {
-        guard let file = m.imageFile else { return [] }
-        return [API.shared.mixImg(file, size: "medium"), API.shared.img(file, size: "medium")].compactMap { $0 }
     }
 
     private func albumRail(_ albums: [Album]) -> some View {

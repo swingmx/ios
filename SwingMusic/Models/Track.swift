@@ -454,7 +454,7 @@ struct FolderResponse: Decodable {
     let path: String?
 }
 
-struct Mix: Decodable, Identifiable, Hashable {
+struct Mix: Codable, Identifiable, Hashable {
     let id: String
     let title: String
     let sourcehash: String
@@ -463,15 +463,17 @@ struct Mix: Decodable, Identifiable, Hashable {
     let tagline: String?
     let time: String?
 
-    struct Extra: Decodable, Hashable {
+    struct Extra: Codable, Hashable {
         let type: String?
         let og_sourcehash: String?
         let image: MixImageRef?
         let images: [MixImageRef]?
     }
-    struct MixImageRef: Decodable, Hashable {
+    struct MixImageRef: Codable, Hashable {
         let image: String?
         let color: String?
+        // "artist" images come from the artist image endpoint, anything else from track thumbnails.
+        var type: String? = nil
     }
 
     var imageFile: String? { extra.image?.image ?? extra.images?.first?.image }
@@ -492,6 +494,17 @@ struct Mix: Decodable, Identifiable, Hashable {
         extra = (try? c.decode(Extra.self, forKey: .extra)) ?? Extra(type: nil, og_sourcehash: nil, image: nil, images: nil)
         tagline = try? c.decode(String.self, forKey: .tagline)
         time = try? c.decode(String.self, forKey: .time)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(title, forKey: .title)
+        try c.encode(sourcehash, forKey: .sourcehash)
+        try c.encodeIfPresent(trackcount, forKey: .trackcount)
+        try c.encode(extra, forKey: .extra)
+        try c.encodeIfPresent(tagline, forKey: .tagline)
+        try c.encodeIfPresent(time, forKey: .time)
     }
 
     static func == (lhs: Mix, rhs: Mix) -> Bool { lhs.id == rhs.id }

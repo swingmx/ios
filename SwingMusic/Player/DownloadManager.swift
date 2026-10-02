@@ -9,6 +9,8 @@ final class DownloadManager: ObservableObject {
     @Published var downloadedTracks: [Track] = []
     @Published var downloadedHashes: Set<String> = []
     @Published var downloadGroups: [DownloadGroup] = []
+    // Downloaded mixes by mix id, for showing and opening them from Downloads.
+    @Published private(set) var savedMixes: [String: Mix] = [:]
 
     struct DownloadGroup: Codable, Identifiable, Hashable {
         enum Kind: String, Codable { case album, playlist, folder, mix, artist }
@@ -53,10 +55,18 @@ final class DownloadManager: ObservableObject {
         loadMetadata()
         loadPending()
         loadGroups()
+        savedMixes = Dictionary(MixOfflineStore.shared.all().map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         resumePending()
     }
 
     nonisolated static func artistGroupID(_ artisthash: String) -> String { "artist:\(artisthash)" }
+    nonisolated static func mixGroupID(_ mixID: String) -> String { "mix:\(mixID)" }
+
+    // The album hash, artist hash, mix id, etc. a group was created for: its id after the "kind:" prefix.
+    nonisolated static func itemID(of group: DownloadGroup) -> String {
+        guard let colon = group.id.firstIndex(of: ":") else { return group.id }
+        return String(group.id[group.id.index(after: colon)...])
+    }
 
     var ungroupedTracks: [Track] {
         let grouped = Set(downloadGroups.flatMap { $0.trackHashes })
@@ -144,8 +154,10 @@ final class DownloadManager: ObservableObject {
                 cancelPending(hash)
             }
         }
-        if group.kind == .artist {
-            removeArtistSnapshot(String(group.id.dropFirst(Self.artistGroupID("").count)))
+        switch group.kind {
+        case .artist: removeArtistSnapshot(Self.itemID(of: group))
+        case .mix: removeMixSnapshot(Self.itemID(of: group))
+        case .album, .playlist, .folder: break
         }
         saveGroups()
     }
@@ -188,9 +200,14 @@ final class DownloadManager: ObservableObject {
             let file = localURL(for: track)
             try? fileManager.removeItem(at: file)
         }
-        for group in downloadGroups where group.kind == .artist {
-            ArtistOfflineStore.shared.remove(String(group.id.dropFirst(Self.artistGroupID("").count)))
+        for group in downloadGroups {
+            switch group.kind {
+            case .artist: ArtistOfflineStore.shared.remove(Self.itemID(of: group))
+            case .mix: MixOfflineStore.shared.remove(Self.itemID(of: group))
+            case .album, .playlist, .folder: break
+            }
         }
+        savedMixes.removeAll()
         cancelled.formUnion(downloads.compactMap { hash, state in
             if case .downloading = state { return hash }
             return nil
@@ -453,6 +470,39 @@ final class DownloadManager: ObservableObject {
         }
     }
 
+    // MARK: Mixes
+
+    // Saves the mix as shown (title, description, artwork), then downloads its tracks.
+    func downloadMix(_ mix: Mix, tracks: [Track]) async {
+        do {
+            try MixOfflineStore.shared.save(mix)
+            savedMixes[mix.id] = mix
+        } catch {
+            Log.error("download", "Saving mix \(mix.id) failed: \(error.localizedDescription)")
+        }
+        downloadAll(tracks, group: DownloadGroup(
+            id: Self.mixGroupID(mix.id), kind: .mix, name: mix.title,
+            image: mix.imageFile ?? "", trackHashes: tracks.map(\.trackhash)))
+        await cacheOfflineImages(mix.offlineImageURLs)
+    }
+
+    private func removeMixSnapshot(_ mixID: String) {
+        if let mix = savedMixes[mixID] ?? MixOfflineStore.shared.mix(for: mixID) {
+            for url in DownloadBookkeeping.imagesToRemove(mix.offlineImageURLs, keeping: thumbnailsInUse()) {
+                ImageDiskCache.removeOffline(for: url)
+            }
+        }
+        MixOfflineStore.shared.remove(mixID)
+        savedMixes.removeValue(forKey: mixID)
+    }
+
+    // Track thumbnails remaining downloads still show, which removed groups must leave in place.
+    private func thumbnailsInUse() -> Set<URL> {
+        Set(downloadedTracks.flatMap { t in
+            ["small", "medium"].compactMap { API.shared.img(t.image, size: $0) }
+        })
+    }
+
     private func cacheOfflineImages(_ urls: [URL]) async {
         for url in urls where !ImageDiskCache.hasOffline(for: url) {
             var req = URLRequest(url: url)
@@ -466,10 +516,7 @@ final class DownloadManager: ObservableObject {
     private func removeArtistSnapshot(_ artisthash: String) {
         let store = ArtistOfflineStore.shared
         if let detail = store.detail(for: artisthash) {
-            let kept = Set(downloadedTracks.flatMap { t in
-                ["small", "medium"].compactMap { API.shared.img(t.image, size: $0) }
-            })
-            for url in DownloadBookkeeping.imagesToRemove(ArtistOfflineStore.imageURLs(for: detail), keeping: kept) {
+            for url in DownloadBookkeeping.imagesToRemove(ArtistOfflineStore.imageURLs(for: detail), keeping: thumbnailsInUse()) {
                 ImageDiskCache.removeOffline(for: url)
             }
         }

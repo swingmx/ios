@@ -88,14 +88,14 @@ struct DownloadsView: View {
 
     @ViewBuilder
     private func groupLink(_ group: DownloadManager.DownloadGroup) -> some View {
-        let realID = group.id.contains(":") ? String(group.id[group.id.firstIndex(of: ":")!...].dropFirst()) : group.id
+        let realID = DownloadManager.itemID(of: group)
         switch group.kind {
         case .album:
             NavigationLink(value: Album(stub: realID, title: group.name, image: group.image, date: nil, albumartists: nil)) { groupRow(group) }
         case .playlist:
             NavigationLink(value: Playlist(stub: realID, name: group.name, image: group.image)) { groupRow(group) }
         case .mix:
-            NavigationLink(value: Mix(stub: realID, title: group.name, image: group.image)) { groupRow(group) }
+            NavigationLink(value: dm.savedMixes[realID] ?? Mix(stub: realID, title: group.name, image: group.image)) { groupRow(group) }
         case .folder:
             NavigationLink(value: group) { groupRow(group) }
         case .artist:
@@ -106,7 +106,10 @@ struct DownloadsView: View {
     private func groupRow(_ group: DownloadManager.DownloadGroup) -> some View {
         HStack(spacing: 14) {
             ZStack {
-                if group.image.isEmpty {
+                if group.kind == .mix, let mix = dm.savedMixes[DownloadManager.itemID(of: group)] {
+                    MixArtwork(mix: mix, cornerRadius: 8)
+                        .frame(width: 44, height: 44)
+                } else if group.image.isEmpty {
                     RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.primary.opacity(0.08))
                         .frame(width: 44, height: 44)
                     Image(systemName: icon(group.kind)).font(.system(size: 18)).foregroundStyle(.blue)

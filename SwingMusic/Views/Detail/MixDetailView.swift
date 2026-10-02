@@ -9,11 +9,6 @@ struct MixDetailView: View {
 
     private var source: AudioPlayer.PlaySource { .mix(id: mix.id, sourcehash: mix.sourcehash) }
 
-    private func imageURLs(_ size: String) -> [URL] {
-        guard let file = mix.imageFile else { return [] }
-        return [API.shared.mixImg(file, size: size), API.shared.img(file, size: size)].compactMap { $0 }
-    }
-
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
@@ -32,20 +27,23 @@ struct MixDetailView: View {
         }
         .squeezeMiniPlayer(state)
         .background { AdaptiveDetailBackground(image: bgImage) }
-        .navigationTitle(mix.title)
-        .navigationBarTitleDisplayMode(.inline)
+        .detailScrollTitle(mix.title, after: 260)
         .toolbar {
             if !tracks.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
-                    CollectionActionsMenu(tracks: tracks, group: DownloadManager.DownloadGroup(
-                        id: "mix:\(mix.id)", kind: .mix, name: mix.title,
-                        image: "", trackHashes: tracks.map { $0.trackhash }))
+                    CollectionActionsMenu(
+                        tracks: tracks,
+                        group: DownloadManager.DownloadGroup(
+                            id: DownloadManager.mixGroupID(mix.id), kind: .mix, name: mix.title,
+                            image: mix.imageFile ?? "", trackHashes: tracks.map { $0.trackhash }),
+                        download: { await DownloadManager.shared.downloadMix(mix, tracks: tracks) }
+                    )
                 }
             }
         }
         .task {
             tracks = (try? await API.shared.mixTracks(id: mix.id, sourcehash: mix.sourcehash, ogSourcehash: mix.ogSourcehash)) ?? []
-            if tracks.isEmpty, let group = DownloadManager.shared.downloadGroups.first(where: { $0.id == "mix:\(mix.id)" }) {
+            if tracks.isEmpty, let group = DownloadManager.shared.downloadGroups.first(where: { $0.id == DownloadManager.mixGroupID(mix.id) }) {
                 tracks = DownloadManager.shared.tracks(in: group)
             }
             loading = false
@@ -71,14 +69,9 @@ struct MixDetailView: View {
 
     private var header: some View {
         VStack(spacing: 16) {
-            Text(mix.title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.top, 16)
-
-            Img(urls: imageURLs("medium"), radius: 14, placeholderColor: mix.extra.images?.first?.color ?? mix.extra.image?.color)
+            MixArtwork(mix: mix, cornerRadius: 14)
                 .frame(width: 220, height: 220)
+                .padding(.top, 16)
                 .shadow(color: .black.opacity(0.6), radius: 30, y: 10)
 
             VStack(spacing: 6) {
@@ -106,7 +99,7 @@ struct MixDetailView: View {
     }
 
     private func loadBg() async {
-        for url in imageURLs("medium") {
+        for url in mix.backgroundURLs {
             var req = URLRequest(url: url)
             if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
             if let (data, _) = try? await Net.session.data(for: req), let img = UIImage(data: data) {
@@ -114,5 +107,6 @@ struct MixDetailView: View {
                 return
             }
         }
+        bgImage = mix.backgroundURLs.lazy.compactMap { ImageDiskCache.image(for: $0) }.first
     }
 }

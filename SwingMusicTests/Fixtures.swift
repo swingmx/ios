@@ -42,3 +42,28 @@ enum Fixtures {
     ]
     """.utf8)
 }
+
+extension Fixtures {
+    // Shaped like a track mix from GET /nothome/: no image of its own, composed from up to three.
+    static let trackMixResponse = Data("""
+    {
+      "id": "t1abc", "title": "Think Fast Radio", "sourcehash": "src1", "trackcount": 40,
+      "description": "Featuring Dominic Fike, LANY, mxmtoon, Mitski and more", "time": "2 days ago",
+      "extra": {
+        "type": "track", "og_sourcehash": "og1",
+        "images": [
+          {"image": "al1.webp", "type": "album", "color": "rgb(200, 150, 100)"},
+          {"image": "ar1.webp", "type": "artist", "color": "rgb(20, 30, 40)"},
+          {"image": "ar2.webp", "type": "artist", "color": "rgb(90, 90, 90)"},
+          {"image": "ar3.webp", "type": "artist", "color": "rgb(1, 2, 3)"}
+        ]
+      }
+    }
+    """.utf8)
+
+    // An artist mix carries its own image.
+    static let artistMixResponse = Data("""
+    {"id": "a1xyz", "title": "LANY Radio", "sourcehash": "src2",
+     "extra": {"type": "artist", "image": {"image": "lany.webp", "color": "rgb(10, 20, 30)"}}}
+    """.utf8)
+}
