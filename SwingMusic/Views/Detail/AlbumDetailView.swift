@@ -28,7 +28,7 @@ struct AlbumDetailView: View {
             }
         }
         .squeezeMiniPlayer(state)
-        .background { AdaptiveDetailBackground(image: bgImage) }
+        .detailBackground(bgImage)
         .detailScrollTitle(detail?.info.title ?? "", after: 330)
         .toolbar {
             if let d = detail {

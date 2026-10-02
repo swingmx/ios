@@ -27,7 +27,7 @@ struct MixDetailView: View {
             }
         }
         .squeezeMiniPlayer(state)
-        .background { AdaptiveDetailBackground(image: bgImage) }
+        .detailBackground(bgImage)
         .detailScrollTitle(mix.title, after: 260)
         .toolbar {
             if !tracks.isEmpty {

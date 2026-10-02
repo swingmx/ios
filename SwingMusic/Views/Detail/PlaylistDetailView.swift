@@ -31,7 +31,7 @@ struct PlaylistDetailView: View {
             }
         }
         .squeezeMiniPlayer(state)
-        .background { AdaptiveDetailBackground(image: bgImage) }
+        .detailBackground(bgImage)
         .detailScrollTitle(name, after: 300)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

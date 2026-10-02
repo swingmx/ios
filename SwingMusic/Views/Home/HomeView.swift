@@ -365,7 +365,10 @@ struct HomeView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
-                        Text(m.typeLabel).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                        // Only recently played mixes carry a play time; the type label takes its place there.
+                        if let time = m.time, !time.isEmpty {
+                            Text(m.typeLabel).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                        }
                     }
                     .frame(width: 150, alignment: .leading)
                 }
