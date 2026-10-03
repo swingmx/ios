@@ -15,10 +15,10 @@ struct TrackRow: View {
                     if let n = num {
                         ZStack {
                             if active && !showArt {
-                                Bars(color: .accentColor)
+                                NowPlayingIndicator(color: .accentColor)
                             } else {
                                 Text("\(n)")
-                                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                                    .font(.body.monospacedDigit())
                                     .foregroundStyle(.secondary)
                                     .fixedSize()
                             }
@@ -30,8 +30,8 @@ struct TrackRow: View {
                         ZStack {
                             AlbumArt(track: track, size: 46)
                             if active {
-                                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.black.opacity(0.62))
-                                Bars(color: .white).scaleEffect(0.7)
+                                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.black.opacity(0.45))
+                                NowPlayingIndicator(color: .white)
                             }
                         }
                         .frame(width: 46, height: 46)
@@ -39,14 +39,14 @@ struct TrackRow: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(track.title)
-                            .font(.system(size: 15, weight: active ? .semibold : .regular))
-                            .foregroundStyle(.primary.opacity(active ? 1 : 0.9))
+                            .font(.body)
+                            .foregroundStyle(.primary)
                             .lineLimit(1)
                             .explicitBadge(track.isExplicit)
                         HStack(spacing: 4) {
                             downloadIndicator
                             Text(track.allArtists)
-                                .font(.system(size: 13))
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
@@ -55,8 +55,8 @@ struct TrackRow: View {
                     Spacer(minLength: 8)
 
                     Text(track.duration.mmss)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
                 }
                 .contentShape(Rectangle())
             }
@@ -100,7 +100,6 @@ struct TrackRow: View {
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
-        .background(active ? Color.primary.opacity(0.06) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .pullActions(
             leading: PullAction(label: "Add to queue", icon: "text.badge.plus", armedColor: .green) {
                 AudioPlayer.shared.addLast(track)
@@ -144,6 +143,21 @@ struct TrackRow: View {
                     .foregroundStyle(.blue)
             }
         }
+    }
+}
+
+// The playing track's marker: the system waveform, moving while audio plays and still when paused.
+// Only the active row creates one, so only that row follows the player's state.
+struct NowPlayingIndicator: View {
+    var color: Color = .accentColor
+    @ObservedObject private var player = AudioPlayer.shared
+
+    var body: some View {
+        Image(systemName: "waveform")
+            .font(.body.weight(.semibold))
+            .foregroundStyle(color)
+            .symbolEffect(.variableColor.iterative.dimInactiveLayers, options: .repeating, isActive: player.playing)
+            .accessibilityLabel(player.playing ? "Now playing" : "Paused")
     }
 }
 

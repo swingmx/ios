@@ -136,10 +136,12 @@ struct NowPlayingArtworkPage: View {
                             ListenTogetherNowPlayingBadge()
                         }
 
-                        Text(song.artistText)
-                            .font(.title3)
-                            .foregroundStyle(.white.opacity(0.64))
-                            .lineLimit(1)
+                        NowPlayingArtistLine(song: song) {
+                            Text(song.artistText)
+                                .font(.title3)
+                                .foregroundStyle(.white.opacity(0.64))
+                                .lineLimit(1)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 

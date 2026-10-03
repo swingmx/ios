@@ -71,6 +71,10 @@ final class API {
     var token: String? {
         get {
             if let t = cachedToken { return t }
+            if UserDefaults.standard.string(forKey: "server") == nil {
+                Keychain.set(nil, for: "token")
+                return nil
+            }
             if let legacy = UserDefaults.standard.string(forKey: "token") {
                 Keychain.set(legacy, for: "token")
                 UserDefaults.standard.removeObject(forKey: "token")

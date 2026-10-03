@@ -1,5 +1,5 @@
 <div align="center" style="display: flex; justify-content: center; align-items: center;">
-  <img class="lo" src='github/images/logo-fill.light.svg' style="height: 4rem">
+  <img src='github/images/icon.png' width="96">
 </div>
 <div align="center" style="font-size: 2rem"><b>Swing Music iOS Client</b></div>
 

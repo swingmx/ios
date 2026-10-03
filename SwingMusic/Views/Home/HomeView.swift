@@ -201,7 +201,7 @@ struct HomeView: View {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .fill(.black.opacity(0.5))
                             .frame(width: 52, height: 52)
-                        Bars(color: .white).scaleEffect(0.7)
+                        NowPlayingIndicator(color: .white)
                     }
                 }
 

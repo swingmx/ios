@@ -83,10 +83,12 @@ struct NowPlayingSongHeader: View {
                     ListenTogetherNowPlayingBadge()
                 }
 
-                Text(artistText)
-                    .font(usesReferenceLayout ? .title3 : .subheadline)
-                    .foregroundStyle(.white.opacity(0.64))
-                    .lineLimit(1)
+                NowPlayingArtistLine(song: song) {
+                    Text(artistText)
+                        .font(usesReferenceLayout ? .title3 : .subheadline)
+                        .foregroundStyle(.white.opacity(0.64))
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -151,10 +153,12 @@ struct NowPlayingLandscapeSongHeader: View {
                     ListenTogetherNowPlayingBadge()
                 }
 
-                Text(song.artistText)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.64))
-                    .lineLimit(1)
+                NowPlayingArtistLine(song: song) {
+                    Text(song.artistText)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.64))
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -176,5 +180,25 @@ struct NowPlayingLandscapeSongHeader: View {
             NowPlayingSongActions(song: song)
         }
         .frame(height: 52)
+    }
+}
+
+// The artist line under the title: tapping it lists the track's artists and album.
+struct NowPlayingArtistLine<Label: View>: View {
+    @EnvironmentObject private var state: AppState
+    let song: Song
+    @ViewBuilder let label: Label
+    @State private var showsArtists = false
+
+    var body: some View {
+        Button { showsArtists = true } label: { label }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows the artists and album of this song")
+            .sheet(isPresented: $showsArtists) {
+                NowPlayingArtistsSheet(song: song)
+                    .environmentObject(state)
+                    .presentationDetents([.height(CGFloat(NowPlayingArtistsSheet.rowCount(for: song)) * 64 + 64)])
+                    .presentationDragIndicator(.visible)
+            }
     }
 }
