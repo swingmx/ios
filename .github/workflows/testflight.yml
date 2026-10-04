@@ -14,9 +14,9 @@ jobs:
     timeout-minutes: 60
 
     env:
-      # Builds up to 18 were uploaded by hand, so CI numbers continue from there.
+      # Builds up to 19 were uploaded by hand, so CI numbers continue from there.
       BUILD_NUMBER: ${{ github.run_number }}
-      BUILD_OFFSET: 18
+      BUILD_OFFSET: 19
 
     steps:
       - uses: actions/checkout@v4

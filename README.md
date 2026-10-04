@@ -5,7 +5,7 @@
 
 <div align="center"><b><sub><code>v1.0.0 Beta 10</code></sub></b></div>
 
-**<div align="center" style="padding-top: 1.25rem"><a href="https://github.com/sponsors/swingmx" target="_blank">Sponsor Us ❤️</a> • [Swing Music Docs](https://swingmx.com/guide/introduction.html) • [r/SwingMusicApp](https://www.reddit.com/r/SwingMusicApp)</div>**
+**<div align="center" style="padding-top: 1.25rem">[Join the Beta](https://testflight.apple.com/join/68bWKBss) • <a href="https://github.com/sponsors/swingmx" target="_blank">Sponsor Us ❤️</a> • [Swing Music Docs](https://swingmx.com/guide/introduction.html) • [r/SwingMusicApp](https://www.reddit.com/r/SwingMusicApp)</div>**
 
 ##
 
@@ -59,7 +59,7 @@ More features will be implemented in the future.
 
 ### How to use
 
-Install the app via TestFlight. When you launch the app, enter your server address, username and password to log in.
+Install the app via [TestFlight](https://testflight.apple.com/join/68bWKBss). When you launch the app, enter your server address, username and password to log in.
 
 ### Thanks to
 
