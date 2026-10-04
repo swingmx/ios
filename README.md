@@ -70,3 +70,7 @@ Install the app via [TestFlight](https://testflight.apple.com/join/68bWKBss). Wh
 - [LNPopupUI](https://github.com/LeoNatan/LNPopupUI)
 - [LRCLIB](https://lrclib.net)
 - [MusicBrainz](https://musicbrainz.org) & [Wikipedia](https://www.wikipedia.org)
+
+### License
+
+This software is provided to you with terms stated in the AGPLv3 License. Read the full text in the `LICENSE` file located at the root of this repository.
