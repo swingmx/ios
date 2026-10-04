@@ -55,7 +55,11 @@ final class AudioPlayer: ObservableObject {
     @Published var shuffle = false
     @Published var loop: LoopMode = .off
     @Published var crossfadeDuration: Double = UserDefaults.standard.double(forKey: "crossfadeDuration") {
-        didSet { UserDefaults.standard.set(crossfadeDuration, forKey: "crossfadeDuration") }
+        didSet {
+            UserDefaults.standard.set(crossfadeDuration, forKey: "crossfadeDuration")
+            // A track prepared for AutoMix starts at its cue point, not at the beginning.
+            if (oldValue > 0) != (crossfadeDuration > 0), !isCrossfading { discardPrepared() }
+        }
     }
     @Published var autoplay: Bool = UserDefaults.standard.bool(forKey: "autoplay") {
         didSet {
@@ -65,7 +69,10 @@ final class AudioPlayer: ObservableObject {
     }
     private var autoplayLoading = false
     @Published var audioQuality: AudioQuality = AudioQuality(rawValue: UserDefaults.standard.string(forKey: "audioQuality") ?? "high") ?? .high {
-        didSet { UserDefaults.standard.set(audioQuality.rawValue, forKey: "audioQuality") }
+        didSet {
+            UserDefaults.standard.set(audioQuality.rawValue, forKey: "audioQuality")
+            if !isCrossfading { discardPrepared() }
+        }
     }
 
     enum AudioQuality: String, CaseIterable {
@@ -399,6 +406,12 @@ final class AudioPlayer: ObservableObject {
 
     func next() {
         guard !queue.isEmpty else { return }
+        if let prep = prepared, !isCrossfading, prep.item.status != .failed,
+           Self.isNextUp(prep.track, queue: queue, index: index, loop: loop) {
+            log()
+            handOver(to: prep)
+            return
+        }
         if loop == .one { seek(0); player?.play(); return }
         if index < queue.count - 1 { index += 1 }
         else if loop == .all { reshuffleForNewRound(); index = 0 }
@@ -645,6 +658,7 @@ final class AudioPlayer: ObservableObject {
                 if sec != s.lastActivitySecond {
                     s.lastActivitySecond = sec
                     s.updateNowPlaying()
+                    s.checkPreload()
                     s.checkCrossfade()
                     let playing = s.playing, progress = s.time, duration = s.total
                     Task { await ActivityManager.shared.updateState(playing: playing, progress: progress, duration: duration) }
@@ -685,13 +699,76 @@ final class AudioPlayer: ObservableObject {
         Task { @MainActor in self.log(); self.next() }
     }
 
+    // Plays the preloaded next track straight away, without the gap of loading it from scratch.
+    private func handOver(to prep: Prepared) {
+        fadeTimer?.invalidate(); fadeTimer = nil
+        if let o = obs { player?.removeTimeObserver(o); obs = nil }
+        NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)
+        player?.pause()
+        index += 1
+        current = queue[index]
+        extendForAutoplayIfNeeded()
+        prep.player.volume = volume
+        adopt(prep, rate: 1)
+    }
+
+    // Makes a prepared player the current one and starts it.
+    private func adopt(_ prep: Prepared, rate: Float) {
+        prep.statusObs?.invalidate()
+        prepared = nil
+        player = prep.player
+        assetLoader = prep.loader
+        streamCandidates = prep.candidates
+        streamCandidateIndex = 0
+        streamHeaders = authHeaders()
+        observeFailure(of: prep.item, track: prep.track)
+        NotificationCenter.default.addObserver(self, selector: #selector(ended), name: .AVPlayerItemDidPlayToEndTime, object: prep.item)
+        setupTimeObserver()
+        prep.player.playImmediately(atRate: rate)
+        resetClock(to: prep.player.currentTime().seconds)
+        playing = true
+        started = Date()
+        startTS = Int(Date().timeIntervalSince1970)
+        total = Double(prep.track.duration)
+        lastActivitySecond = -1
+        updateNowPlaying()
+        updateArtwork(prep.track)
+        setupCrossfadeObserver()
+        automixDidStart(prep.track)
+        Task { await ActivityManager.shared.start(track: prep.track, accentHex: "#FF375F") }
+    }
+
     private func setupCrossfadeObserver() {
         guard crossfadeDuration > 0 else { return }
     }
 
     private var isCrossfading = false
 
-    private var prepared: (track: Track, player: AVPlayer, item: AVPlayerItem, loader: AuthStreamLoader?)?
+    // The next track, loaded ahead so it can start without a gap.
+    private struct Prepared {
+        let track: Track
+        let player: AVPlayer
+        let item: AVPlayerItem
+        let loader: AuthStreamLoader?
+        // Every stream URL for the track, so a failure after handing over can fall back to the others.
+        let candidates: [URL]
+        var statusObs: NSKeyValueObservation?
+    }
+
+    private var prepared: Prepared?
+
+    // How long before the current track ends the next one starts loading.
+    nonisolated static let preloadLead: Double = 30
+
+    nonisolated static func shouldPreload(time: Double, total: Double, loop: LoopMode) -> Bool {
+        loop != .one && total > 0 && total - time <= preloadLead
+    }
+
+    // Whether `track` is what next() would play after the track at `index`.
+    nonisolated static func isNextUp(_ track: Track, queue: [Track], index: Int, loop: LoopMode) -> Bool {
+        loop != .one && queue.indices.contains(index + 1) && queue[index + 1] == track
+    }
+
     private var fadeTimer: Timer?
 
     private func automixDidStart(_ track: Track) {
@@ -703,6 +780,14 @@ final class AudioPlayer: ObservableObject {
 
     private var upcomingTrack: Track? {
         index + 1 < queue.count ? queue[index + 1] : nil
+    }
+
+    private func checkPreload() {
+        // The queue may have changed since the track was prepared.
+        if let prep = prepared, prep.track != upcomingTrack, !isCrossfading { discardPrepared() }
+        guard prepared == nil, !isCrossfading, upcomingTrack != nil,
+              Self.shouldPreload(time: time, total: total, loop: loop) else { return }
+        prepareNext()
     }
 
     private func checkCrossfade() {
@@ -718,35 +803,44 @@ final class AudioPlayer: ObservableObject {
         }
     }
 
-    private func makeItem(for track: Track) -> (AVPlayerItem, AuthStreamLoader?)? {
+    private func makeItem(for track: Track) -> (AVPlayerItem, AuthStreamLoader?, [URL])? {
         let localURL = DownloadManager.shared.localURL(for: track)
         if FileManager.default.fileExists(atPath: localURL.path) {
-            return (AVPlayerItem(url: localURL), nil)
+            return (AVPlayerItem(url: localURL), nil, [])
         }
         let p = streamParams
-        guard let url = API.shared.streamURLs(track.trackhash, filepath: track.filepath, container: p.container, quality: p.quality).first
-        else { return nil }
+        let candidates = API.shared.streamURLs(track.trackhash, filepath: track.filepath, container: p.container, quality: p.quality)
+        guard let url = candidates.first else { return nil }
         var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
         comps?.scheme = "swingstream"
         let asset = AVURLAsset(url: comps?.url ?? url)
         let loader = AuthStreamLoader(realURL: url, headers: authHeaders(), fileExtension: (track.filepath as NSString).pathExtension)
         asset.resourceLoader.setDelegate(loader, queue: AuthStreamLoader.queue)
-        return (AVPlayerItem(asset: asset), loader)
+        return (AVPlayerItem(asset: asset), loader, candidates)
     }
 
     private func prepareNext() {
-        guard let next = upcomingTrack, let (item, loader) = makeItem(for: next) else { return }
+        guard let next = upcomingTrack, let (item, loader, candidates) = makeItem(for: next) else { return }
         item.audioTimePitchAlgorithm = .timeDomain
         let p = AVPlayer(playerItem: item)
         p.volume = 0
         p.allowsExternalPlayback = false
-        if let cue = AutoMixStore.shared.info(for: next.trackhash)?.cueIn, cue > 0.05 {
+        if crossfadeDuration > 0, let cue = AutoMixStore.shared.info(for: next.trackhash)?.cueIn, cue > 0.05 {
             p.seek(to: CMTime(seconds: cue, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         }
-        prepared = (next, p, item, loader)
+        // Fill the audio buffers once the item can play, so starting it is instant. Prerolling earlier throws.
+        let statusObs = p.observe(\.status, options: [.new]) { player, _ in
+            guard player.status == .readyToPlay else { return }
+            Task { @MainActor in
+                guard player.rate == 0, player.status == .readyToPlay else { return }
+                player.preroll(atRate: 1)
+            }
+        }
+        prepared = Prepared(track: next, player: p, item: item, loader: loader, candidates: candidates, statusObs: statusObs)
     }
 
     private func discardPrepared() {
+        prepared?.statusObs?.invalidate()
         prepared?.player.pause()
         prepared = nil
     }
@@ -773,28 +867,9 @@ final class AudioPlayer: ObservableObject {
         let newInfo = AutoMixStore.shared.info(for: next.trackhash)
         let startRate: Float = (oldInfo.flatMap { newInfo?.rateToMatch($0) }) ?? 1
 
-        if let prep = prepared, prep.track == next {
-            prepared = nil
-            player = prep.player
-            assetLoader = prep.loader
-            streamCandidates = []
-            streamCandidateIndex = 0
-            observeFailure(of: prep.item, track: next)
-            NotificationCenter.default.addObserver(self, selector: #selector(ended), name: .AVPlayerItemDidPlayToEndTime, object: prep.item)
-            setupTimeObserver()
+        if let prep = prepared, prep.track == next, prep.item.status != .failed {
             prep.player.volume = 0
-            prep.player.playImmediately(atRate: startRate)
-            resetClock(to: prep.player.currentTime().seconds)
-            playing = true
-            started = Date()
-            startTS = Int(Date().timeIntervalSince1970)
-            total = Double(next.duration)
-            lastActivitySecond = -1
-            updateNowPlaying()
-            updateArtwork(next)
-            setupCrossfadeObserver()
-            automixDidStart(next)
-            Task { await ActivityManager.shared.start(track: next, accentHex: "#FF375F") }
+            adopt(prep, rate: startRate)
             runFade(from: oldPlayer, to: prep.player, duration: fade, startRate: startRate)
         } else {
             discardPrepared()
