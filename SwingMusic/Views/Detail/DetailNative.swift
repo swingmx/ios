@@ -3,6 +3,7 @@ import SwiftUI
 struct DetailPlayButtons: View {
     let play: () -> Void
     let shuffle: () -> Void
+    @Environment(\.detailTint) private var tint
 
     var body: some View {
         HStack(spacing: 12) {
@@ -12,8 +13,10 @@ struct DetailPlayButtons: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                     .frame(maxWidth: 160)
+                    .foregroundStyle(tint == nil ? Color.white : Color.black.opacity(0.85))
             }
             .buttonStyle(.glassProminent)
+            .tint(tint)
 
             Button(action: shuffle) {
                 Label("Shuffle", systemImage: "shuffle")
