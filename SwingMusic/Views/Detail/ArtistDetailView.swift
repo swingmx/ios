@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ArtistDetailView: View {
     let hash: String
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @State private var detail: ArtistDetail?
     @State private var similar: [Artist] = []
     @State private var bgImage: UIImage?
@@ -123,7 +123,7 @@ struct ArtistDetailView: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(d.tracks.prefix(5).enumerated()), id: \.element.id) { i, t in
-                    TrackRow(track: t, num: i + 1, active: state.player.current == t) {
+                    TrackRow(track: t, num: i + 1, active: state.isCurrentTrack(t)) {
                         Task { state.player.play(t, from: await allTracks(d), source: .artist(hash)) }
                     }
                 }
@@ -326,7 +326,7 @@ struct ArtistTracksView: View {
     let hash: String
     let artistName: String
     let loadTracks: () async -> [Track]?
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @State private var tracks: [Track] = []
     @State private var loading = true
 
@@ -343,7 +343,7 @@ struct ArtistTracksView: View {
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
-                        TrackRow(track: t, num: i + 1, active: state.player.current == t) {
+                        TrackRow(track: t, num: i + 1, active: state.isCurrentTrack(t)) {
                             state.player.play(t, from: tracks, source: .artist(hash))
                         }
                     }
@@ -366,7 +366,7 @@ struct ArtistTracksView: View {
 struct ArtistAlbumsGridView: View {
     let title: String
     let albums: [Album]
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     private let cols = [GridItem(.adaptive(minimum: 150), spacing: 14)]
 
     var body: some View {

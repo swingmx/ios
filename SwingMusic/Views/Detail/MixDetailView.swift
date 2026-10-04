@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MixDetailView: View {
     let mix: Mix
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @State private var tracks: [Track] = []
     @State private var loading = true
     @State private var bgImage: UIImage?
@@ -18,7 +18,7 @@ struct MixDetailView: View {
                     ProgressView().tint(.secondary).frame(maxWidth: .infinity, minHeight: 200)
                 } else {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
-                        TrackRow(track: t, num: i + 1, active: state.player.current == t) {
+                        TrackRow(track: t, num: i + 1, active: state.isCurrentTrack(t)) {
                             state.player.play(t, from: tracks, source: source)
                         }
                     }

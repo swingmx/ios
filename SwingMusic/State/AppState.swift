@@ -26,38 +26,44 @@ final class ScrollTracker: ObservableObject {
     }
 }
 
+// Observable rather than ObservableObject so a view re-renders only when a property it read changes.
+// With ObservableObject every change re-rendered every view holding AppState, which rebuilt any open
+// menu each time and made it flicker.
 @MainActor
-final class AppState: ObservableObject {
+@Observable
+final class AppState {
     let scroll = ScrollTracker.shared
-    @Published var authed = false
-    @Published var tab: Tab = .home
-    @Published var accent: Color = .white
+    var authed = false
+    var tab: Tab = .home
+    var accent: Color = .white
 
-    @Published var recentAdded: [Album] = []
-    @Published var recentPlayed: [Album] = []
-    @Published var topTracks: [Track] = []
-    @Published var allAlbums: [Album] = []
-    @Published var allArtists: [Artist] = []
-    @Published var allPlaylists: [Playlist] = []
-    @Published var favTracks: [Track] = []
-    @Published var favAlbums: [Album] = []
-    @Published var favArtists: [Artist] = []
+    var recentAdded: [Album] = []
+    var recentPlayed: [Album] = []
+    var topTracks: [Track] = []
+    var allAlbums: [Album] = []
+    var allArtists: [Artist] = []
+    var allPlaylists: [Playlist] = []
+    var favTracks: [Track] = []
+    var favAlbums: [Album] = []
+    var favArtists: [Artist] = []
 
-    @Published var showPlayer = false
-    @Published var showLyrics = false
-    @Published var lyrics: ParsedLyrics?
-    var lyricIdx = 0
-    @Published var loadingLyrics = false
+    var showPlayer = false
+    var showLyrics = false
+    var lyrics: ParsedLyrics? { didSet { lyricsRevision &+= 1 } }
+    // Changes whenever lyrics is set, for views that need to react to it: ParsedLyrics isn't Equatable.
+    private(set) var lyricsRevision = 0
+    @ObservationIgnored var lyricIdx = 0
+    var loadingLyrics = false
 
-    @Published var colorCache: [String: Color] = [:]
-    @Published var currentBGImage: UIImage?
-    @Published var appearanceMode: AppearanceMode = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "") ?? .dark {
+    var colorCache: [String: Color] = [:]
+    var currentBGImage: UIImage?
+    var appearanceMode: AppearanceMode = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "") ?? .dark {
         didSet { UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode") }
     }
 
-    @Published var favTracksTotal = 0
-    @Published var favAlbumsTotal = 0
-    @Published var favArtistsTotal = 0
+    var favTracksTotal = 0
+    var favAlbumsTotal = 0
+    var favArtistsTotal = 0
 
     enum AppearanceMode: String, CaseIterable {
         case system = "System"
@@ -73,13 +79,16 @@ final class AppState: ObservableObject {
         }
     }
 
-    @Published var homePath = NavigationPath()
-    @Published var libraryPath = NavigationPath()
-    @Published var favoritesPath = NavigationPath()
-    @Published var searchPath = NavigationPath()
+    var homePath = NavigationPath()
+    var libraryPath = NavigationPath()
+    var favoritesPath = NavigationPath()
+    var searchPath = NavigationPath()
 
     let player = AudioPlayer.shared
-    private var bag = Set<AnyCancellable>()
+    // The playing track's hash, mirrored from the player so views can observe it. Set by the player
+    // subscription in init; settable here only so tests can drive it without starting playback.
+    var playingTrackHash: String?
+    @ObservationIgnored private var bag = Set<AnyCancellable>()
 
     enum Tab: String { case home, library, favorites, search, settings }
 
@@ -89,12 +98,12 @@ final class AppState: ObservableObject {
         case folder(Folder)
     }
 
-    @Published var navigationTarget: NavTarget?
-    @Published var requestedTrackForPlaylist: Track? = nil
-    @Published var keyboardVisible = false
+    var navigationTarget: NavTarget?
+    var requestedTrackForPlaylist: Track? = nil
+    var keyboardVisible = false
 
-    @Published var showBugReport = false
-    @Published var currentBugReport: BugReport?
+    var showBugReport = false
+    var currentBugReport: BugReport?
 
     func beginBugReport() {
         currentBugReport = BugReport.generate()
@@ -120,7 +129,10 @@ final class AppState: ObservableObject {
         authed = API.shared.authed
         player.$current
             .removeDuplicates()
-            .sink { [weak self] t in Task { @MainActor in if let t { await self?.onTrack(t) } } }
+            .sink { [weak self] t in
+                self?.playingTrackHash = t?.trackhash
+                Task { @MainActor in if let t { await self?.onTrack(t) } }
+            }
             .store(in: &bag)
         player.$time
             .sink { [weak self] t in self?.syncLyric(t) }
@@ -179,7 +191,7 @@ final class AppState: ObservableObject {
         catch { print("❌ Artists laden: \(error)") }
     }
 
-    @Published var shufflingLibrary = false
+    var shufflingLibrary = false
 
     func shuffleLibrary() async {
         guard !shufflingLibrary else { return }
@@ -211,7 +223,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    @Published var homeSections: [HomeSection] = []
+    var homeSections: [HomeSection] = []
 
     func loadHomeSections() async {
         guard let data = try? await API.shared.homeData(),
@@ -337,7 +349,11 @@ final class AppState: ObservableObject {
     }
 
     // Favorite changes made in this session, which the track values already on screen do not reflect.
-    @Published private(set) var favoriteTrackChanges: [String: Bool] = [:]
+    private(set) var favoriteTrackChanges: [String: Bool] = [:]
+
+    func isCurrentTrack(_ track: Track) -> Bool {
+        playingTrackHash == track.trackhash
+    }
 
     func isTrackFavorite(_ track: Track) -> Bool {
         favoriteTrackChanges[track.trackhash]

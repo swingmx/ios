@@ -5,7 +5,7 @@ import AVFoundation
 private let logger = Logger(subsystem: "com.swingmusic.app", category: "LoginView")
 
 struct LoginView: View {
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @State private var server = UserDefaults.standard.string(forKey: "server") ?? ""
     @State private var user = ""
     @State private var pass = ""

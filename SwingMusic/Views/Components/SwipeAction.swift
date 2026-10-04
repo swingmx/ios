@@ -25,7 +25,7 @@ struct PullActions: ViewModifier {
     // Positive reveals the leading action, negative the trailing one.
     @State private var offset: CGFloat = 0
     @State private var armed = false
-    // Decided on the drag's first movement, so a vertical scroll never turns into a pull halfway through.
+    // Decided on the drag's first movement.
     @State private var side: Side?
     @State private var decided = false
     @State private var leadingWidth: CGFloat = 110
@@ -41,11 +41,7 @@ struct PullActions: ViewModifier {
                 if let trailing { revealed(trailing, width: max(0, -offset), alignment: .trailing) { trailingWidth = $0 } }
             }
             .contentShape(Rectangle())
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 20, coordinateSpace: .local)
-                    .onChanged(dragChanged)
-                    .onEnded { _ in dragEnded() }
-            )
+            .gesture(HorizontalPan(changed: dragChanged, ended: dragEnded))
     }
 
     private func revealed(_ item: PullAction, width: CGFloat, alignment: Alignment,
@@ -71,13 +67,10 @@ struct PullActions: ViewModifier {
         .animation(.easeOut(duration: 0.15), value: armed)
     }
 
-    private func dragChanged(_ value: DragGesture.Value) {
-        let dx = value.translation.width, dy = value.translation.height
+    private func dragChanged(_ dx: CGFloat) {
         if !decided {
             decided = true
-            if abs(dx) > abs(dy) {
-                side = dx > 0 ? (leading == nil ? nil : .leading) : (trailing == nil ? nil : .trailing)
-            }
+            side = dx > 0 ? (leading == nil ? nil : .leading) : (trailing == nil ? nil : .trailing)
             if side != nil { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
         }
         guard let side else { return }
@@ -114,6 +107,38 @@ struct PullActions: ViewModifier {
     static func resisted(_ distance: CGFloat) -> CGFloat {
         let range: CGFloat = 1000
         return distance * range / (range + distance)
+    }
+}
+
+// A pan that only begins when the finger moves more sideways than up or down. A vertical swipe makes
+// it fail straight away, so the enclosing scroll view gets the touch instead of having to compete for
+// it the way it does with a SwiftUI DragGesture.
+private struct HorizontalPan: UIGestureRecognizerRepresentable {
+    let changed: (CGFloat) -> Void
+    let ended: () -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        switch recognizer.state {
+        case .began, .changed: changed(recognizer.translation(in: recognizer.view).x)
+        case .ended, .cancelled, .failed: ended()
+        default: break
+        }
+    }
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
+            let v = pan.velocity(in: pan.view)
+            return abs(v.x) > abs(v.y)
+        }
     }
 }
 

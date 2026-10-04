@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct NowPlayingSongActions: View {
-    @EnvironmentObject private var state: AppState
+    @Environment(AppState.self) private var state
 
     let song: Song
     var showsFavoriteButton = true
@@ -33,7 +33,7 @@ struct NowPlayingSongActions: View {
         }
         .sheet(isPresented: $showPlaylistSheet) {
             AddToPlaylistSheet(track: song)
-                .environmentObject(state)
+                .environment(state)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HomeView: View {
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @State private var showSettings = false
     @State private var heroes: [HeroPick] = []
     @Namespace private var zoomNS
@@ -21,6 +21,7 @@ struct HomeView: View {
     private var isLoading: Bool { !didLoad && state.homeSections.isEmpty }
 
     var body: some View {
+        @Bindable var state = state
         NavigationStack(path: $state.homePath) {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 28) {
@@ -184,7 +185,7 @@ struct HomeView: View {
     }
 
     private func chartRow(rank: Int, track: Track, queue: [Track]) -> some View {
-        let active = state.player.current == track
+        let active = state.isCurrentTrack(track)
         return Button {
             playTrack(track, from: queue)
         } label: {

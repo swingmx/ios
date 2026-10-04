@@ -1375,11 +1375,11 @@ struct NativeAMLLLyricsView: View {
 }
 
 private struct AppLyricsListener: View {
-    @EnvironmentObject private var state: AppState
+    @Environment(AppState.self) private var state
     let onChange: (ParsedLyrics?) -> Void
 
     var body: some View {
         Color.clear
-            .onReceive(state.$lyrics) { onChange($0) }
+            .onChange(of: state.lyricsRevision, initial: true) { onChange(state.lyrics) }
     }
 }

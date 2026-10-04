@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct FolderBrowserView: View {
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     var path: String = "$home"
     var title: String = "Folders"
 
@@ -46,7 +46,7 @@ struct FolderBrowserView: View {
                         .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 2)
 
                         ForEach(tracks) { t in
-                            TrackRow(track: t, active: state.player.current == t) {
+                            TrackRow(track: t, active: state.isCurrentTrack(t)) {
                                 state.player.play(t, from: tracks, source: .folder(path))
                             }
                         }

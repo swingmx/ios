@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AmbientBackground: View {
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @Environment(\.colorScheme) var colorScheme
 
     private var isDark: Bool { colorScheme == .dark }

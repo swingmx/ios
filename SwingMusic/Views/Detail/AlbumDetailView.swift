@@ -2,7 +2,7 @@ import SwiftUI
 
 struct AlbumDetailView: View {
     let hash: String
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @State private var detail: AlbumDetail?
     @State private var loading = true
     @State private var bgImage: UIImage?
@@ -147,7 +147,7 @@ struct AlbumDetailView: View {
                     .padding(.top, i == 0 ? 8 : 24)
                     .padding(.bottom, 8)
                 }
-                TrackRow(track: t, num: t.trackno ?? (i + 1), active: state.player.current == t, showArt: false) {
+                TrackRow(track: t, num: t.trackno ?? (i + 1), active: state.isCurrentTrack(t), showArt: false) {
                     state.player.play(t, from: ordered, source: .album(hash))
                 }
             }

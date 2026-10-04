@@ -109,7 +109,7 @@ struct TrackRow: View {
         )
     }
 
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
 
     private var favoritePullAction: PullAction {
         let isFavorite = state.isTrackFavorite(track)

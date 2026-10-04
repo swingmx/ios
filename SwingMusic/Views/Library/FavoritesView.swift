@@ -3,7 +3,7 @@ import SwiftUI
 enum FavRoute: Hashable { case albums, artists, songs }
 
 struct FavoritesView: View {
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @State private var loading = true
 
     private var breakdown: String {
@@ -59,7 +59,7 @@ struct FavoritesView: View {
             sectionHeader("Songs", seeAll: state.favTracksTotal > state.favPreviewTracks ? .songs : nil)
             VStack(spacing: 0) {
                 ForEach(state.favTracks.prefix(state.favPreviewTracks)) { t in
-                    TrackRow(track: t, active: state.player.current == t) {
+                    TrackRow(track: t, active: state.isCurrentTrack(t)) {
                         state.playFavorite(t)
                     }
                 }
@@ -128,10 +128,11 @@ struct FavoritesView: View {
 
 // The Favorites tab: its own navigation stack, with the same detail screens and zoom transitions as Library.
 struct FavoritesTabView: View {
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @Namespace private var zoomNS
 
     var body: some View {
+        @Bindable var state = state
         NavigationStack(path: $state.favoritesPath) {
             FavoritesView()
                 .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash).navigationTransition(.zoom(sourceID: "album-\($0.albumhash)", in: zoomNS)) }

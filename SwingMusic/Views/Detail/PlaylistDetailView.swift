@@ -3,7 +3,7 @@ import SwiftUI
 struct PlaylistDetailView: View {
     let id: String
     let name: String
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @State private var tracks: [Track] = []
     @State private var loading = true
     @State private var bgImage: UIImage?
@@ -17,7 +17,7 @@ struct PlaylistDetailView: View {
 
                 VStack(spacing: 0) {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
-                        TrackRow(track: t, num: i + 1, active: state.player.current == t) {
+                        TrackRow(track: t, num: i + 1, active: state.isCurrentTrack(t)) {
                             state.player.play(t, from: tracks, source: .playlist(id))
                         }
                     }
