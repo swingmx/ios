@@ -11,8 +11,10 @@ private enum MeloXLayout {
     static let backgroundVocalsFontCoefficient: CGFloat = 0.75
     static let backgroundVocalsDeselectedScale = 0.9
     static let deselectedScale = 0.98
-    static let nonFocusedBlurRadius = 3.0
+    static let nearestLineBlurRadius = 1.0
+    static let blurRadiusStepPerLine = 0.75
     static let maximumNonFocusedBlurRadius = 4.0
+    static let scrollLead = 0.35
     static let selectedTextOpacity = 1.0
     static let selectedUpcomingTextOpacity = 0.35
     static let deselectedTextOpacity = 0.175
@@ -876,11 +878,9 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
 
     deinit { link?.invalidate() }
 
-    static let headstart = 0.0
-
     private var now: Double {
         if debugFakePlay { return playing ? anchorTime + (CACurrentMediaTime() - anchorHost) : anchorTime }
-        return player.smoothTime() + (playing ? Self.headstart : 0)
+        return player.smoothTime()
     }
 
     private var lastReceived: (t: Double, host: CFTimeInterval)?
@@ -1027,13 +1027,14 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
     private func setCurrentTime(_ t: Double) {
         let seeking = isSeeking
         isSeeking = false
+        let lead = t + MeloXLayout.scrollLead
         var next = hot
         var added = Set<Int>(), removedHot = Set<Int>(), removedBuf = Set<Int>()
         for id in hot {
             let g = groups[id]
-            if t < g.start || g.end <= t { next.remove(id); removedHot.insert(id) }
+            if lead < g.start || g.end <= t { next.remove(id); removedHot.insert(id) }
         }
-        for (id, g) in groups.enumerated() where g.start <= t && g.end > t && !next.contains(id) {
+        for (id, g) in groups.enumerated() where g.start <= lead && g.end > t && !next.contains(id) {
             next.insert(id); added.insert(id)
         }
         for id in buffered where !next.contains(id) { removedBuf.insert(id) }
@@ -1045,7 +1046,7 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
             if let m = buffered.min() {
                 scrollToIndex = m
             } else {
-                scrollToIndex = groups.firstIndex { $0.start >= t } ?? groups.count
+                scrollToIndex = groups.firstIndex { $0.start >= lead } ?? groups.count
             }
             for id in removedHot.union(removedBuf) { groups[id].disable() }
             for id in hot { groups[id].enable() }
@@ -1056,10 +1057,17 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
         } else if !added.isEmpty {
             for id in added { buffered.insert(id); groups[id].enable() }
             for id in removedBuf { buffered.remove(id); groups[id].disable() }
+            // A line ending within the lead stops holding the scroll, so the new line scrolls into place
+            // before it starts. It is still in `hot`, so it stays highlighted until it ends.
+            for id in buffered where !added.contains(id) && groups[id].end <= lead { buffered.remove(id) }
             if let m = buffered.min() { scrollToIndex = m }
             layout = true
         } else if !removedBuf.isEmpty, removedBuf == buffered {
             for id in buffered where !hot.contains(id) { buffered.remove(id); groups[id].disable() }
+            layout = true
+        } else if !removedHot.isEmpty {
+            // A line released early above has now ended: dim it.
+            for id in removedHot where !buffered.contains(id) { groups[id].disable() }
             layout = true
         }
 
@@ -1123,7 +1131,7 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
         presentation.reserveCapacity(groups.count)
         for i in groups.indices {
             let hasBuf = buffered.contains(i)
-            let active = hasBuf || (i >= scrollToIndex && i < latest)
+            let active = hasBuf || hot.contains(i) || (i >= scrollToIndex && i < latest)
             presentation.append((active, hasBuf ? 0.85 : 1, lineBlur(i, active: active, latest: latest)))
             groups[i].isActive = active
         }
@@ -1134,14 +1142,20 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
         let dotMargin: CGFloat = 0
         let dotsH = dots?.size.height ?? 0
 
-        let before = heights.prefix(min(scrollToIndex, heights.count)).reduce(0, +)
+        let ascender = AMLLFont.bold(em).ascender
+        let focusTop = max(60, viewH * MeloXLayout.selectedLineTopRelativePercent / 100 - ascender)
+        let dotsAbove: CGFloat = interlude.map { $0.anchor != -1 ? dotsH + MeloXLayout.lineSpacing : 0 } ?? 0
+        let dotsInList: CGFloat = interlude == nil ? 0 : dotsH + MeloXLayout.lineSpacing
+
+        var before = heights.prefix(min(scrollToIndex, heights.count)).reduce(0, +)
+        if let lastH = heights.last {
+            let lastTop = heights.dropLast().reduce(0, +) + dotsInList - dotsAbove + focusTop
+            let middle = min(bounds.height / 2, viewH - lastH / 2)
+            before = min(before, max(0, lastTop - (middle - lastH / 2)))
+        }
         scrollMin = -before
         if isUserScrolling { scrollOffset = scroller.contentOffset.y - before }
-        var cur = -scrollOffset
-        if let iv = interlude, iv.anchor != -1 { cur -= dotsH + MeloXLayout.lineSpacing }
-        cur -= before
-        let ascender = AMLLFont.bold(em).ascender
-        cur += max(60, viewH * MeloXLayout.selectedLineTopRelativePercent / 100 - ascender)
+        var cur = -scrollOffset - dotsAbove - before + focusTop
         let targetH: CGFloat = scrollToIndex < groups.count
             ? heights[scrollToIndex]
             : (creditsGroup?.height(playing: playing) ?? fallback)
@@ -1182,8 +1196,8 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
     private func lineBlur(_ i: Int, active: Bool, latest: Int) -> Double {
         if isUserScrolling || active { return 0 }
         let d = i < scrollToIndex ? scrollToIndex - i : i - max(scrollToIndex, latest)
-        let r0 = MeloXLayout.nonFocusedBlurRadius, r1 = MeloXLayout.maximumNonFocusedBlurRadius
-        return r0 + (r1 - r0) * min(max(Double(d) - 1, 0), 1)
+        let blur = MeloXLayout.nearestLineBlurRadius + MeloXLayout.blurRadiusStepPerLine * Double(max(d - 1, 0))
+        return min(blur, MeloXLayout.maximumNonFocusedBlurRadius)
     }
 
     private let scroller = UIScrollView()
