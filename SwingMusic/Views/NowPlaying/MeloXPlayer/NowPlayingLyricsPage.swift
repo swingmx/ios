@@ -84,6 +84,7 @@ struct NowPlayingLyricsPage: View {
     private var lyricsStyleContent: some View {
         NativeAMLLLyricsView(
             bottomInset: isInterfaceHidden ? 24 : appleMusicBottomOverlayHeight + 24,
+            isActive: isActive,
             onReady: onInitialFocusPrepared
         )
             .frame(maxWidth: .infinity, maxHeight: .infinity)

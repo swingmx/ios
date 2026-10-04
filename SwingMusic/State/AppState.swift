@@ -131,6 +131,7 @@ final class AppState {
             .removeDuplicates()
             .sink { [weak self] t in
                 self?.playingTrackHash = t?.trackhash
+                self?.resetLyrics()
                 Task { @MainActor in if let t { await self?.onTrack(t) } }
             }
             .store(in: &bag)
@@ -401,10 +402,11 @@ final class AppState {
         do {
             let res = try await API.shared.playlists()
             print("✅ Loaded \(res.count) playlists from server.")
-            allPlaylists = res
+            // Assigning an unchanged list would still rebuild every view showing playlists.
+            if res != allPlaylists { allPlaylists = res }
         } catch {
+            // Keep what is already shown: clearing it made playlists vanish whenever the server was unreachable.
             print("❌ Failed to load playlists: \(error.localizedDescription)")
-            allPlaylists = []
         }
     }
 
@@ -417,13 +419,38 @@ final class AppState {
     }
 
     private func onTrack(_ track: Track) async {
-        lyrics = nil; lyricIdx = 0; loadingLyrics = true
         let c = await color(for: track.albumhash)
         withAnimation(.easeInOut(duration: 1.0)) { accent = c }
-
-        let musixmatchTask = wordByWordTask(for: track)
-
         await loadBGImage(for: track)
+        await ActivityManager.shared.updateAccent(c)
+    }
+
+    @ObservationIgnored private var lyricsTask: Task<Void, Never>?
+    @ObservationIgnored private var lyricsTrackHash: String?
+
+    // Lyrics are only fetched when something shows them: the lyrics view asks for them when its own
+    // word-by-word search comes up empty or slow. A track change cancels a search still running.
+    func loadLyrics(for track: Track) {
+        guard track.trackhash == player.current?.trackhash, lyricsTrackHash != track.trackhash else { return }
+        lyricsTask?.cancel()
+        lyricsTrackHash = track.trackhash
+        lyrics = nil
+        loadingLyrics = true
+        lyricsTask = Task { [weak self] in await self?.fetchLyrics(for: track) }
+    }
+
+    private func resetLyrics() {
+        lyricsTask?.cancel()
+        lyricsTask = nil
+        lyricsTrackHash = nil
+        if lyrics != nil { lyrics = nil }
+        lyricIdx = 0
+        loadingLyrics = false
+    }
+
+    private func fetchLyrics(for track: Track) async {
+        let musixmatchTask = wordByWordTask(for: track)
+        defer { if Task.isCancelled { musixmatchTask?.cancel() } }
 
         var parsed: ParsedLyrics?
 
@@ -500,9 +527,9 @@ final class AppState {
             }
         }
 
+        guard !Task.isCancelled, lyricsTrackHash == track.trackhash else { return }
         lyrics = parsed
         loadingLyrics = false
-        await ActivityManager.shared.updateAccent(c)
 
         await upgradeToWordByWord(for: track, task: musixmatchTask)
     }
@@ -533,7 +560,7 @@ final class AppState {
 
         let lrc = await task.value
         guard let lrc else { return }
-        guard player.current?.trackhash == track.trackhash else { return }
+        guard !Task.isCancelled, lyricsTrackHash == track.trackhash else { return }
 
         let parsed = parseLyrics(
             LyricsResponse(lyrics: .string(lrc), synced: true, copyright: "Lyrics by Musixmatch"),

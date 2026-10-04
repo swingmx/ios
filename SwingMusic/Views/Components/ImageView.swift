@@ -46,8 +46,51 @@ enum ImageDiskCache {
     }
 }
 
+// Decoded images by URL. NSCache lets iOS drop them under memory pressure, which the plain
+// dictionary used before never did.
+final class ImageMemoryCache: @unchecked Sendable {
+    static let shared = ImageMemoryCache()
+    private let images = NSCache<NSString, UIImage>()
+
+    init() { images.totalCostLimit = 150 * 1024 * 1024 }
+
+    subscript(key: String) -> UIImage? {
+        get { images.object(forKey: key as NSString) }
+        set {
+            if let newValue {
+                images.setObject(newValue, forKey: key as NSString, cost: Self.cost(of: newValue))
+            } else {
+                images.removeObject(forKey: key as NSString)
+            }
+        }
+    }
+
+    // Bytes the decoded bitmap takes.
+    static func cost(of image: UIImage) -> Int {
+        Int(image.size.width * image.scale * image.size.height * image.scale * 4)
+    }
+}
+
+// Reading and decoding images off the main thread. UIImage(data:) only decodes when the image is
+// first drawn, which happened on the main thread mid-scroll and made lists stutter.
+enum ImageDecoding {
+    static func decoded(_ data: Data) async -> UIImage? {
+        await Task.detached(priority: .userInitiated) { UIImage(data: data).map(prepared) }.value
+    }
+
+    static func cached(_ urls: [URL]) async -> (exact: UIImage?, preview: UIImage?) {
+        await Task.detached(priority: .userInitiated) {
+            Img.cachedImage(for: urls,
+                            memory: { ImageMemoryCache.shared[$0.absoluteString] },
+                            disk: { ImageDiskCache.image(for: $0).map(prepared) })
+        }.value
+    }
+
+    private static func prepared(_ image: UIImage) -> UIImage { image.preparingForDisplay() ?? image }
+}
+
 struct Img: View {
-    static var cache: [String: UIImage] = [:]
+    static var cache: ImageMemoryCache { .shared }
 
     let urls: [URL]
     var radius: CGFloat = 8
@@ -105,7 +148,7 @@ struct Img: View {
     // when the first (preferred) URL is asked for. A smaller size already on hand is only used when
     // no listed size can be fetched (offline); online the preferred one shows directly, without a
     // visible swap from low to high resolution.
-    static func cachedImage(for urls: [URL], memory: (URL) -> UIImage?, disk: (URL) -> UIImage?)
+    nonisolated static func cachedImage(for urls: [URL], memory: (URL) -> UIImage?, disk: (URL) -> UIImage?)
         -> (exact: UIImage?, preview: UIImage?) {
         guard let primary = urls.first else { return (nil, nil) }
         if let exact = memory(primary) ?? disk(primary) { return (exact, nil) }
@@ -116,8 +159,9 @@ struct Img: View {
     }
 
     private func load() async {
-        guard primaryKey != nil else { loading = false; return }
-        let cached = Img.cachedImage(for: urls, memory: { Img.cache[$0.absoluteString] }, disk: ImageDiskCache.image(for:))
+        guard let primaryKey else { loading = false; return }
+        if let hit = Img.cache[primaryKey] { img = hit; loading = false; return }
+        let cached = await ImageDecoding.cached(urls)
         if let exact = cached.exact {
             Img.cache[urls[0].absoluteString] = exact
             img = exact
@@ -132,7 +176,7 @@ struct Img: View {
             if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
             guard let (data, resp) = try? await Net.session.data(for: req) else { continue }
             if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) { continue }
-            guard let ui = UIImage(data: data) else { continue }
+            guard let ui = await ImageDecoding.decoded(data) else { continue }
             Img.cache[url.absoluteString] = ui
             ImageDiskCache.storeBrowse(data, for: url)
             withAnimation { img = ui; loading = false }

@@ -76,8 +76,9 @@ final class AMLLEngine: ObservableObject {
     @Published var state: State = .idle
     enum State { case idle, loading, ready, empty }
 
-    private var loadedID: String?
+    private(set) var loadedID: String?
     private var loadTask: Task<Void, Never>?
+    private var inAppTask: Task<Data?, Never>?
     private var isFallback = false
     private var fallbackSignature = ""
     private static var cache: [String: (lines: [AMLLLine], writers: [String], syncedBy: String?, provider: String?)] = [:]
@@ -96,9 +97,20 @@ final class AMLLEngine: ObservableObject {
         return out.filter { seen.insert($0).inserted }
     }
 
+    // Stops any search in flight and forgets the loaded track, for when lyrics aren't on screen.
+    func reset() {
+        loadTask?.cancel(); loadTask = nil
+        inAppTask?.cancel(); inAppTask = nil
+        loadedID = nil
+        isFallback = false
+        lines = []
+        state = .idle
+    }
+
     func load(for track: Track) {
         if loadedID == track.id, state == .ready || state == .loading { return }
         loadTask?.cancel()
+        inAppTask?.cancel()
         loadedID = track.id
         isFallback = false
 
@@ -128,6 +140,7 @@ final class AMLLEngine: ObservableObject {
             inApp.done = true
             return inApp.data
         }
+        self.inAppTask = inAppTask
 
         loadTask = Task { [weak self] in
             var result: (Data, URLResponse)?

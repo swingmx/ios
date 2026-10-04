@@ -66,4 +66,14 @@ struct AppStateObservationTests {
         })
         #expect(state.lyricsRevision == before + 1)
     }
+
+    // Lyrics are fetched on demand; a request for anything but the playing track must not start a search.
+    @Test func lyricsAreNotFetchedForATrackThatIsNotPlaying() {
+        guard AudioPlayer.shared.current?.trackhash != track.trackhash else { return }
+
+        state.loadLyrics(for: track)
+
+        #expect(!state.loadingLyrics)
+        #expect(state.lyrics == nil)
+    }
 }

@@ -1320,10 +1320,26 @@ private struct AMLLPlayerRepresentable: UIViewRepresentable {
 struct NativeAMLLLyricsView: View {
     var bottomInset: CGFloat = 341
     var topInset: CGFloat = 0
+    // Whether the lyrics are on screen. Lyrics are only searched for while they are.
+    var isActive = true
     var onReady: (() -> Void)? = nil
 
+    @Environment(AppState.self) private var appState
     @StateObject private var engine = AMLLEngine()
     @State private var appLyrics: ParsedLyrics?
+    @State private var trackID: String?
+
+    // How long the word-by-word search may run before the app's own search starts alongside it.
+    private static let fallbackDelay: Duration = .seconds(4)
+
+    // On screen: the lyrics page is selected and the full player is open.
+    private var wanted: Bool { isActive && appState.showPlayer }
+
+    private struct Request: Equatable {
+        let trackID: String?
+        let active: Bool
+        var engineState: AMLLEngine.State = .idle
+    }
 
     private func applyFallback() {
         guard engine.state == .empty, let id = AudioPlayer.shared.current?.id else { return }
@@ -1364,8 +1380,29 @@ struct NativeAMLLLyricsView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .padding(.top, topInset)
-        .onReceive(AudioPlayer.shared.$current.map { $0?.id }.removeDuplicates()) { _ in
-            if let t = AudioPlayer.shared.current { engine.load(for: t) }
+        .onReceive(AudioPlayer.shared.$current.map { $0?.id }.removeDuplicates()) { trackID = $0 }
+        .task(id: Request(trackID: trackID, active: wanted)) {
+            guard let t = AudioPlayer.shared.current, t.id == trackID else { engine.reset(); return }
+            if wanted {
+                engine.load(for: t)
+            } else if engine.loadedID != t.id {
+                // Hidden and the track changed: drop the old track's search rather than finish it.
+                engine.reset()
+            }
+        }
+        // The app's own search (server, lrclib, Musixmatch) only runs as the fallback: when the
+        // word-by-word search finds nothing, or is still going after fallbackDelay.
+        .task(id: Request(trackID: trackID, active: wanted, engineState: engine.state)) {
+            guard wanted, let t = AudioPlayer.shared.current, t.id == trackID else { return }
+            switch engine.state {
+            case .empty:
+                appState.loadLyrics(for: t)
+            case .loading:
+                try? await Task.sleep(for: Self.fallbackDelay)
+                if !Task.isCancelled { appState.loadLyrics(for: t) }
+            case .idle, .ready:
+                break
+            }
         }
         .onChange(of: engine.state) { _, s in
             applyFallback()

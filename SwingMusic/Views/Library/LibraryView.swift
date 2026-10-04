@@ -72,7 +72,7 @@ struct LibraryView: View {
                 if !state.recentAdded.isEmpty {
                     Section(header: Text("Recently Added")) {
                         ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 14) {
+                            LazyHStack(spacing: 14) {
                                 ForEach(Array(state.recentAdded.enumerated()), id: \.offset) { _, a in
                                     NavigationLink(value: a) { AlbumCard(album: a, size: 130) }
                                         .buttonStyle(.plain)
