@@ -15,6 +15,7 @@ private enum MeloXLayout {
     static let blurRadiusStepPerLine = 0.75
     static let maximumNonFocusedBlurRadius = 4.0
     static let scrollLead = 0.35
+    static let wordLead = 0.15
     static let selectedTextOpacity = 1.0
     static let selectedUpcomingTextOpacity = 0.35
     static let deselectedTextOpacity = 0.175
@@ -1009,7 +1010,7 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
         let h = bounds.height
         var allSettled = true
         for g in groups {
-            g.update(dt: dt, time: t, viewHeight: h, playing: playing)
+            g.update(dt: dt, time: t + MeloXLayout.wordLead, viewHeight: h, playing: playing)
             if !g.settled { allSettled = false }
         }
         creditsGroup?.update(dt: dt, time: t, viewHeight: h, playing: playing)
