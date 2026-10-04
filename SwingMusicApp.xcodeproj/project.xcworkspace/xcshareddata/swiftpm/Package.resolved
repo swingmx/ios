@@ -1,42 +1,42 @@
 {
-  "originHash" : "b1a110a42e9db9d1604c52f9a0edb44692b435545484882a6863d17c850cc397",
-  "pins" : [
+  "originHash": "b1a110a42e9db9d1604c52f9a0edb44692b435545484882a6863d17c850cc397",
+  "pins": [
     {
-      "identity" : "lnpopupcontroller",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LeoNatan/LNPopupController.git",
-      "state" : {
-        "revision" : "20cccb8220bced28ac5e831f4a112a3b5a872125",
-        "version" : "4.5.5"
+      "identity": "lnpopupcontroller",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/LeoNatan/LNPopupController.git",
+      "state": {
+        "revision": "bee9fb9e860934634e1cbc76952b4c4fe72f8b76",
+        "version": "4.5.13"
       }
     },
     {
-      "identity" : "lnpopupui",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LeoNatan/LNPopupUI",
-      "state" : {
-        "revision" : "9eb7413a6d8428ef83e598293963dc21dedc39f1",
-        "version" : "4.0.1"
+      "identity": "lnpopupui",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/LeoNatan/LNPopupUI",
+      "state": {
+        "revision": "9eb7413a6d8428ef83e598293963dc21dedc39f1",
+        "version": "4.0.1"
       }
     },
     {
-      "identity" : "lnswiftuiutils",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LeoNatan/LNSwiftUIUtils.git",
-      "state" : {
-        "revision" : "181a95b992f84d99a14c562c86e8ebef3cbcdca9",
-        "version" : "1.1.5"
+      "identity": "lnswiftuiutils",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/LeoNatan/LNSwiftUIUtils.git",
+      "state": {
+        "revision": "181a95b992f84d99a14c562c86e8ebef3cbcdca9",
+        "version": "1.1.5"
       }
     },
     {
-      "identity" : "lnsystemmarqueelabel",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LeoNatan/LNSystemMarqueeLabel",
-      "state" : {
-        "revision" : "a87c80c36e8cc84f05a691da33c838a8e93015f6",
-        "version" : "0.1.2"
+      "identity": "lnsystemmarqueelabel",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/LeoNatan/LNSystemMarqueeLabel",
+      "state": {
+        "revision": "a87c80c36e8cc84f05a691da33c838a8e93015f6",
+        "version": "0.1.2"
       }
     }
   ],
-  "version" : 3
+  "version": 3
 }
