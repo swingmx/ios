@@ -149,6 +149,7 @@
 		F43AF761BB9C2F01936E634F /* ElasticSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9AA08B855DFB0038A01BF23 /* ElasticSlider.swift */; };
 		F481A53CA707A8BFC485A51C /* AMLLLyricsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 758E1FDDD4BE7FB97FA0C697 /* AMLLLyricsView.swift */; };
 		FB38CDE50A185684E4A9C215 /* DownloadControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF2E93B61880EE876F027A51 /* DownloadControl.swift */; };
+		FEB6FD9C6DED92F22AE4F080 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 81BEB10C08DFE99B79634260 /* AppIcon.icon */; };
 		FED6D9395EA79AD8B287BA78 /* NowPlayingArtworkPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF7C7A2AB25F761AE1A5940 /* NowPlayingArtworkPage.swift */; };
 /* End PBXBuildFile section */
 
@@ -264,6 +265,7 @@
 		7FABE5AE4BB6B6EA38565BC4 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		7FD9296865CCCFCF99C83469 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		7FDBCC97AC4D171B06C51BE4 /* NowPlayingArtistsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingArtistsSheet.swift; sourceTree = "<group>"; };
+		81BEB10C08DFE99B79634260 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		82C1F53629AA76AF6BD1F113 /* RepeatMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatMode.swift; sourceTree = "<group>"; };
 		83B3F7932BD64294175D0171 /* Helpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Helpers.swift; sourceTree = "<group>"; };
 		85232031BABBF8C394AB1BEE /* ExplicitBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExplicitBadge.swift; sourceTree = "<group>"; };
@@ -537,6 +539,7 @@
 		A148873D7F4FA825D88FD71F /* SwingMusic */ = {
 			isa = PBXGroup;
 			children = (
+				81BEB10C08DFE99B79634260 /* AppIcon.icon */,
 				23030EBEF4A33DC01CA6DF10 /* Assets.xcassets */,
 				F54AFABE5018FABBEE21FC85 /* Info.plist */,
 				011ADA806AD741F6F7E82129 /* PrivacyInfo.xcprivacy */,
@@ -844,6 +847,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FEB6FD9C6DED92F22AE4F080 /* AppIcon.icon in Resources */,
 				B39F1E1C8FDAEA45DF4556DF /* Assets.xcassets in Resources */,
 				80F6E330DF3A0F9D29B0AF1C /* PrivacyInfo.xcprivacy in Resources */,
 			);
