@@ -209,6 +209,17 @@ extension Album {
 
 struct PlaylistImage: Codable, Hashable {
     let image: String?
+
+    private enum CodingKeys: String, CodingKey { case image }
+
+    // /playlists sends {"image": "<hash>.webp", "color": …}; the home feed sends just "<hash>.webp".
+    init(from decoder: Decoder) throws {
+        if let hash = try? decoder.singleValueContainer().decode(String.self) {
+            image = hash
+        } else {
+            image = try decoder.container(keyedBy: CodingKeys.self).decodeIfPresent(String.self, forKey: .image)
+        }
+    }
 }
 
 struct Playlist: Codable, Identifiable, Hashable {
