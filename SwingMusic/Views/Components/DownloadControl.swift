@@ -110,7 +110,7 @@ struct FavoriteButton: View {
             toggle()
         } label: {
             Image(systemName: isFavorite ? "heart.fill" : "heart")
-                .foregroundStyle(isFavorite ? Color.accentColor : Color.primary)
+                .foregroundStyle(.primary)
                 .contentTransition(.symbolEffect(.replace))
                 .symbolEffect(.bounce, value: isFavorite)
         }

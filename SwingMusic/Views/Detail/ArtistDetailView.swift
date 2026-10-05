@@ -111,7 +111,7 @@ struct ArtistDetailView: View {
                     NavigationLink {
                         ArtistTracksView(hash: hash, artistName: d.artist.name, loadTracks: fetchAllTracks)
                     } label: {
-                        Text("See All").font(.system(size: 14, weight: .semibold)).foregroundStyle(.blue)
+                        Text("See All").font(.system(size: 14, weight: .semibold)).foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
                 }

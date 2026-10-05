@@ -245,7 +245,7 @@ struct SearchView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.body)
-                    .foregroundStyle(playing ? Color.accentColor : .primary)
+                    .foregroundStyle(playing ? Color.appAccent : .primary)
                     .lineLimit(1)
                     .explicitBadge(explicit)
                 Text(subtitle)
@@ -257,7 +257,7 @@ struct SearchView: View {
             if playing {
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.footnote)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.appAccent)
             }
         }
         .contentShape(.rect)

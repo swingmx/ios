@@ -76,7 +76,7 @@ struct TrackRow: View {
                     if let n = num {
                         ZStack {
                             if active && !showArt {
-                                Bars(color: .accentColor)
+                                Bars(color: .appAccent)
                             } else {
                                 Text("\(n)")
                                     .font(.system(size: 14, weight: .medium, design: .monospaced))

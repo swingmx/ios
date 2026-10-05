@@ -184,3 +184,9 @@ struct ThinSlider: View {
         .frame(height: 24)
     }
 }
+
+extension Color {
+    // The app's accent. Controls default to a neutral tint (see ContentView); only what should stand
+    // out (what's playing, primary actions, links) uses this.
+    static let appAccent = Color.blue
+}

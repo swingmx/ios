@@ -120,6 +120,7 @@ struct SettingsView: View {
                         }
                     }
                 }
+                .tint(.green)
 
             }
 
@@ -162,6 +163,7 @@ struct SettingsView: View {
                         Text("Allow Self-Signed Certificates")
                     }
                 }
+                .tint(.green)
             }
 
             Section(header: Text("Account")) {
@@ -187,6 +189,7 @@ struct SettingsView: View {
                         Text("Shake to Report")
                     }
                 }
+                .tint(.green)
                 Button {
                     state.beginBugReport()
                 } label: {

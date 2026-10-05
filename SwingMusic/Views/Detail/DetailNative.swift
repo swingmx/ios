@@ -134,7 +134,7 @@ struct StatsRow: View {
     }
 
     private func card(_ stat: ArtistStat) -> some View {
-        let accent = color.flatMap { Color(rgbString: $0) } ?? .accentColor
+        let accent = color.flatMap { Color(rgbString: $0) } ?? .appAccent
         return VStack(alignment: .leading, spacing: 0) {
             if let image = stat.image, !image.isEmpty {
                 Img(url: API.shared.img(image, size: "small"), radius: 6)

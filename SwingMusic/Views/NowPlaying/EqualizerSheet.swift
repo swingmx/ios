@@ -237,7 +237,7 @@ struct EqualizerView: View {
                             .foregroundStyle(selected ? Color.white : Color.primary)
                     }
                     .buttonStyle(.plain)
-                    .glassEffect(selected ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .capsule)
+                    .glassEffect(selected ? .regular.tint(Color.appAccent).interactive() : .regular.interactive(), in: .capsule)
                 }
             }
             .padding(.horizontal, 4)
@@ -293,10 +293,10 @@ struct EqualizerGraph: View {
                 let _ = fill.addLine(to: CGPoint(x: w, y: insetY + plotH))
                 let _ = fill.addLine(to: CGPoint(x: 0, y: insetY + plotH))
                 let _ = fill.closeSubpath()
-                fill.fill(LinearGradient(colors: [Color.accentColor.opacity(0.35), Color.accentColor.opacity(0.02)],
+                fill.fill(LinearGradient(colors: [Color.appAccent.opacity(0.35), Color.appAccent.opacity(0.02)],
                                          startPoint: .top, endPoint: .bottom))
-                curve.stroke(Color.accentColor.opacity(0.35), lineWidth: 10).blur(radius: 8)
-                curve.stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                curve.stroke(Color.appAccent.opacity(0.35), lineWidth: 10).blur(radius: 8)
+                curve.stroke(Color.appAccent, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
                 ForEach(points.indices, id: \.self) { i in
                     let active = dragging == i
@@ -322,7 +322,7 @@ struct EqualizerGraph: View {
                 ForEach(xs.indices, id: \.self) { i in
                     Text(labels[i] + " Hz")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(dragging == i ? Color.accentColor : .secondary)
+                        .foregroundStyle(dragging == i ? Color.appAccent : .secondary)
                         .position(x: xs[i], y: h + labelH / 2)
                 }
             }

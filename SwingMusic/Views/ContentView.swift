@@ -27,6 +27,7 @@ struct ContentView: View {
                 }
             }
             .popupCloseButtonStyle(.none)
+            .popupBarCustomizer { $0.tintColor = .label }
             .popupInteractionStyle(.drag)
             .onReceive(player.$current.map { $0 != nil }.removeDuplicates()) { barPresented = $0 }
             .onChange(of: state.lyricsRevision) { _, _ in
@@ -60,22 +61,27 @@ struct ContentView: View {
         return TabView(selection: $state.tab) {
             Tab("Listening Now", systemImage: "house.fill", value: AppState.Tab.home) {
                 HomeView()
+                    .neutralTint()
                     .blocksTouchesBehindBottomBars()
             }
             Tab("Library", systemImage: "music.note.list", value: AppState.Tab.library) {
                 LibraryView()
+                    .neutralTint()
                     .blocksTouchesBehindBottomBars()
             }
             Tab("Favorites", systemImage: "heart.fill", value: AppState.Tab.favorites) {
                 FavoritesTabView()
+                    .neutralTint()
                     .blocksTouchesBehindBottomBars()
             }
             Tab(value: AppState.Tab.search, role: .search) {
                 SearchView()
+                    .neutralTint()
                     .blocksTouchesBehindBottomBars()
             }
         }
-        .tint(.blue)
+        // The tab bar's selected tab shows the accent; each tab's content is neutral (neutralTint).
+        .tint(Color.appAccent)
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
     }
@@ -180,6 +186,9 @@ private struct BottomBarsTouchBlocker: ViewModifier {
 }
 
 private extension View {
+    // Controls inside a tab default to black or white; only what should stand out uses Color.appAccent.
+    func neutralTint() -> some View { tint(.primary) }
+
     func blocksTouchesBehindBottomBars() -> some View {
         modifier(BottomBarsTouchBlocker())
     }

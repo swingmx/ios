@@ -189,7 +189,7 @@ struct HomeView: View {
                 Text("\(rank)")
                     .font(.system(size: 22, weight: .heavy, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(active ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(active ? AnyShapeStyle(Color.appAccent) : AnyShapeStyle(.tertiary))
                     .frame(width: 30, alignment: .center)
 
                 ZStack {

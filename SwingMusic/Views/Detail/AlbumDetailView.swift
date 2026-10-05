@@ -81,7 +81,7 @@ struct AlbumDetailView: View {
                 } label: {
                     Text(d.info.artist)
                         .font(.title3)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.appAccent)
                 }
                 .buttonStyle(.plain)
                 Text(subtitleLine(d))
