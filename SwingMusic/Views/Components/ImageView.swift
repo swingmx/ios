@@ -86,7 +86,9 @@ enum ImageDecoding {
         }.value
     }
 
-    private static func prepared(_ image: UIImage) -> UIImage { image.preparingForDisplay() ?? image }
+    // Decodes at full size. preparingForDisplay() does the same, but logs "Error -17102 decompressing
+    // image" for every WebP (the server's thumbnail format) even though it succeeds.
+    static func prepared(_ image: UIImage) -> UIImage { image.preparingThumbnail(of: image.size) ?? image }
 }
 
 struct Img: View {

@@ -63,11 +63,6 @@ struct ArtistDetailView: View {
                 }
             }
         }
-                .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
-                .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
-                .navigationDestination(for: ArtistAlbumSection.self) { section in
-                    ArtistAlbumsGridView(title: section.title, albums: section.albums)
-                }
         .environment(\.leavesAfterDownloadRemoval, isOfflineCopy)
         .task { await load() }
     }
@@ -376,6 +371,5 @@ struct ArtistAlbumsGridView: View {
         .background { AmbientBackground() }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
     }
 }

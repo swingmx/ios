@@ -59,3 +59,22 @@ struct AmbientBlurTests {
         #expect(alpha(out, row: 128) < 0.05)
     }
 }
+
+// The server's thumbnails are WebP, so they have to decode off the main thread at full size.
+struct ImageDecodingTests {
+    // 1×1 lossy (VP8) and lossless (VP8L) WebP images, as used for WebP feature detection.
+    private let lossy = Data(base64Encoded: "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA")!
+    private let lossless = Data(base64Encoded: "UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==")!
+
+    @Test func webPImagesDecodeAtTheirFullSize() async throws {
+        for data in [lossy, lossless] {
+            let img = try #require(await ImageDecoding.decoded(data))
+            #expect(img.size == CGSize(width: 1, height: 1))
+            #expect(img.cgImage != nil)
+        }
+    }
+
+    @Test func dataThatIsNotAnImageGivesNothing() async {
+        #expect(await ImageDecoding.decoded(Data("{\"error\": 422}".utf8)) == nil)
+    }
+}

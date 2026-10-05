@@ -62,8 +62,7 @@ struct SearchView: View {
                 }
                 .onSubmit(of: .search) { runSearch(query, delay: 0) }
                 .onChange(of: query) { _, v in runSearch(v, delay: 300_000_000) }
-                .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
-                .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
+                .appDestinations(zoom: nil)
         }
     }
 

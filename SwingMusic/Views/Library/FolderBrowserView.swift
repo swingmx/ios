@@ -62,9 +62,6 @@ struct FolderBrowserView: View {
         .background { AmbientBackground() }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(for: Folder.self) { f in
-            FolderBrowserView(path: f.path, title: f.name)
-        }
         .task { await load() }
     }
 

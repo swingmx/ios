@@ -62,11 +62,7 @@ struct HomeView: View {
                 case .allArtists: ArtistsGridView()
                 }
             }
-            .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash).navigationTransition(.zoom(sourceID: "album-\($0.albumhash)", in: zoomNS)) }
-            .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash).navigationTransition(.zoom(sourceID: "artist-\($0.artisthash)", in: zoomNS)) }
-            .navigationDestination(for: Playlist.self) { PlaylistDetailView(id: $0.id, name: $0.name).navigationTransition(.zoom(sourceID: "playlist-\($0.id)", in: zoomNS)) }
-            .navigationDestination(for: Mix.self) { MixDetailView(mix: $0) }
-            .navigationDestination(for: Folder.self) { FolderBrowserView(path: $0.path, title: $0.name) }
+            .appDestinations(zoom: zoomNS)
         }
         .environment(\.zoomNamespace, zoomNS)
         .task {

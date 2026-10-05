@@ -20,6 +20,33 @@ struct ZoomSource: ViewModifier {
 }
 extension View {
     func zoomSource(_ id: String) -> some View { modifier(ZoomSource(id: id)) }
+
+    // Zooms in from the card with the same id when there is a namespace to match it in.
+    @ViewBuilder
+    func zoomTransition(_ id: String, in ns: Namespace.ID?) -> some View {
+        if let ns { navigationTransition(.zoom(sourceID: id, in: ns)) } else { self }
+    }
+
+    // Where every pushed album, artist, playlist, folder, mix and album section leads. Applied once to
+    // each tab's NavigationStack; pushed screens must not register these again, since SwiftUI only
+    // uses the registration closest to the root and warns about the others.
+    func appDestinations(zoom ns: Namespace.ID?) -> some View {
+        self
+            .navigationDestination(for: Album.self) {
+                AlbumDetailView(hash: $0.albumhash).zoomTransition("album-\($0.albumhash)", in: ns)
+            }
+            .navigationDestination(for: Artist.self) {
+                ArtistDetailView(hash: $0.artisthash).zoomTransition("artist-\($0.artisthash)", in: ns)
+            }
+            .navigationDestination(for: Playlist.self) {
+                PlaylistDetailView(id: $0.id, name: $0.name).zoomTransition("playlist-\($0.id)", in: ns)
+            }
+            .navigationDestination(for: Folder.self) { FolderBrowserView(path: $0.path, title: $0.name) }
+            .navigationDestination(for: Mix.self) { MixDetailView(mix: $0) }
+            .navigationDestination(for: ArtistAlbumSection.self) {
+                ArtistAlbumsGridView(title: $0.title, albums: $0.albums)
+            }
+    }
 }
 
 struct AlbumCard: View {
