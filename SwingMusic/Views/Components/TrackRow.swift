@@ -1,7 +1,68 @@
 import SwiftUI
 
+// The screen a list of tracks is shown on, so a track's menu doesn't offer to go where you already are.
+enum TrackListContext: Equatable {
+    case none
+    case album(String)
+    case artist(String)
+    case folder(String)
+}
+
+private struct TrackListContextKey: EnvironmentKey {
+    static let defaultValue: TrackListContext = .none
+}
+
+extension EnvironmentValues {
+    var trackListContext: TrackListContext {
+        get { self[TrackListContextKey.self] }
+        set { self[TrackListContextKey.self] = newValue }
+    }
+}
+
+// What a track's menu offers, given the screen it is on.
+enum TrackMenuRules {
+    enum ArtistEntry: Equatable {
+        case hidden
+        case single(TrackArtist)
+        // Every artist on the track; `current` is the one whose screen this is, shown but inactive.
+        case list([TrackArtist], current: String?)
+    }
+
+    static func showsViewAlbum(_ track: Track, in context: TrackListContext) -> Bool {
+        context != .album(track.albumhash)
+    }
+
+    static func folder(of track: Track) -> String {
+        (track.filepath as NSString).deletingLastPathComponent
+    }
+
+    static func showsGoToFolder(_ track: Track, in context: TrackListContext) -> Bool {
+        let parent = folder(of: track)
+        guard !parent.isEmpty else { return false }
+        if case .folder(let path) = context { return trimmed(path) != trimmed(parent) }
+        return true
+    }
+
+    static func artistEntry(_ track: Track, in context: TrackListContext) -> ArtistEntry {
+        var artists = track.artists ?? []
+        if artists.isEmpty { artists = [TrackArtist(name: track.artist, artisthash: track.artisthash)] }
+        if case .artist(let hash) = context, artists.contains(where: { $0.artisthash == hash }) {
+            return artists.count == 1 ? .hidden : .list(artists, current: hash)
+        }
+        return artists.count == 1 ? .single(artists[0]) : .list(artists, current: nil)
+    }
+
+    // Server folder paths may end with a slash; a track's folder doesn't.
+    private static func trimmed(_ path: String) -> String {
+        var p = path
+        while p.count > 1, p.hasSuffix("/") { p.removeLast() }
+        return p
+    }
+}
+
 struct TrackRow: View {
     let track: Track
+    @Environment(\.trackListContext) private var listContext
     @ObservedObject var downloadManager = DownloadManager.shared
     var num: Int? = nil
     var active: Bool = false
@@ -67,19 +128,25 @@ struct TrackRow: View {
                     Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
                 }
                 Divider()
-                Button { state.navigationTarget = .album(Album(stub: track.albumhash, title: track.album, image: track.image, date: track.date, albumartists: track.albumartists)) } label: { Label("View Album", systemImage: "square.stack") }
-                if let artists = track.artists, artists.count > 1 {
+                if TrackMenuRules.showsViewAlbum(track, in: listContext) {
+                    Button { state.navigationTarget = .album(Album(stub: track.albumhash, title: track.album, image: track.image, date: track.date, albumartists: track.albumartists)) } label: { Label("View Album", systemImage: "square.stack") }
+                }
+                switch TrackMenuRules.artistEntry(track, in: listContext) {
+                case .hidden:
+                    EmptyView()
+                case .single(let a):
+                    Button { viewArtist(a) } label: { Label("View Artist", systemImage: "music.mic") }
+                case .list(let artists, let current):
                     Menu {
                         ForEach(artists, id: \.artisthash) { a in
-                            Button(a.name) { state.navigationTarget = .artist(Artist(stub: a.artisthash, name: a.name, image: track.image)) }
+                            Button(a.name) { viewArtist(a) }
+                                .disabled(a.artisthash == current)
                         }
                     } label: { Label("View Artist", systemImage: "music.mic") }
-                } else {
-                    Button { state.navigationTarget = .artist(Artist(stub: track.artisthash, name: track.artist, image: track.image)) } label: { Label("View Artist", systemImage: "music.mic") }
                 }
                 Button { state.requestedTrackForPlaylist = track } label: { Label("Add to Playlist", systemImage: "text.badge.plus") }
-                let parent = (track.filepath as NSString).deletingLastPathComponent
-                if !parent.isEmpty {
+                if TrackMenuRules.showsGoToFolder(track, in: listContext) {
+                    let parent = TrackMenuRules.folder(of: track)
                     Button {
                         let name = (parent as NSString).lastPathComponent
                         state.navigationTarget = .folder(Folder(path: parent, name: name.isEmpty ? parent : name))
@@ -110,6 +177,10 @@ struct TrackRow: View {
     }
 
     @Environment(AppState.self) var state
+
+    private func viewArtist(_ a: TrackArtist) {
+        state.navigationTarget = .artist(Artist(stub: a.artisthash, name: a.name, image: track.image))
+    }
 
     private var favoritePullAction: PullAction {
         let isFavorite = state.isTrackFavorite(track)

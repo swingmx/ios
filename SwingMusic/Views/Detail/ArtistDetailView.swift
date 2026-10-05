@@ -128,6 +128,7 @@ struct ArtistDetailView: View {
                     }
                 }
             }
+            .environment(\.trackListContext, .artist(hash))
         }
     }
 
@@ -348,6 +349,7 @@ struct ArtistTracksView: View {
                         }
                     }
                 }
+                .environment(\.trackListContext, .artist(hash))
                 .padding(.bottom, 100)
             }
         }

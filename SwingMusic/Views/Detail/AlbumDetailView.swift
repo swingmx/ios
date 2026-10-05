@@ -152,6 +152,7 @@ struct AlbumDetailView: View {
                 }
             }
         }
+        .environment(\.trackListContext, .album(hash))
     }
 
     private func load() async {

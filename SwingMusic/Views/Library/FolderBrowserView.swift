@@ -49,6 +49,7 @@ struct FolderBrowserView: View {
                             TrackRow(track: t, active: state.isCurrentTrack(t)) {
                                 state.player.play(t, from: tracks, source: .folder(path))
                             }
+                            .environment(\.trackListContext, .folder(path))
                         }
                     }
                     Color.clear.frame(height: 100)
