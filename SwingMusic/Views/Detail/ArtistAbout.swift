@@ -114,7 +114,7 @@ struct ArtistAboutSection: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 20))
+                    .background(DetailCardFill.color, in: .rect(cornerRadius: 20))
                     .padding(.horizontal, 18)
                 }
                 .transition(.opacity)

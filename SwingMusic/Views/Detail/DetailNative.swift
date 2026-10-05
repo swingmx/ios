@@ -13,7 +13,7 @@ struct DetailPlayButtons: View {
                     .minimumScaleFactor(0.75)
                     .frame(maxWidth: 160)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(DetailButtonStyle(prominent: true))
 
             Button(action: shuffle) {
                 Label("Shuffle", systemImage: "shuffle")
@@ -22,10 +22,33 @@ struct DetailPlayButtons: View {
                     .minimumScaleFactor(0.75)
                     .frame(maxWidth: 160)
             }
-            .buttonStyle(.glass)
+            .buttonStyle(DetailButtonStyle(prominent: false))
         }
-        .controlSize(.large)
         .padding(.horizontal, 20)
+    }
+}
+
+// The fill for cards and pills on album and artist screens. Solid rather than glass for the same
+// reason as DetailButtonStyle: glass showed as grey in the app switcher.
+enum DetailCardFill {
+    static let color = Color.primary.opacity(0.08)
+}
+
+// Solid capsules rather than glass, like Apple Music's. Glass is drawn live from the content behind
+// it, which iOS stops doing for the app switcher snapshot: the buttons showed as grey there and faded
+// back to blue on return.
+private struct DetailButtonStyle: ButtonStyle {
+    let prominent: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(prominent ? Color.white : Color.blue)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 20)
+            .background(prominent ? Color.blue : Color.primary.opacity(0.1), in: .capsule)
+            .opacity(configuration.isPressed ? 0.8 : 1)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
@@ -137,7 +160,7 @@ struct StatsRow: View {
         }
         .padding(14)
         .frame(width: 150, height: 130, alignment: .topLeading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .background(DetailCardFill.color, in: .rect(cornerRadius: 20))
     }
 
     static func icon(_ cssclass: String) -> String {

@@ -161,7 +161,7 @@ struct ArtistDetailView: View {
                             Text(g.name)
                                 .font(.subheadline.weight(.medium))
                                 .padding(.horizontal, 14).padding(.vertical, 8)
-                                .glassEffect(.regular, in: .capsule)
+                                .background(DetailCardFill.color, in: .capsule)
                         }
                     }
                     .padding(.horizontal, 18)
