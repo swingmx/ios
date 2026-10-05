@@ -7,7 +7,6 @@ struct AlbumDetailView: View {
     @State private var loading = true
     @State private var bgImage: UIImage?
     @State private var isOfflineCopy = false
-    @State private var isFavorite = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -38,13 +37,16 @@ struct AlbumDetailView: View {
         .detailScrollTitle(detail?.info.title ?? "", after: 330)
         .toolbar {
             if let d = detail {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    FavoriteButton(isFavorite: state.isAlbumFavorite(d.info)) {
+                        let album = d.info
+                        Task { await state.setAlbumFavorite(album, !state.isAlbumFavorite(album)) }
+                    }
                     CollectionActionsMenu(
                         tracks: sortedTracks(d.tracks),
                         group: DownloadManager.DownloadGroup(
                             id: "album:\(hash)", kind: .album, name: d.info.title,
-                            image: d.info.image, trackHashes: d.tracks.map { $0.trackhash }),
-                        favorite: FavoriteToggle(isFavorite: isFavorite) { toggleFavorite(d.info) }
+                            image: d.info.image, trackHashes: d.tracks.map { $0.trackhash })
                     )
                 }
             }
@@ -108,16 +110,6 @@ struct AlbumDetailView: View {
         return parts.joined(separator: " · ")
     }
 
-    // Shown straight away, and put back if the server rejects the change.
-    private func toggleFavorite(_ album: Album) {
-        let target = !isFavorite
-        isFavorite = target
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        Task {
-            if !(await state.setAlbumFavorite(album, target)) { isFavorite = !target }
-        }
-    }
-
     private func sortedTracks(_ tracks: [Track]) -> [Track] {
         tracks.sorted { a, b in
             let da = a.disc ?? 1, db = b.disc ?? 1
@@ -158,7 +150,6 @@ struct AlbumDetailView: View {
     private func load() async {
         if let d = try? await API.shared.album(hash) {
             detail = d
-            isFavorite = d.info.isFavorite ?? false
         } else {
             let dl = DownloadManager.shared.downloadedTracks.filter { $0.albumhash == hash }
             if let t = dl.first {

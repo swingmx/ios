@@ -99,9 +99,23 @@ struct DownloadRing: View {
     }
 }
 
-struct FavoriteToggle {
+// The heart next to the ⋯ menu on album and artist screens.
+struct FavoriteButton: View {
     let isFavorite: Bool
     let toggle: () -> Void
+
+    var body: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            toggle()
+        } label: {
+            Image(systemName: isFavorite ? "heart.fill" : "heart")
+                .foregroundStyle(isFavorite ? Color.red : Color.primary)
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: isFavorite)
+        }
+        .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Add to Favorites")
+    }
 }
 
 // The ⋯ toolbar menu on album, playlist, mix and artist screens.
@@ -113,8 +127,6 @@ struct CollectionActionsMenu: View {
     var group: DownloadManager.DownloadGroup?
     var queueTracks: (() async -> [Track])?
     var download: (() async -> Void)?
-    // Album and artist screens offer favoriting here too.
-    var favorite: FavoriteToggle?
     @ObservedObject private var dm = DownloadManager.shared
     @Environment(\.displayScale) private var displayScale
     @Environment(\.leavesAfterDownloadRemoval) private var leavesAfterRemoval
@@ -177,12 +189,6 @@ struct CollectionActionsMenu: View {
             }
             Button { enqueue { AudioPlayer.shared.addLast($0) } } label: {
                 Label("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward")
-            }
-            if let favorite {
-                Button(action: favorite.toggle) {
-                    Label(favorite.isFavorite ? "Remove from Favorites" : "Add to Favorites",
-                          systemImage: favorite.isFavorite ? "heart.slash" : "heart")
-                }
             }
             Divider()
             if let group {

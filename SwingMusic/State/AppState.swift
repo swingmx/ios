@@ -318,12 +318,50 @@ final class AppState {
     }
 
     // Albums and artists: the Favorites lists follow the change, which is undone if the server rejects it.
+    // Album and artist favorite changes made in this session, so every screen showing one agrees
+    // without refetching it. Like favoriteTrackChanges, they take precedence over the server's flag.
+    private(set) var favoriteAlbumChanges: [String: Bool] = [:]
+    private(set) var favoriteArtistChanges: [String: Bool] = [:]
+
+    func isAlbumFavorite(_ album: Album) -> Bool {
+        favoriteAlbumChanges[album.albumhash]
+            ?? album.isFavorite
+            ?? favAlbums.contains { $0.albumhash == album.albumhash }
+    }
+
+    func isArtistFavorite(_ artist: Artist) -> Bool {
+        favoriteArtistChanges[artist.artisthash]
+            ?? artist.isFavorite
+            ?? favArtists.contains { $0.artisthash == artist.artisthash }
+    }
+
+    // Shown straight away, and put back if the server rejects the change. Returns the resulting state.
+    @discardableResult
     func setAlbumFavorite(_ album: Album, _ fav: Bool) async -> Bool {
+        applyAlbumFavorite(album, fav)
         do {
             try await API.shared.toggleFavorite(hash: album.albumhash, type: "album", add: fav)
+            return fav
         } catch {
-            return false
+            applyAlbumFavorite(album, !fav)
+            return !fav
         }
+    }
+
+    @discardableResult
+    func setArtistFavorite(_ artist: Artist, _ fav: Bool) async -> Bool {
+        applyArtistFavorite(artist, fav)
+        do {
+            try await API.shared.toggleFavorite(hash: artist.artisthash, type: "artist", add: fav)
+            return fav
+        } catch {
+            applyArtistFavorite(artist, !fav)
+            return !fav
+        }
+    }
+
+    private func applyAlbumFavorite(_ album: Album, _ fav: Bool) {
+        favoriteAlbumChanges[album.albumhash] = fav
         let present = favAlbums.contains { $0.albumhash == album.albumhash }
         if fav && !present {
             favAlbums.insert(album, at: 0)
@@ -332,15 +370,10 @@ final class AppState {
             favAlbums.removeAll { $0.albumhash == album.albumhash }
             favAlbumsTotal = max(0, favAlbumsTotal - 1)
         }
-        return true
     }
 
-    func setArtistFavorite(_ artist: Artist, _ fav: Bool) async -> Bool {
-        do {
-            try await API.shared.toggleFavorite(hash: artist.artisthash, type: "artist", add: fav)
-        } catch {
-            return false
-        }
+    private func applyArtistFavorite(_ artist: Artist, _ fav: Bool) {
+        favoriteArtistChanges[artist.artisthash] = fav
         let present = favArtists.contains { $0.artisthash == artist.artisthash }
         if fav && !present {
             favArtists.insert(artist, at: 0)
@@ -349,7 +382,6 @@ final class AppState {
             favArtists.removeAll { $0.artisthash == artist.artisthash }
             favArtistsTotal = max(0, favArtistsTotal - 1)
         }
-        return true
     }
 
     // Favorite changes made in this session, which the track values already on screen do not reflect.
