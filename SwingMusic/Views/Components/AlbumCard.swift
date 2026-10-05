@@ -33,16 +33,18 @@ extension View {
     func appDestinations(zoom ns: Namespace.ID?) -> some View {
         self
             .navigationDestination(for: Album.self) {
-                AlbumDetailView(hash: $0.albumhash).zoomTransition("album-\($0.albumhash)", in: ns)
+                AlbumDetailView(album: $0).zoomTransition("album-\($0.albumhash)", in: ns)
             }
             .navigationDestination(for: Artist.self) {
-                ArtistDetailView(hash: $0.artisthash).zoomTransition("artist-\($0.artisthash)", in: ns)
+                ArtistDetailView(artist: $0).zoomTransition("artist-\($0.artisthash)", in: ns)
             }
             .navigationDestination(for: Playlist.self) {
                 PlaylistDetailView(id: $0.id, name: $0.name).zoomTransition("playlist-\($0.id)", in: ns)
             }
             .navigationDestination(for: Folder.self) { FolderBrowserView(path: $0.path, title: $0.name) }
-            .navigationDestination(for: Mix.self) { MixDetailView(mix: $0) }
+            .navigationDestination(for: Mix.self) {
+                MixDetailView(mix: $0).zoomTransition("mix-\($0.id)", in: ns)
+            }
             .navigationDestination(for: ArtistAlbumSection.self) {
                 ArtistAlbumsGridView(title: $0.title, albums: $0.albums)
             }

@@ -179,7 +179,7 @@ struct TrackRow: View {
     @Environment(AppState.self) var state
 
     private func viewArtist(_ a: TrackArtist) {
-        state.navigationTarget = .artist(Artist(stub: a.artisthash, name: a.name, image: track.image))
+        state.navigationTarget = .artist(Artist(stub: a.artisthash, name: a.name))
     }
 
     private var favoritePullAction: PullAction {

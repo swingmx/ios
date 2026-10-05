@@ -64,4 +64,12 @@ struct PlaylistImageTests {
 
         #expect(reloaded.images?.map(\.image) == ["a.webp"])
     }
+
+    // Each grid cell gets the smallest server thumbnail that is still sharp at its size on screen.
+    @Test func gridCellsAskForAThumbnailSharpEnoughForTheirSize() {
+        #expect(PlaylistImageGrid.thumbnailSizes(forCell: 22, scale: 3) == ["small", "medium"])   // 44 pt list row
+        #expect(PlaylistImageGrid.thumbnailSizes(forCell: 75, scale: 3) == ["medium", ""])        // 150 pt home card
+        #expect(PlaylistImageGrid.thumbnailSizes(forCell: 135, scale: 3) == ["", "medium"])       // 270 pt header
+        #expect(PlaylistImageGrid.thumbnailSizes(forCell: 75, scale: 1) == ["small", "medium"])
+    }
 }

@@ -1,18 +1,24 @@
 import SwiftUI
 
 struct AlbumDetailView: View {
-    let hash: String
+    // The album as it was when opened (from a card, a search result or a track), so the header shows
+    // straight away, moving in with the screen; the server's copy replaces it once loaded.
+    let album: Album
     @Environment(AppState.self) var state
     @State private var detail: AlbumDetail?
     @State private var loading = true
     @State private var bgImage: UIImage?
     @State private var isOfflineCopy = false
 
+    private var hash: String { album.albumhash }
+    private var info: Album { detail?.info ?? album }
+    private var tracks: [Track] { detail?.tracks ?? [] }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            if let d = detail {
-                VStack(spacing: 0) {
-                    header(d)
+            VStack(spacing: 0) {
+                header
+                if let d = detail {
                     trackList(d)
                     DetailFooter(
                         date: d.info.date.map { Date(timeIntervalSince1970: TimeInterval($0)).formatted(date: .long, time: .omitted) },
@@ -25,16 +31,20 @@ struct AlbumDetailView: View {
                         StatsRow(stats: stats, color: d.info.color)
                             .padding(.top, 28)
                     }
-                    Color.clear.frame(height: 100)
+                } else if loading {
+                    ProgressView().tint(.secondary).frame(maxWidth: .infinity, minHeight: 200)
+                } else {
+                    Text("Couldn't load this album")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 200)
                 }
-            } else {
-                VStack { Spacer(); ProgressView().tint(.secondary); Spacer() }
-                    .frame(minHeight: 400)
+                Color.clear.frame(height: 100)
             }
         }
         .squeezeMiniPlayer(state)
         .detailBackground(bgImage)
-        .detailScrollTitle(detail?.info.title ?? "", after: 330)
+        .detailScrollTitle(info.title, after: 330)
         .toolbar {
             if let d = detail {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -52,14 +62,19 @@ struct AlbumDetailView: View {
             }
         }
         .environment(\.leavesAfterDownloadRemoval, isOfflineCopy)
-        .task { await load() }
+        .task {
+            // The background comes from the artwork already known, without waiting for the details.
+            async let background: Void = loadBgImage(album.image)
+            await load()
+            await background
+        }
     }
 
-    private func header(_ d: AlbumDetail) -> some View {
+    private var header: some View {
         VStack(spacing: 16) {
             GeometryReader { geo in
                 let minY = geo.frame(in: .scrollView).minY
-                AlbumCover(album: d.info, size: coverSize)
+                AlbumCover(album: info, size: coverSize)
                     .shadow(color: .black.opacity(0.6), radius: 30, y: 10)
                     .scaleEffect(minY > 0 ? 1 + minY / 600 : 1 + minY / 2400, anchor: .bottom)
                     .offset(y: minY > 0 ? -minY * 0.3 : -minY * 0.2)
@@ -70,30 +85,32 @@ struct AlbumDetailView: View {
             .padding(.top, 16)
 
             VStack(spacing: 6) {
-                Text(d.info.title)
+                Text(info.title)
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
-                    .explicitBadge(d.tracks.contains { $0.isExplicit })
+                    .explicitBadge(tracks.contains { $0.isExplicit })
                 Button {
-                    let a = d.info.albumartists?.first
-                    state.navigationTarget = .artist(Artist(stub: a?.artisthash ?? d.info.artisthash, name: a?.name ?? d.info.artist, image: d.info.image))
+                    let a = info.albumartists?.first
+                    state.navigationTarget = .artist(Artist(stub: a?.artisthash ?? info.artisthash, name: a?.name ?? info.artist))
                 } label: {
-                    Text(d.info.artist)
+                    Text(info.artist)
                         .font(.title3)
                         .foregroundStyle(Color.appAccent)
                 }
                 .buttonStyle(.plain)
-                Text(subtitleLine(d))
+                Text(Self.subtitle(info, tracks: tracks))
                     .font(.caption.weight(.semibold))
                     .textCase(.uppercase)
                     .foregroundStyle(.secondary)
             }
 
             DetailPlayButtons(
-                play: { state.player.playAll(sortedTracks(d.tracks), source: .album(hash)) },
-                shuffle: { state.player.playAll(sortedTracks(d.tracks), shuffled: true, source: .album(hash)) }
+                play: { state.player.playAll(sortedTracks(tracks), source: .album(hash)) },
+                shuffle: { state.player.playAll(sortedTracks(tracks), shuffled: true, source: .album(hash)) }
             )
+            // Shown from the start so the header doesn't jump; usable once the tracks are in.
+            .disabled(tracks.isEmpty)
             .padding(.top, 4).padding(.bottom, 8)
         }
         .padding(.horizontal, 20)
@@ -103,10 +120,11 @@ struct AlbumDetailView: View {
         UIDevice.current.userInterfaceIdiom == .pad ? 320 : 270
     }
 
-    private func subtitleLine(_ d: AlbumDetail) -> String {
+    // "GENRE · YEAR". The genre comes from the tracks, so before they load it is just the year.
+    nonisolated static func subtitle(_ album: Album, tracks: [Track]) -> String {
         var parts: [String] = []
-        if let g = d.tracks.lazy.compactMap({ $0.genres?.first?.name }).first, !g.isEmpty { parts.append(g) }
-        if let dt = d.info.date { parts.append(Date(timeIntervalSince1970: TimeInterval(dt)).formatted(.dateTime.year())) }
+        if let g = tracks.lazy.compactMap({ $0.genres?.first?.name }).first, !g.isEmpty { parts.append(g) }
+        if let dt = album.date { parts.append(Date(timeIntervalSince1970: TimeInterval(dt)).formatted(.dateTime.year())) }
         return parts.joined(separator: " · ")
     }
 
@@ -152,20 +170,17 @@ struct AlbumDetailView: View {
             detail = d
         } else {
             let dl = DownloadManager.shared.downloadedTracks.filter { $0.albumhash == hash }
-            if let t = dl.first {
-                detail = AlbumDetail(
-                    info: Album(stub: hash, title: t.album, image: t.image, date: t.date, albumartists: t.albumartists),
-                    tracks: dl)
+            if !dl.isEmpty {
+                // The album this was opened with already holds what the downloaded tracks would give.
+                detail = AlbumDetail(info: album, tracks: dl)
                 isOfflineCopy = true
             }
         }
         loading = false
-        await loadBgImage()
     }
 
-    private func loadBgImage() async {
-        guard let image = detail?.info.image,
-              let url = API.shared.img(image) else { return }
+    private func loadBgImage(_ image: String) async {
+        guard let url = API.shared.img(image) else { return }
         var req = URLRequest(url: url)
         if let tk = API.shared.token { req.setValue("Bearer \(tk)", forHTTPHeaderField: "Authorization") }
         guard let (data, _) = try? await Net.session.data(for: req),

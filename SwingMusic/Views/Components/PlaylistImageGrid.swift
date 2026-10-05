@@ -3,6 +3,7 @@ import SwiftUI
 struct PlaylistImageGrid: View {
     let playlist: Playlist?
     let size: CGFloat
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         ZStack {
@@ -35,10 +36,21 @@ struct PlaylistImageGrid: View {
     @ViewBuilder
     private func cell(_ hash: String?) -> some View {
         if let hash {
-            // Each cell is a quarter of the cover, so the small thumbnail is plenty.
-            Img(urls: ["small", "medium"].compactMap { API.shared.img(hash, size: $0) }, radius: 0)
+            let sizes = Self.thumbnailSizes(forCell: size / 2, scale: displayScale)
+            Img(urls: sizes.compactMap { API.shared.img(hash, size: $0) }, radius: 0)
         } else {
             Color.white.opacity(0.05)
         }
+    }
+}
+
+extension PlaylistImageGrid {
+    // The server's thumbnail sizes, smallest first: "small" is 96 px, "medium" 256 px and "" (large) 512 px.
+    // Picks the smallest that is at least as sharp as the cell, then a fallback.
+    nonisolated static func thumbnailSizes(forCell points: CGFloat, scale: CGFloat) -> [String] {
+        let pixels = points * scale
+        if pixels <= 96 { return ["small", "medium"] }
+        if pixels <= 256 { return ["medium", ""] }
+        return ["", "medium"]
     }
 }

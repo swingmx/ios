@@ -295,6 +295,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     MixArtwork(mix: m, cornerRadius: 12)
                         .frame(width: 150, height: 150)
+                        .zoomSource("mix-\(m.id)")
                     VStack(alignment: .leading, spacing: 2) {
                         Text(m.tagline?.isEmpty == false ? m.tagline! : m.title)
                             .font(.system(size: 13, weight: .medium))

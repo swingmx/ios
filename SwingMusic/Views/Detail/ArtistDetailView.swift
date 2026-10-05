@@ -1,20 +1,26 @@
 import SwiftUI
 
 struct ArtistDetailView: View {
-    let hash: String
+    // The artist as it was when opened, so the portrait and name show straight away, moving in with
+    // the screen; the server's copy replaces it once loaded.
+    let artist: Artist
     @Environment(AppState.self) var state
     @State private var detail: ArtistDetail?
+    @State private var loading = true
     @State private var similar: [Artist] = []
     @State private var bgImage: UIImage?
     @State private var fullTracks: Task<[Track]?, Never>?
     // True when the screen shows the copy saved at download time instead of live server data.
     @State private var isOfflineCopy = false
 
+    private var hash: String { artist.artisthash }
+    private var info: Artist { detail?.artist ?? artist }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            if let d = detail {
-                VStack(spacing: 24) {
-                    heroSection(d)
+            VStack(spacing: 24) {
+                heroSection
+                if let d = detail {
                     topSongsList(d)
 
                     ForEach(d.albumSections, id: \.self) { section in
@@ -33,18 +39,20 @@ struct ArtistDetailView: View {
                     }
 
                     ArtistAboutSection(artistName: d.artist.name, hint: d.tracks.first?.title)
-
-                    Color.clear.frame(height: 110)
+                } else if loading {
+                    ProgressView().tint(.secondary).frame(maxWidth: .infinity, minHeight: 200)
+                } else {
+                    Text("Couldn't load this artist")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 200)
                 }
-            } else {
-                ProgressView().tint(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 420)
+                Color.clear.frame(height: 110)
             }
         }
         .squeezeMiniPlayer(state)
         .detailBackground(bgImage)
-        .detailScrollTitle(detail?.artist.name ?? "", after: 380)
+        .detailScrollTitle(info.name, after: 380)
         .toolbar {
             if let d = detail {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -64,15 +72,20 @@ struct ArtistDetailView: View {
             }
         }
         .environment(\.leavesAfterDownloadRemoval, isOfflineCopy)
-        .task { await load() }
+        .task {
+            // The background comes from the portrait already known, without waiting for the details.
+            async let background: Void = loadBackgroundImage(path: artist.image)
+            await load()
+            await background
+        }
     }
 
-    private func heroSection(_ d: ArtistDetail) -> some View {
+    private var heroSection: some View {
             VStack(spacing: 16) {
                 GeometryReader { geo in
                     let minY = geo.frame(in: .scrollView).minY
-                    ArtistAvatar(artist: d.artist, size: 170)
-                        .shadow(color: (d.artist.color.flatMap { Color(rgbString: $0) } ?? .black).opacity(0.55),
+                    ArtistAvatar(artist: info, size: 170)
+                        .shadow(color: (info.color.flatMap { Color(rgbString: $0) } ?? .black).opacity(0.55),
                                 radius: 34, y: 12)
                         .scaleEffect(minY > 0 ? 1 + minY / 600 : 1 + minY / 2400, anchor: .bottom)
                         .offset(y: minY > 0 ? -minY * 0.3 : -minY * 0.2)
@@ -82,20 +95,29 @@ struct ArtistDetailView: View {
                 .frame(height: 170)
                 .padding(.top, 20)
 
-                Text(d.artist.name)
+                Text(info.name)
                     .font(.largeTitle.bold())
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
 
-                Text(statsLine(d.artist))
+                // A space keeps the line's height until the counts arrive, so the header doesn't jump.
+                Text(statsLine(info).isEmpty ? " " : statsLine(info))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
                 DetailPlayButtons(
-                    play: { Task { state.player.playAll(await allTracks(d), source: .artist(hash)) } },
-                    shuffle: { Task { state.player.playAll(await allTracks(d), shuffled: true, source: .artist(hash)) } }
+                    play: {
+                        guard let d = detail else { return }
+                        Task { state.player.playAll(await allTracks(d), source: .artist(hash)) }
+                    },
+                    shuffle: {
+                        guard let d = detail else { return }
+                        Task { state.player.playAll(await allTracks(d), shuffled: true, source: .artist(hash)) }
+                    }
                 )
+                // Shown from the start so the header doesn't jump; usable once the artist is loaded.
+                .disabled(detail == nil)
             }
     }
 
@@ -286,10 +308,8 @@ struct ArtistDetailView: View {
         if fullTracks == nil {
             fullTracks = makeFullTracksTask()
         }
+        loading = false
         similar = (try? await API.shared.similarArtists(hash)) ?? []
-        if let imagePath = detail?.artist.image {
-            await loadBackgroundImage(path: imagePath)
-        }
     }
 
     private func loadBackgroundImage(path: String) async {

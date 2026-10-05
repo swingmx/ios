@@ -193,6 +193,14 @@ struct Artist: Codable, Identifiable, Hashable {
 }
 
 extension Artist {
+    // The server names an artist's image after the artist. Stubs built from a track use this rather
+    // than the track's album art, which the artist screen would otherwise show as the portrait.
+    static func imageFile(for hash: String) -> String { "\(hash).webp" }
+
+    init(stub hash: String, name: String) {
+        self.init(stub: hash, name: name, image: Artist.imageFile(for: hash))
+    }
+
     init(stub hash: String, name: String, image: String) {
         self.init(artisthash: hash, name: name, image: image,
                   trackcount: nil, albumcount: nil, duration: nil, genres: nil, color: nil)

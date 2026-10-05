@@ -88,7 +88,7 @@ struct NowPlayingSongActions: View {
             if !song.artisthash.isEmpty {
                 Button {
                     state.navigationTarget = .artist(
-                        Artist(stub: song.artisthash, name: song.artist, image: song.image)
+                        Artist(stub: song.artisthash, name: song.artist)
                     )
                 } label: {
                     Label("Go to Artist", systemImage: "music.mic")
