@@ -33,7 +33,10 @@ final class ScrollTracker: ObservableObject {
 @Observable
 final class AppState {
     let scroll = ScrollTracker.shared
-    var authed = false
+    var authed = false {
+        // Plays made while logged out were waiting for a session to send them with.
+        didSet { if authed, !oldValue { Task { await ScrobbleQueue.shared.flush() } } }
+    }
     var tab: Tab = .home
     var accent: Color = .white
 

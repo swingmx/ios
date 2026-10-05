@@ -41,6 +41,23 @@ final class AudioPlayer: ObservableObject {
             case .none: ""
             }
         }
+
+        // Reads back a token, for the source saved with the queue.
+        init(token: String) {
+            func after(_ prefix: String) -> String? {
+                token.hasPrefix(prefix) ? String(token.dropFirst(prefix.count)) : nil
+            }
+            if token == "favorite" { self = .favorite }
+            else if let h = after("al:") { self = .album(h) }
+            else if let h = after("ar:") { self = .artist(h) }
+            else if let id = after("pl:") { self = .playlist(id) }
+            else if let p = after("fo:") { self = .folder(p) }
+            else if let q = after("q:") { self = .search(q) }
+            else if let m = after("mix:"), let dot = m.lastIndex(of: ".") {
+                // The source hash has no dots, so the last one separates it from the mix id.
+                self = .mix(id: String(m[..<dot]), sourcehash: String(m[m.index(after: dot)...]))
+            } else { self = .none }
+        }
     }
 
     @Published var playing = false
@@ -117,8 +134,9 @@ final class AudioPlayer: ObservableObject {
     private var obs: Any?
     private var statusObs: NSKeyValueObservation?
     private var assetLoader: AuthStreamLoader?
-    private var started: Date?
-    private var startTS = 0
+    // The play being counted for the server; see PlaySession.
+    private var session: PlaySession?
+    private var sessionSavedAt = 0.0
     private var lastActivitySecond = -1
     private var widgetCommandPoll: AnyCancellable?
     private var lastWidgetCommandAt: TimeInterval = 0
@@ -141,14 +159,22 @@ final class AudioPlayer: ObservableObject {
         observeInterruptions()
         restoreQueue()
         setupQueuePersistence()
+        recoverSession()
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.saveSession() }
+        }
     }
 
-    private struct QueueSnapshot: Codable {
+    struct QueueSnapshot: Codable {
         var queue: [Track]
         var index: Int
         var shuffle: Bool
         var baseOrder: [Track]
         var time: Double
+        // Optional so queues saved before it was added still load.
+        var source: String?
     }
 
     private static let queueStateURL: URL = {
@@ -158,7 +184,7 @@ final class AudioPlayer: ObservableObject {
     }()
 
     private func setupQueuePersistence() {
-        Publishers.CombineLatest($queue, $index)
+        Publishers.CombineLatest3($queue, $index, $source)
             .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in self?.persistQueue() }
             .store(in: &queueCancellables)
@@ -175,7 +201,8 @@ final class AudioPlayer: ObservableObject {
             try? FileManager.default.removeItem(at: Self.queueStateURL)
             return
         }
-        let snap = QueueSnapshot(queue: queue, index: index, shuffle: shuffle, baseOrder: baseOrder, time: time)
+        let snap = QueueSnapshot(queue: queue, index: index, shuffle: shuffle, baseOrder: baseOrder, time: time,
+                                 source: source.token)
         guard let data = try? JSONEncoder().encode(snap) else { return }
         try? data.write(to: Self.queueStateURL, options: .atomic)
     }
@@ -188,6 +215,8 @@ final class AudioPlayer: ObservableObject {
         index = snap.index
         shuffle = snap.shuffle
         baseOrder = snap.baseOrder
+        // Without this, plays after a restart were credited to no source and counted as plain tracks.
+        source = PlaySource(token: snap.source ?? "")
         current = snap.queue[snap.index]
         total = Double(snap.queue[snap.index].duration)
     }
@@ -239,7 +268,8 @@ final class AudioPlayer: ObservableObject {
 
     func play(_ track: Track, from list: [Track]? = nil, source: PlaySource = .none) {
         log()
-        if source != .none { self.source = source }
+        // A new list without a context isn't credited to the one playing before.
+        if source != .none || list != nil { self.source = source }
         if let list {
             baseOrder = list
             if shuffle {
@@ -412,7 +442,12 @@ final class AudioPlayer: ObservableObject {
             handOver(to: prep)
             return
         }
-        if loop == .one { seek(0); player?.play(); return }
+        if loop == .one {
+            // Each time round is its own play.
+            log()
+            if let t = current { beginSession(for: t) }
+            seek(0); player?.play(); return
+        }
         if index < queue.count - 1 { index += 1 }
         else if loop == .all { reshuffleForNewRound(); index = 0 }
         else {
@@ -561,8 +596,7 @@ final class AudioPlayer: ObservableObject {
             player?.play()
             playing = true
             logger.info("✅ Playing offline: \(track.title)")
-            started = Date()
-            startTS = Int(Date().timeIntervalSince1970)
+            beginSession(for: track)
             total = Double(track.duration)
             time = 0
             lastActivitySecond = -1
@@ -631,8 +665,7 @@ final class AudioPlayer: ObservableObject {
         playing = true
         Log.info("play", "→ trying candidate \(self.streamCandidateIndex + 1)/\(self.streamCandidates.count) via resource-loader")
         logger.info("▶️ Trying candidate \(self.streamCandidateIndex + 1)/\(self.streamCandidates.count) for \(track.title, privacy: .public)")
-        started = Date()
-        startTS = Int(Date().timeIntervalSince1970)
+        beginSession(for: track)
         total = Double(track.duration)
         time = 0
         resetClock(to: 0)
@@ -653,6 +686,7 @@ final class AudioPlayer: ObservableObject {
                 s.timeAnchor = seconds
                 s.timeAnchorDate = Date()
                 if let d = s.player?.currentItem?.duration.seconds, d.isFinite { s.total = d }
+                s.tickSession()
 
                 let sec = max(0, Int(seconds))
                 if sec != s.lastActivitySecond {
@@ -727,8 +761,7 @@ final class AudioPlayer: ObservableObject {
         prep.player.playImmediately(atRate: rate)
         resetClock(to: prep.player.currentTime().seconds)
         playing = true
-        started = Date()
-        startTS = Int(Date().timeIntervalSince1970)
+        beginSession(for: prep.track)
         total = Double(prep.track.duration)
         lastActivitySecond = -1
         updateNowPlaying()
@@ -908,13 +941,54 @@ final class AudioPlayer: ObservableObject {
         }
     }
 
+    // Ends the current play and queues it for the server if enough of it was heard.
     private func log() {
-        guard let t = current, let s = started else { return }
-        let d = Int(Date().timeIntervalSince(s))
-        if d >= 5 {
-            ScrobbleQueue.shared.record(trackhash: t.trackhash, timestamp: startTS, duration: d, source: source.token)
+        guard let s = session else { return }
+        session = nil
+        clearSavedSession()
+        if let play = s.play { ScrobbleQueue.shared.record(play) }
+    }
+
+    private func beginSession(for track: Track) {
+        // A retry of the same track (another stream URL) continues the same play.
+        if session?.trackhash == track.trackhash { return }
+        log()
+        session = PlaySession(trackhash: track.trackhash, source: source.token)
+        sessionSavedAt = 0
+    }
+
+    private func tickSession() {
+        guard session != nil else { return }
+        session?.tick(at: Date(), playing: playing && player?.timeControlStatus == .playing)
+        // Saved every few seconds of listening, so a play survives the app being closed or killed.
+        if let listened = session?.listened, listened - sessionSavedAt >= 5 {
+            sessionSavedAt = listened
+            saveSession()
         }
-        started = nil
+    }
+
+    private static let sessionURL: URL = {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("current_play.json")
+    }()
+
+    private func saveSession() {
+        guard let session, let data = try? JSONEncoder().encode(session) else { return }
+        try? data.write(to: Self.sessionURL, options: .atomic)
+    }
+
+    private func clearSavedSession() {
+        try? FileManager.default.removeItem(at: Self.sessionURL)
+    }
+
+    // A play still in progress when the app was last closed is queued as it stood then.
+    private func recoverSession() {
+        guard let data = try? Data(contentsOf: Self.sessionURL) else { return }
+        clearSavedSession()
+        if let saved = try? JSONDecoder().decode(PlaySession.self, from: data), let play = saved.play {
+            ScrobbleQueue.shared.record(play)
+        }
     }
 
     private func remote() {
