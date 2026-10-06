@@ -51,7 +51,7 @@ struct ArtistDetailView: View {
             }
         }
         .squeezeMiniPlayer(state)
-        .detailBackground(bgImage)
+        .detailBackground(bgImage, color: info.color)
         .detailScrollTitle(info.name, after: 380)
         .toolbar {
             if let d = detail {

@@ -43,7 +43,7 @@ struct AlbumDetailView: View {
             }
         }
         .squeezeMiniPlayer(state)
-        .detailBackground(bgImage)
+        .detailBackground(bgImage, color: info.color)
         .detailScrollTitle(info.title, after: 330)
         .toolbar {
             if let d = detail {
@@ -128,6 +128,22 @@ struct AlbumDetailView: View {
         return parts.joined(separator: " · ")
     }
 
+    // Track numbers as shown. The album endpoint fills missing tags with 1, so when numbers repeat
+    // within a disc they are meaningless and the tracks are numbered by position instead.
+    static func displayNumbers(_ ordered: [Track]) -> [Int] {
+        var seen = Set<String>()
+        let tagged = ordered.allSatisfy { t in
+            guard let n = t.trackno else { return false }
+            return seen.insert("\(t.disc ?? 1)-\(n)").inserted
+        }
+        var position: [Int: Int] = [:]
+        return ordered.map { t in
+            let disc = t.disc ?? 1
+            position[disc, default: 0] += 1
+            return tagged ? (t.trackno ?? position[disc]!) : position[disc]!
+        }
+    }
+
     private func sortedTracks(_ tracks: [Track]) -> [Track] {
         tracks.sorted { a, b in
             let da = a.disc ?? 1, db = b.disc ?? 1
@@ -138,6 +154,7 @@ struct AlbumDetailView: View {
 
     private func trackList(_ d: AlbumDetail) -> some View {
         let ordered = sortedTracks(d.tracks)
+        let numbers = Self.displayNumbers(ordered)
         let discs = Set(ordered.map { $0.disc ?? 1 })
         let multiDisc = discs.count > 1
         return VStack(spacing: 0) {
@@ -157,7 +174,7 @@ struct AlbumDetailView: View {
                     .padding(.top, i == 0 ? 8 : 24)
                     .padding(.bottom, 8)
                 }
-                TrackRow(track: t, num: t.trackno ?? (i + 1), active: state.isCurrentTrack(t), showArt: false) {
+                TrackRow(track: t, num: numbers[i], active: state.isCurrentTrack(t), showArt: false) {
                     state.player.play(t, from: ordered, source: .album(hash))
                 }
             }

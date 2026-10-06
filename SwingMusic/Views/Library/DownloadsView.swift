@@ -81,7 +81,7 @@ struct DownloadsView: View {
                 .font(.system(size: 13)).foregroundStyle(.secondary)
             Spacer()
             Text(dm.totalSize)
-                .font(.system(size: 13, design: .monospaced)).foregroundStyle(.secondary)
+                .font(.system(size: 13).monospacedDigit()).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
     }

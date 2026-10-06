@@ -1,11 +1,11 @@
 <div align="center" style="display: flex; justify-content: center; align-items: center;">
-  <img class="lo" src='github/images/logo-fill.light.svg' style="height: 4rem">
+  <img src='github/images/icon.png' width="96">
 </div>
 <div align="center" style="font-size: 2rem"><b>Swing Music iOS Client</b></div>
 
 <div align="center"><b><sub><code>v1.0.0 Beta 10</code></sub></b></div>
 
-**<div align="center" style="padding-top: 1.25rem"><a href="https://github.com/sponsors/swingmx" target="_blank">Sponsor Us ❤️</a> • [Swing Music Docs](https://swingmx.com/guide/introduction.html) • [r/SwingMusicApp](https://www.reddit.com/r/SwingMusicApp)</div>**
+**<div align="center" style="padding-top: 1.25rem">[Join the Beta](https://testflight.apple.com/join/68bWKBss) • <a href="https://github.com/sponsors/swingmx" target="_blank">Sponsor Us ❤️</a> • [Swing Music Docs](https://swingmx.com/guide/introduction.html) • [r/SwingMusicApp](https://www.reddit.com/r/SwingMusicApp)</div>**
 
 ##
 
@@ -59,7 +59,7 @@ More features will be implemented in the future.
 
 ### How to use
 
-Install the app via TestFlight. When you launch the app, enter your server address, username and password to log in.
+Install the app via [TestFlight](https://testflight.apple.com/join/68bWKBss). When you launch the app, enter your server address, username and password to log in.
 
 ### Thanks to
 
@@ -70,3 +70,7 @@ Install the app via TestFlight. When you launch the app, enter your server addre
 - [LNPopupUI](https://github.com/LeoNatan/LNPopupUI)
 - [LRCLIB](https://lrclib.net)
 - [MusicBrainz](https://musicbrainz.org) & [Wikipedia](https://www.wikipedia.org)
+
+### License
+
+This software is provided to you with terms stated in the AGPLv3 License. Read the full text in the `LICENSE` file located at the root of this repository.

@@ -24,8 +24,6 @@
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
 	</dict>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>This allows the app to show your music metadata and playback info.</string>

@@ -3,6 +3,7 @@ import SwiftUI
 struct DetailPlayButtons: View {
     let play: () -> Void
     let shuffle: () -> Void
+    @Environment(\.detailTint) private var tint
 
     var body: some View {
         HStack(spacing: 12) {
@@ -12,8 +13,9 @@ struct DetailPlayButtons: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                     .frame(maxWidth: 160)
+                    .foregroundStyle(tint == nil ? Color.white : Color.black.opacity(0.85))
             }
-            .buttonStyle(DetailButtonStyle(prominent: true))
+            .buttonStyle(DetailButtonStyle(prominent: true, accent: tint ?? .appAccent))
 
             Button(action: shuffle) {
                 Label("Shuffle", systemImage: "shuffle")
@@ -22,7 +24,7 @@ struct DetailPlayButtons: View {
                     .minimumScaleFactor(0.75)
                     .frame(maxWidth: 160)
             }
-            .buttonStyle(DetailButtonStyle(prominent: false))
+            .buttonStyle(DetailButtonStyle(prominent: false, accent: tint ?? .appAccent))
         }
         .padding(.horizontal, 20)
     }
@@ -39,13 +41,15 @@ enum DetailCardFill {
 // back to blue on return.
 private struct DetailButtonStyle: ButtonStyle {
     let prominent: Bool
+    // Play's fill and Shuffle's label: the artwork's tint on detail screens, else the app accent.
+    let accent: Color
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(prominent ? Color.white : Color.blue)
+            .foregroundStyle(prominent ? Color.white : accent)
             .padding(.vertical, 14)
             .padding(.horizontal, 20)
-            .background(prominent ? Color.blue : Color.primary.opacity(0.1), in: .capsule)
+            .background(prominent ? accent : Color.primary.opacity(0.1), in: .capsule)
             .opacity(configuration.isPressed ? 0.8 : 1)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
