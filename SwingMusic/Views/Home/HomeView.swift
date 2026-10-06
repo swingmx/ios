@@ -13,7 +13,7 @@ struct HomeView: View {
     }
 
     private enum HomeRoute: Hashable {
-        case allAlbums, allArtists
+        case allAlbums, allArtists, favoriteSongs
     }
 
     @State private var didLoad = false
@@ -60,6 +60,7 @@ struct HomeView: View {
                 switch route {
                 case .allAlbums: AlbumsGridView()
                 case .allArtists: ArtistsGridView()
+                case .favoriteSongs: FavoriteTracksView()
                 }
             }
             .appDestinations(zoom: zoomNS)
@@ -290,6 +291,19 @@ struct HomeView: View {
             }
             .buttonStyle(PressableCardStyle())
             .contextMenu { trackMenuItems(t) }
+        case .favorites(let f):
+            NavigationLink(value: HomeRoute.favoriteSongs) {
+                VStack(alignment: .leading, spacing: 8) {
+                    FavoritesArtwork(image: f.image)
+                        .frame(width: 150, height: 150)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Favorite Songs").font(.system(size: 15, weight: .bold)).foregroundStyle(.primary).lineLimit(1)
+                        Text("Playlist").font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    .frame(width: 150, alignment: .leading)
+                }
+            }
+            .buttonStyle(PressableCardStyle())
         case .mix(let m):
             NavigationLink(value: m) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -493,5 +507,27 @@ struct PressableCardStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .opacity(configuration.isPressed ? 0.8 : 1)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+// The favorites card's cover: the last favorited song's artwork, blurred, under a heart.
+private struct FavoritesArtwork: View {
+    let image: String?
+
+    var body: some View {
+        ZStack {
+            if let image, let url = API.shared.img(image, size: "small") {
+                Img(url: url, radius: 0)
+                    .blur(radius: 18, opaque: true)
+                    .overlay(Color.black.opacity(0.25))
+            } else {
+                Color.primary.opacity(0.08)
+            }
+            Image(systemName: "heart.fill")
+                .font(.system(size: 52, weight: .semibold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

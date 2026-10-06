@@ -246,20 +246,7 @@ final class AppState {
                 guard let type = raw["type"] as? String,
                       let itemObj = raw["item"],
                       let itemData = try? JSONSerialization.data(withJSONObject: itemObj) else { continue }
-                switch type {
-                case "album":
-                    if let a = try? JSONDecoder().decode(Album.self, from: itemData) { items.append(.album(a)) }
-                case "artist":
-                    if let a = try? JSONDecoder().decode(Artist.self, from: itemData) { items.append(.artist(a)) }
-                case "track":
-                    if let t = try? JSONDecoder().decode(Track.self, from: itemData) { items.append(.track(t)) }
-                case "playlist":
-                    if let p = try? JSONDecoder().decode(Playlist.self, from: itemData) { items.append(.playlist(p)) }
-                case "mix":
-                    if let m = try? JSONDecoder().decode(Mix.self, from: itemData) { items.append(.mix(m)) }
-                default:
-                    break
-                }
+                if let item = HomeItem.decode(type: type, json: itemData) { items.append(item) }
             }
             if !items.isEmpty { result.append(HomeSection(id: key, title: title, description: description, items: items)) }
         }

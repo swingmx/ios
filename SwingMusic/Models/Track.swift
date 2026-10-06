@@ -547,12 +547,20 @@ struct Mix: Codable, Identifiable, Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
+// Your favorite songs as one item, as Recently Played shows them after playing from favorites.
+struct FavoritesItem: Codable, Hashable {
+    // The last favorited track's artwork.
+    let image: String?
+    let count: Int?
+}
+
 enum HomeItem: Identifiable, Hashable {
     case album(Album)
     case artist(Artist)
     case track(Track)
     case playlist(Playlist)
     case mix(Mix)
+    case favorites(FavoritesItem)
 
     var id: String {
         switch self {
@@ -561,6 +569,21 @@ enum HomeItem: Identifiable, Hashable {
         case .track(let t): "tr:\(t.trackhash)"
         case .playlist(let p): "pl:\(p.id)"
         case .mix(let m): "mix:\(m.id)"
+        case .favorites: "favorites"
+        }
+    }
+
+    // One item of a home section, from its "type" and "item" JSON; nil for kinds the app doesn't show.
+    static func decode(type: String, json: Data) -> HomeItem? {
+        let d = JSONDecoder()
+        switch type {
+        case "album": return (try? d.decode(Album.self, from: json)).map(HomeItem.album)
+        case "artist": return (try? d.decode(Artist.self, from: json)).map(HomeItem.artist)
+        case "track": return (try? d.decode(Track.self, from: json)).map(HomeItem.track)
+        case "playlist": return (try? d.decode(Playlist.self, from: json)).map(HomeItem.playlist)
+        case "mix": return (try? d.decode(Mix.self, from: json)).map(HomeItem.mix)
+        case "favorite": return (try? d.decode(FavoritesItem.self, from: json)).map(HomeItem.favorites)
+        default: return nil
         }
     }
 }
