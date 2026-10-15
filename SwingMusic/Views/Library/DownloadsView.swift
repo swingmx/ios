@@ -2,7 +2,7 @@ import SwiftUI
 
 struct DownloadsView: View {
     @ObservedObject var dm = DownloadManager.shared
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
 
     var body: some View {
         Group {
@@ -39,7 +39,7 @@ struct DownloadsView: View {
                             .padding(.bottom, 4)
 
                             ForEach(Array(singles.enumerated()), id: \.element.id) { i, track in
-                                TrackRow(track: track, num: i + 1, active: state.player.current == track) {
+                                TrackRow(track: track, num: i + 1, active: state.isCurrentTrack(track)) {
                                     state.player.play(track, from: singles)
                                 }
                                 .swipeActions(edge: .trailing) {
@@ -159,7 +159,7 @@ struct DownloadsView: View {
 struct DownloadedGroupView: View {
     let group: DownloadManager.DownloadGroup
     @ObservedObject var dm = DownloadManager.shared
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @Environment(\.dismiss) private var dismiss
 
     private var tracks: [Track] { dm.tracks(in: group) }
@@ -186,7 +186,7 @@ struct DownloadedGroupView: View {
                 .padding(.horizontal, 16).padding(.vertical, 12)
 
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
-                    TrackRow(track: t, num: i + 1, active: state.player.current == t) {
+                    TrackRow(track: t, num: i + 1, active: state.isCurrentTrack(t)) {
                         state.player.play(t, from: tracks)
                     }
                 }

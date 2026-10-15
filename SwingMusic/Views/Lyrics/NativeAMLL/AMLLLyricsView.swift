@@ -11,8 +11,11 @@ private enum MeloXLayout {
     static let backgroundVocalsFontCoefficient: CGFloat = 0.75
     static let backgroundVocalsDeselectedScale = 0.9
     static let deselectedScale = 0.98
-    static let nonFocusedBlurRadius = 3.0
+    static let nearestLineBlurRadius = 1.0
+    static let blurRadiusStepPerLine = 0.75
     static let maximumNonFocusedBlurRadius = 4.0
+    static let scrollLead = 0.35
+    static let wordLead = 0.15
     static let selectedTextOpacity = 1.0
     static let selectedUpcomingTextOpacity = 0.35
     static let deselectedTextOpacity = 0.175
@@ -876,11 +879,9 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
 
     deinit { link?.invalidate() }
 
-    static let headstart = 0.0
-
     private var now: Double {
         if debugFakePlay { return playing ? anchorTime + (CACurrentMediaTime() - anchorHost) : anchorTime }
-        return player.smoothTime() + (playing ? Self.headstart : 0)
+        return player.smoothTime()
     }
 
     private var lastReceived: (t: Double, host: CFTimeInterval)?
@@ -1009,7 +1010,7 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
         let h = bounds.height
         var allSettled = true
         for g in groups {
-            g.update(dt: dt, time: t, viewHeight: h, playing: playing)
+            g.update(dt: dt, time: t + MeloXLayout.wordLead, viewHeight: h, playing: playing)
             if !g.settled { allSettled = false }
         }
         creditsGroup?.update(dt: dt, time: t, viewHeight: h, playing: playing)
@@ -1027,13 +1028,14 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
     private func setCurrentTime(_ t: Double) {
         let seeking = isSeeking
         isSeeking = false
+        let lead = t + MeloXLayout.scrollLead
         var next = hot
         var added = Set<Int>(), removedHot = Set<Int>(), removedBuf = Set<Int>()
         for id in hot {
             let g = groups[id]
-            if t < g.start || g.end <= t { next.remove(id); removedHot.insert(id) }
+            if lead < g.start || g.end <= t { next.remove(id); removedHot.insert(id) }
         }
-        for (id, g) in groups.enumerated() where g.start <= t && g.end > t && !next.contains(id) {
+        for (id, g) in groups.enumerated() where g.start <= lead && g.end > t && !next.contains(id) {
             next.insert(id); added.insert(id)
         }
         for id in buffered where !next.contains(id) { removedBuf.insert(id) }
@@ -1045,7 +1047,7 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
             if let m = buffered.min() {
                 scrollToIndex = m
             } else {
-                scrollToIndex = groups.firstIndex { $0.start >= t } ?? groups.count
+                scrollToIndex = groups.firstIndex { $0.start >= lead } ?? groups.count
             }
             for id in removedHot.union(removedBuf) { groups[id].disable() }
             for id in hot { groups[id].enable() }
@@ -1056,10 +1058,17 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
         } else if !added.isEmpty {
             for id in added { buffered.insert(id); groups[id].enable() }
             for id in removedBuf { buffered.remove(id); groups[id].disable() }
+            // A line ending within the lead stops holding the scroll, so the new line scrolls into place
+            // before it starts. It is still in `hot`, so it stays highlighted until it ends.
+            for id in buffered where !added.contains(id) && groups[id].end <= lead { buffered.remove(id) }
             if let m = buffered.min() { scrollToIndex = m }
             layout = true
         } else if !removedBuf.isEmpty, removedBuf == buffered {
             for id in buffered where !hot.contains(id) { buffered.remove(id); groups[id].disable() }
+            layout = true
+        } else if !removedHot.isEmpty {
+            // A line released early above has now ended: dim it.
+            for id in removedHot where !buffered.contains(id) { groups[id].disable() }
             layout = true
         }
 
@@ -1123,7 +1132,7 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
         presentation.reserveCapacity(groups.count)
         for i in groups.indices {
             let hasBuf = buffered.contains(i)
-            let active = hasBuf || (i >= scrollToIndex && i < latest)
+            let active = hasBuf || hot.contains(i) || (i >= scrollToIndex && i < latest)
             presentation.append((active, hasBuf ? 0.85 : 1, lineBlur(i, active: active, latest: latest)))
             groups[i].isActive = active
         }
@@ -1134,14 +1143,20 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
         let dotMargin: CGFloat = 0
         let dotsH = dots?.size.height ?? 0
 
-        let before = heights.prefix(min(scrollToIndex, heights.count)).reduce(0, +)
+        let ascender = AMLLFont.bold(em).ascender
+        let focusTop = max(60, viewH * MeloXLayout.selectedLineTopRelativePercent / 100 - ascender)
+        let dotsAbove: CGFloat = interlude.map { $0.anchor != -1 ? dotsH + MeloXLayout.lineSpacing : 0 } ?? 0
+        let dotsInList: CGFloat = interlude == nil ? 0 : dotsH + MeloXLayout.lineSpacing
+
+        var before = heights.prefix(min(scrollToIndex, heights.count)).reduce(0, +)
+        if let lastH = heights.last {
+            let lastTop = heights.dropLast().reduce(0, +) + dotsInList - dotsAbove + focusTop
+            let middle = min(bounds.height / 2, viewH - lastH / 2)
+            before = min(before, max(0, lastTop - (middle - lastH / 2)))
+        }
         scrollMin = -before
         if isUserScrolling { scrollOffset = scroller.contentOffset.y - before }
-        var cur = -scrollOffset
-        if let iv = interlude, iv.anchor != -1 { cur -= dotsH + MeloXLayout.lineSpacing }
-        cur -= before
-        let ascender = AMLLFont.bold(em).ascender
-        cur += max(60, viewH * MeloXLayout.selectedLineTopRelativePercent / 100 - ascender)
+        var cur = -scrollOffset - dotsAbove - before + focusTop
         let targetH: CGFloat = scrollToIndex < groups.count
             ? heights[scrollToIndex]
             : (creditsGroup?.height(playing: playing) ?? fallback)
@@ -1182,8 +1197,8 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
     private func lineBlur(_ i: Int, active: Bool, latest: Int) -> Double {
         if isUserScrolling || active { return 0 }
         let d = i < scrollToIndex ? scrollToIndex - i : i - max(scrollToIndex, latest)
-        let r0 = MeloXLayout.nonFocusedBlurRadius, r1 = MeloXLayout.maximumNonFocusedBlurRadius
-        return r0 + (r1 - r0) * min(max(Double(d) - 1, 0), 1)
+        let blur = MeloXLayout.nearestLineBlurRadius + MeloXLayout.blurRadiusStepPerLine * Double(max(d - 1, 0))
+        return min(blur, MeloXLayout.maximumNonFocusedBlurRadius)
     }
 
     private let scroller = UIScrollView()
@@ -1305,10 +1320,26 @@ private struct AMLLPlayerRepresentable: UIViewRepresentable {
 struct NativeAMLLLyricsView: View {
     var bottomInset: CGFloat = 341
     var topInset: CGFloat = 0
+    // Whether the lyrics are on screen. Lyrics are only searched for while they are.
+    var isActive = true
     var onReady: (() -> Void)? = nil
 
+    @Environment(AppState.self) private var appState
     @StateObject private var engine = AMLLEngine()
     @State private var appLyrics: ParsedLyrics?
+    @State private var trackID: String?
+
+    // How long the word-by-word search may run before the app's own search starts alongside it.
+    private static let fallbackDelay: Duration = .seconds(4)
+
+    // On screen: the lyrics page is selected and the full player is open.
+    private var wanted: Bool { isActive && appState.showPlayer }
+
+    private struct Request: Equatable {
+        let trackID: String?
+        let active: Bool
+        var engineState: AMLLEngine.State = .idle
+    }
 
     private func applyFallback() {
         guard engine.state == .empty, let id = AudioPlayer.shared.current?.id else { return }
@@ -1349,8 +1380,29 @@ struct NativeAMLLLyricsView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .padding(.top, topInset)
-        .onReceive(AudioPlayer.shared.$current.map { $0?.id }.removeDuplicates()) { _ in
-            if let t = AudioPlayer.shared.current { engine.load(for: t) }
+        .onReceive(AudioPlayer.shared.$current.map { $0?.id }.removeDuplicates()) { trackID = $0 }
+        .task(id: Request(trackID: trackID, active: wanted)) {
+            guard let t = AudioPlayer.shared.current, t.id == trackID else { engine.reset(); return }
+            if wanted {
+                engine.load(for: t)
+            } else if engine.loadedID != t.id {
+                // Hidden and the track changed: drop the old track's search rather than finish it.
+                engine.reset()
+            }
+        }
+        // The app's own search (server, lrclib, Musixmatch) only runs as the fallback: when the
+        // word-by-word search finds nothing, or is still going after fallbackDelay.
+        .task(id: Request(trackID: trackID, active: wanted, engineState: engine.state)) {
+            guard wanted, let t = AudioPlayer.shared.current, t.id == trackID else { return }
+            switch engine.state {
+            case .empty:
+                appState.loadLyrics(for: t)
+            case .loading:
+                try? await Task.sleep(for: Self.fallbackDelay)
+                if !Task.isCancelled { appState.loadLyrics(for: t) }
+            case .idle, .ready:
+                break
+            }
         }
         .onChange(of: engine.state) { _, s in
             applyFallback()
@@ -1375,11 +1427,11 @@ struct NativeAMLLLyricsView: View {
 }
 
 private struct AppLyricsListener: View {
-    @EnvironmentObject private var state: AppState
+    @Environment(AppState.self) private var state
     let onChange: (ParsedLyrics?) -> Void
 
     var body: some View {
         Color.clear
-            .onReceive(state.$lyrics) { onChange($0) }
+            .onChange(of: state.lyricsRevision, initial: true) { onChange(state.lyrics) }
     }
 }

@@ -45,4 +45,31 @@ struct PlaylistImageTests {
         #expect(decoded.hasImage == false)
         #expect(decoded.customImage == nil)
     }
+
+    // The home feed lists the grid images as plain strings, /playlists as objects. Both have to work,
+    // or the grid comes up empty and only the placeholder shows.
+    @Test func gridImagesDecodeFromTheHomeFeedAndThePlaylistsList() throws {
+        let fromHome = try playlist(#"{"id": 20, "name": "Anime Essentials", "image": "None", "has_image": false, "images": ["a.webp?pathhash=1", "b.webp?pathhash=1"]}"#)
+        let fromList = try playlist(#"{"id": 20, "name": "Anime Essentials", "image": "None", "has_image": false, "images": [{"color": "rgb(139, 79, 60)", "image": "a.webp?pathhash=1"}, {"color": "rgb(26, 17, 12)", "image": "b.webp?pathhash=1"}]}"#)
+
+        #expect(fromHome.images?.map(\.image) == ["a.webp?pathhash=1", "b.webp?pathhash=1"])
+        #expect(fromList.images == fromHome.images)
+    }
+
+    // Playlists are saved for offline use by encoding them, so the decoded images must survive a round trip.
+    @Test func gridImagesSurviveEncoding() throws {
+        let p = try playlist(#"{"id": 20, "name": "Mix", "images": ["a.webp"]}"#)
+
+        let reloaded = try JSONDecoder().decode(Playlist.self, from: JSONEncoder().encode(p))
+
+        #expect(reloaded.images?.map(\.image) == ["a.webp"])
+    }
+
+    // Each grid cell gets the smallest server thumbnail that is still sharp at its size on screen.
+    @Test func gridCellsAskForAThumbnailSharpEnoughForTheirSize() {
+        #expect(PlaylistImageGrid.thumbnailSizes(forCell: 22, scale: 3) == ["small", "medium"])   // 44 pt list row
+        #expect(PlaylistImageGrid.thumbnailSizes(forCell: 75, scale: 3) == ["medium", ""])        // 150 pt home card
+        #expect(PlaylistImageGrid.thumbnailSizes(forCell: 135, scale: 3) == ["", "medium"])       // 270 pt header
+        #expect(PlaylistImageGrid.thumbnailSizes(forCell: 75, scale: 1) == ["small", "medium"])
+    }
 }

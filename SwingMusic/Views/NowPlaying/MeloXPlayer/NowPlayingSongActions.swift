@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct NowPlayingSongActions: View {
-    @EnvironmentObject private var state: AppState
+    @Environment(AppState.self) private var state
 
     let song: Song
     var showsFavoriteButton = true
@@ -33,7 +33,7 @@ struct NowPlayingSongActions: View {
         }
         .sheet(isPresented: $showPlaylistSheet) {
             AddToPlaylistSheet(track: song)
-                .environmentObject(state)
+                .environment(state)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -88,7 +88,7 @@ struct NowPlayingSongActions: View {
             if !song.artisthash.isEmpty {
                 Button {
                     state.navigationTarget = .artist(
-                        Artist(stub: song.artisthash, name: song.artist, image: song.image)
+                        Artist(stub: song.artisthash, name: song.artist)
                     )
                 } label: {
                     Label("Go to Artist", systemImage: "music.mic")

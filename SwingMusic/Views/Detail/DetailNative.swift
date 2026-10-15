@@ -15,8 +15,7 @@ struct DetailPlayButtons: View {
                     .frame(maxWidth: 160)
                     .foregroundStyle(tint == nil ? Color.white : Color.black.opacity(0.85))
             }
-            .buttonStyle(.glassProminent)
-            .tint(tint)
+            .buttonStyle(DetailButtonStyle(prominent: true, accent: tint ?? .appAccent))
 
             Button(action: shuffle) {
                 Label("Shuffle", systemImage: "shuffle")
@@ -25,10 +24,35 @@ struct DetailPlayButtons: View {
                     .minimumScaleFactor(0.75)
                     .frame(maxWidth: 160)
             }
-            .buttonStyle(.glass)
+            .buttonStyle(DetailButtonStyle(prominent: false, accent: tint ?? .appAccent))
         }
-        .controlSize(.large)
         .padding(.horizontal, 20)
+    }
+}
+
+// The fill for cards and pills on album and artist screens. Solid rather than glass for the same
+// reason as DetailButtonStyle: glass showed as grey in the app switcher.
+enum DetailCardFill {
+    static let color = Color.primary.opacity(0.08)
+}
+
+// Solid capsules rather than glass, like Apple Music's. Glass is drawn live from the content behind
+// it, which iOS stops doing for the app switcher snapshot: the buttons showed as grey there and faded
+// back to blue on return.
+private struct DetailButtonStyle: ButtonStyle {
+    let prominent: Bool
+    // Play's fill and Shuffle's label: the artwork's tint on detail screens, else the app accent.
+    let accent: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(prominent ? Color.white : accent)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 20)
+            .background(prominent ? accent : Color.primary.opacity(0.1), in: .capsule)
+            .opacity(configuration.isPressed ? 0.8 : 1)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
@@ -114,7 +138,7 @@ struct StatsRow: View {
     }
 
     private func card(_ stat: ArtistStat) -> some View {
-        let accent = color.flatMap { Color(rgbString: $0) } ?? .accentColor
+        let accent = color.flatMap { Color(rgbString: $0) } ?? .appAccent
         return VStack(alignment: .leading, spacing: 0) {
             if let image = stat.image, !image.isEmpty {
                 Img(url: API.shared.img(image, size: "small"), radius: 6)
@@ -140,7 +164,7 @@ struct StatsRow: View {
         }
         .padding(14)
         .frame(width: 150, height: 130, alignment: .topLeading)
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .background(DetailCardFill.color, in: .rect(cornerRadius: 20))
     }
 
     static func icon(_ cssclass: String) -> String {

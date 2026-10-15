@@ -26,38 +26,47 @@ final class ScrollTracker: ObservableObject {
     }
 }
 
+// Observable rather than ObservableObject so a view re-renders only when a property it read changes.
+// With ObservableObject every change re-rendered every view holding AppState, which rebuilt any open
+// menu each time and made it flicker.
 @MainActor
-final class AppState: ObservableObject {
+@Observable
+final class AppState {
     let scroll = ScrollTracker.shared
-    @Published var authed = false
-    @Published var tab: Tab = .home
-    @Published var accent: Color = .white
+    var authed = false {
+        // Plays made while logged out were waiting for a session to send them with.
+        didSet { if authed, !oldValue { Task { await ScrobbleQueue.shared.flush() } } }
+    }
+    var tab: Tab = .home
+    var accent: Color = .white
 
-    @Published var recentAdded: [Album] = []
-    @Published var recentPlayed: [Album] = []
-    @Published var topTracks: [Track] = []
-    @Published var allAlbums: [Album] = []
-    @Published var allArtists: [Artist] = []
-    @Published var allPlaylists: [Playlist] = []
-    @Published var favTracks: [Track] = []
-    @Published var favAlbums: [Album] = []
-    @Published var favArtists: [Artist] = []
+    var recentAdded: [Album] = []
+    var recentPlayed: [Album] = []
+    var topTracks: [Track] = []
+    var allAlbums: [Album] = []
+    var allArtists: [Artist] = []
+    var allPlaylists: [Playlist] = []
+    var favTracks: [Track] = []
+    var favAlbums: [Album] = []
+    var favArtists: [Artist] = []
 
-    @Published var showPlayer = false
-    @Published var showLyrics = false
-    @Published var lyrics: ParsedLyrics?
-    var lyricIdx = 0
-    @Published var loadingLyrics = false
+    var showPlayer = false
+    var showLyrics = false
+    var lyrics: ParsedLyrics? { didSet { lyricsRevision &+= 1 } }
+    // Changes whenever lyrics is set, for views that need to react to it: ParsedLyrics isn't Equatable.
+    private(set) var lyricsRevision = 0
+    @ObservationIgnored var lyricIdx = 0
+    var loadingLyrics = false
 
-    @Published var colorCache: [String: Color] = [:]
-    @Published var currentBGImage: UIImage?
-    @Published var appearanceMode: AppearanceMode = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "") ?? .dark {
+    var colorCache: [String: Color] = [:]
+    var currentBGImage: UIImage?
+    var appearanceMode: AppearanceMode = AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "") ?? .dark {
         didSet { UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appearanceMode") }
     }
 
-    @Published var favTracksTotal = 0
-    @Published var favAlbumsTotal = 0
-    @Published var favArtistsTotal = 0
+    var favTracksTotal = 0
+    var favAlbumsTotal = 0
+    var favArtistsTotal = 0
 
     enum AppearanceMode: String, CaseIterable {
         case system = "System"
@@ -73,13 +82,16 @@ final class AppState: ObservableObject {
         }
     }
 
-    @Published var homePath = NavigationPath()
-    @Published var libraryPath = NavigationPath()
-    @Published var favoritesPath = NavigationPath()
-    @Published var searchPath = NavigationPath()
+    var homePath = NavigationPath()
+    var libraryPath = NavigationPath()
+    var favoritesPath = NavigationPath()
+    var searchPath = NavigationPath()
 
     let player = AudioPlayer.shared
-    private var bag = Set<AnyCancellable>()
+    // The playing track's hash, mirrored from the player so views can observe it. Set by the player
+    // subscription in init; settable here only so tests can drive it without starting playback.
+    var playingTrackHash: String?
+    @ObservationIgnored private var bag = Set<AnyCancellable>()
 
     enum Tab: String { case home, library, favorites, search, settings }
 
@@ -89,12 +101,12 @@ final class AppState: ObservableObject {
         case folder(Folder)
     }
 
-    @Published var navigationTarget: NavTarget?
-    @Published var requestedTrackForPlaylist: Track? = nil
-    @Published var keyboardVisible = false
+    var navigationTarget: NavTarget?
+    var requestedTrackForPlaylist: Track? = nil
+    var keyboardVisible = false
 
-    @Published var showBugReport = false
-    @Published var currentBugReport: BugReport?
+    var showBugReport = false
+    var currentBugReport: BugReport?
 
     func beginBugReport() {
         currentBugReport = BugReport.generate()
@@ -120,7 +132,11 @@ final class AppState: ObservableObject {
         authed = API.shared.authed
         player.$current
             .removeDuplicates()
-            .sink { [weak self] t in Task { @MainActor in if let t { await self?.onTrack(t) } } }
+            .sink { [weak self] t in
+                self?.playingTrackHash = t?.trackhash
+                self?.resetLyrics()
+                Task { @MainActor in if let t { await self?.onTrack(t) } }
+            }
             .store(in: &bag)
         player.$time
             .sink { [weak self] t in self?.syncLyric(t) }
@@ -179,7 +195,7 @@ final class AppState: ObservableObject {
         catch { print("❌ Artists laden: \(error)") }
     }
 
-    @Published var shufflingLibrary = false
+    var shufflingLibrary = false
 
     func shuffleLibrary() async {
         guard !shufflingLibrary else { return }
@@ -211,7 +227,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    @Published var homeSections: [HomeSection] = []
+    var homeSections: [HomeSection] = []
 
     func loadHomeSections() async {
         guard let data = try? await API.shared.homeData(),
@@ -230,20 +246,7 @@ final class AppState: ObservableObject {
                 guard let type = raw["type"] as? String,
                       let itemObj = raw["item"],
                       let itemData = try? JSONSerialization.data(withJSONObject: itemObj) else { continue }
-                switch type {
-                case "album":
-                    if let a = try? JSONDecoder().decode(Album.self, from: itemData) { items.append(.album(a)) }
-                case "artist":
-                    if let a = try? JSONDecoder().decode(Artist.self, from: itemData) { items.append(.artist(a)) }
-                case "track":
-                    if let t = try? JSONDecoder().decode(Track.self, from: itemData) { items.append(.track(t)) }
-                case "playlist":
-                    if let p = try? JSONDecoder().decode(Playlist.self, from: itemData) { items.append(.playlist(p)) }
-                case "mix":
-                    if let m = try? JSONDecoder().decode(Mix.self, from: itemData) { items.append(.mix(m)) }
-                default:
-                    break
-                }
+                if let item = HomeItem.decode(type: type, json: itemData) { items.append(item) }
             }
             if !items.isEmpty { result.append(HomeSection(id: key, title: title, description: description, items: items)) }
         }
@@ -302,12 +305,50 @@ final class AppState: ObservableObject {
     }
 
     // Albums and artists: the Favorites lists follow the change, which is undone if the server rejects it.
+    // Album and artist favorite changes made in this session, so every screen showing one agrees
+    // without refetching it. Like favoriteTrackChanges, they take precedence over the server's flag.
+    private(set) var favoriteAlbumChanges: [String: Bool] = [:]
+    private(set) var favoriteArtistChanges: [String: Bool] = [:]
+
+    func isAlbumFavorite(_ album: Album) -> Bool {
+        favoriteAlbumChanges[album.albumhash]
+            ?? album.isFavorite
+            ?? favAlbums.contains { $0.albumhash == album.albumhash }
+    }
+
+    func isArtistFavorite(_ artist: Artist) -> Bool {
+        favoriteArtistChanges[artist.artisthash]
+            ?? artist.isFavorite
+            ?? favArtists.contains { $0.artisthash == artist.artisthash }
+    }
+
+    // Shown straight away, and put back if the server rejects the change. Returns the resulting state.
+    @discardableResult
     func setAlbumFavorite(_ album: Album, _ fav: Bool) async -> Bool {
+        applyAlbumFavorite(album, fav)
         do {
             try await API.shared.toggleFavorite(hash: album.albumhash, type: "album", add: fav)
+            return fav
         } catch {
-            return false
+            applyAlbumFavorite(album, !fav)
+            return !fav
         }
+    }
+
+    @discardableResult
+    func setArtistFavorite(_ artist: Artist, _ fav: Bool) async -> Bool {
+        applyArtistFavorite(artist, fav)
+        do {
+            try await API.shared.toggleFavorite(hash: artist.artisthash, type: "artist", add: fav)
+            return fav
+        } catch {
+            applyArtistFavorite(artist, !fav)
+            return !fav
+        }
+    }
+
+    private func applyAlbumFavorite(_ album: Album, _ fav: Bool) {
+        favoriteAlbumChanges[album.albumhash] = fav
         let present = favAlbums.contains { $0.albumhash == album.albumhash }
         if fav && !present {
             favAlbums.insert(album, at: 0)
@@ -316,15 +357,10 @@ final class AppState: ObservableObject {
             favAlbums.removeAll { $0.albumhash == album.albumhash }
             favAlbumsTotal = max(0, favAlbumsTotal - 1)
         }
-        return true
     }
 
-    func setArtistFavorite(_ artist: Artist, _ fav: Bool) async -> Bool {
-        do {
-            try await API.shared.toggleFavorite(hash: artist.artisthash, type: "artist", add: fav)
-        } catch {
-            return false
-        }
+    private func applyArtistFavorite(_ artist: Artist, _ fav: Bool) {
+        favoriteArtistChanges[artist.artisthash] = fav
         let present = favArtists.contains { $0.artisthash == artist.artisthash }
         if fav && !present {
             favArtists.insert(artist, at: 0)
@@ -333,11 +369,14 @@ final class AppState: ObservableObject {
             favArtists.removeAll { $0.artisthash == artist.artisthash }
             favArtistsTotal = max(0, favArtistsTotal - 1)
         }
-        return true
     }
 
     // Favorite changes made in this session, which the track values already on screen do not reflect.
-    @Published private(set) var favoriteTrackChanges: [String: Bool] = [:]
+    private(set) var favoriteTrackChanges: [String: Bool] = [:]
+
+    func isCurrentTrack(_ track: Track) -> Bool {
+        playingTrackHash == track.trackhash
+    }
 
     func isTrackFavorite(_ track: Track) -> Bool {
         favoriteTrackChanges[track.trackhash]
@@ -385,10 +424,11 @@ final class AppState: ObservableObject {
         do {
             let res = try await API.shared.playlists()
             print("✅ Loaded \(res.count) playlists from server.")
-            allPlaylists = res
+            // Assigning an unchanged list would still rebuild every view showing playlists.
+            if res != allPlaylists { allPlaylists = res }
         } catch {
+            // Keep what is already shown: clearing it made playlists vanish whenever the server was unreachable.
             print("❌ Failed to load playlists: \(error.localizedDescription)")
-            allPlaylists = []
         }
     }
 
@@ -401,13 +441,38 @@ final class AppState: ObservableObject {
     }
 
     private func onTrack(_ track: Track) async {
-        lyrics = nil; lyricIdx = 0; loadingLyrics = true
         let c = await color(for: track.albumhash)
         withAnimation(.easeInOut(duration: 1.0)) { accent = c }
-
-        let musixmatchTask = wordByWordTask(for: track)
-
         await loadBGImage(for: track)
+        await ActivityManager.shared.updateAccent(c)
+    }
+
+    @ObservationIgnored private var lyricsTask: Task<Void, Never>?
+    @ObservationIgnored private var lyricsTrackHash: String?
+
+    // Lyrics are only fetched when something shows them: the lyrics view asks for them when its own
+    // word-by-word search comes up empty or slow. A track change cancels a search still running.
+    func loadLyrics(for track: Track) {
+        guard track.trackhash == player.current?.trackhash, lyricsTrackHash != track.trackhash else { return }
+        lyricsTask?.cancel()
+        lyricsTrackHash = track.trackhash
+        lyrics = nil
+        loadingLyrics = true
+        lyricsTask = Task { [weak self] in await self?.fetchLyrics(for: track) }
+    }
+
+    private func resetLyrics() {
+        lyricsTask?.cancel()
+        lyricsTask = nil
+        lyricsTrackHash = nil
+        if lyrics != nil { lyrics = nil }
+        lyricIdx = 0
+        loadingLyrics = false
+    }
+
+    private func fetchLyrics(for track: Track) async {
+        let musixmatchTask = wordByWordTask(for: track)
+        defer { if Task.isCancelled { musixmatchTask?.cancel() } }
 
         var parsed: ParsedLyrics?
 
@@ -484,9 +549,9 @@ final class AppState: ObservableObject {
             }
         }
 
+        guard !Task.isCancelled, lyricsTrackHash == track.trackhash else { return }
         lyrics = parsed
         loadingLyrics = false
-        await ActivityManager.shared.updateAccent(c)
 
         await upgradeToWordByWord(for: track, task: musixmatchTask)
     }
@@ -517,7 +582,7 @@ final class AppState: ObservableObject {
 
         let lrc = await task.value
         guard let lrc else { return }
-        guard player.current?.trackhash == track.trackhash else { return }
+        guard !Task.isCancelled, lyricsTrackHash == track.trackhash else { return }
 
         let parsed = parseLyrics(
             LyricsResponse(lyrics: .string(lrc), synced: true, copyright: "Lyrics by Musixmatch"),

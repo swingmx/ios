@@ -2,7 +2,7 @@ import SwiftUI
 
 struct AddToPlaylistSheet: View {
     let track: Track?
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @Environment(\.dismiss) var dismiss
     @State private var newPlaylistName = ""
     @State private var showingCreateAlert = false

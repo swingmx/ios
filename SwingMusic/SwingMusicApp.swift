@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct SwingMusicApp: App {
-    @StateObject private var state = AppState()
+    @State private var state = AppState()
     @AppStorage(ShakeToReport.key) private var shakeToReport = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -25,7 +25,7 @@ struct SwingMusicApp: App {
                     LoginView()
                 }
             }
-            .environmentObject(state)
+            .environment(state)
             .preferredColorScheme(state.appearanceMode.colorScheme)
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {

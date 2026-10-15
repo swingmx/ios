@@ -75,6 +75,7 @@
 		838EFEC7D1ECBB7A8C2FCAB5 /* FlowingLightMotionField.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCB8669EA3449F97EE517F88 /* FlowingLightMotionField.swift */; };
 		86159192042746B10290A43E /* ComponentExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1329C8ACBEE78187F1844C5F /* ComponentExporter.swift */; };
 		880C3A833182ED53D142CEAD /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9D107FB20908FBD8A215E80 /* SettingsView.swift */; };
+		8E9A0A18CF9B51A51B437399 /* PlaySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 789D53EA21094E5A7305C8F3 /* PlaySession.swift */; };
 		8A9A6898DDA445883226813C /* ScrobbleQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D8066B9F32F9D800B9B7A4 /* ScrobbleQueue.swift */; };
 		8CF0E754CC5BA29D3FBE45B8 /* NowPlayingInterfaceTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABF01DAD1399CC121EE0B75 /* NowPlayingInterfaceTransition.swift */; };
 		8EB824A7EE1F26A77103AD36 /* PlayerBackgroundStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 299611C8E526DE7CA227F7CC /* PlayerBackgroundStyle.swift */; };
@@ -98,6 +99,14 @@
 		A692ACD6402BD082FD206324 /* ArtistAbout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBFD6C9B2B18F9E3062FB4BB /* ArtistAbout.swift */; };
 		A6FFCB2184E339D4D3FAC0D6 /* TrackRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38516273DA33B3418DAC7790 /* TrackRow.swift */; };
 		A74D2341185790E3175CAA89 /* RecentTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C87F17CCE93D6FBE77E1935 /* RecentTrack.swift */; };
+		CBC86B676CF557A4550CBE7A /* AppStateObservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D73CCDC4492AE9DF647D0C07 /* AppStateObservationTests.swift */; };
+		D9BCE62F42E085479423711D /* PreloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2387124F40B49E4A57FBBA0 /* PreloadTests.swift */; };
+		A06F00166E74C570240116A1 /* ImageRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C945CDE6DDFA3F6B8D7330 /* ImageRenderingTests.swift */; };
+		ADF61B5D0A86046C7B82DCD6 /* PlayLoggingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64D95DFB2DEFEC1156381DD9 /* PlayLoggingTests.swift */; };
+		A06AE942332B7FAFD48D5B60 /* TrackMenuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51ACEC60581814875A8156A0 /* TrackMenuTests.swift */; };
+		90F29D12252926F767E859CB /* CollectionFavoriteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9ADED1A23D2E5EF75A416AF /* CollectionFavoriteTests.swift */; };
+		0E55F17D03C5F778DD70E650 /* DetailHeaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C13D889FE529F3AD215626A2 /* DetailHeaderTests.swift */; };
+		12A01F72DAF33A8DADB1A318 /* HomeFeedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4C99C146ACC54EE35D3B5D7 /* HomeFeedTests.swift */; };
 		A952C3F97E798689ECF08C4F /* TrackFavoriteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B04FFD3641F0109930BC034 /* TrackFavoriteTests.swift */; };
 		AA7866CDEC67E629C58F8834 /* NowPlayingTransportButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA447EFFE1C6E3EBAFC91A37 /* NowPlayingTransportButtonStyle.swift */; };
 		ACA647D419808494D4E56905 /* NowPlayingFlowingLightFields.swift in Sources */ = {isa = PBXBuildFile; fileRef = E488D03516D667FF17846298 /* NowPlayingFlowingLightFields.swift */; };
@@ -229,6 +238,14 @@
 		38516273DA33B3418DAC7790 /* TrackRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRow.swift; sourceTree = "<group>"; };
 		39534673CD91E61FB99B75CC /* EqualizerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EqualizerSheet.swift; sourceTree = "<group>"; };
 		3B045CA79A95FCF8A824B28B /* BlurHash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurHash.swift; sourceTree = "<group>"; };
+		D73CCDC4492AE9DF647D0C07 /* AppStateObservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateObservationTests.swift; sourceTree = "<group>"; };
+		B2387124F40B49E4A57FBBA0 /* PreloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreloadTests.swift; sourceTree = "<group>"; };
+		B2C945CDE6DDFA3F6B8D7330 /* ImageRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageRenderingTests.swift; sourceTree = "<group>"; };
+		64D95DFB2DEFEC1156381DD9 /* PlayLoggingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayLoggingTests.swift; sourceTree = "<group>"; };
+		51ACEC60581814875A8156A0 /* TrackMenuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMenuTests.swift; sourceTree = "<group>"; };
+		C9ADED1A23D2E5EF75A416AF /* CollectionFavoriteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionFavoriteTests.swift; sourceTree = "<group>"; };
+		C13D889FE529F3AD215626A2 /* DetailHeaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailHeaderTests.swift; sourceTree = "<group>"; };
+		D4C99C146ACC54EE35D3B5D7 /* HomeFeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeFeedTests.swift; sourceTree = "<group>"; };
 		3B04FFD3641F0109930BC034 /* TrackFavoriteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackFavoriteTests.swift; sourceTree = "<group>"; };
 		3D2BBD45BF285C12E0AF858A /* PlayerScreenAwakeMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerScreenAwakeMode.swift; sourceTree = "<group>"; };
 		3F464EC11D8D06D24AB99785 /* LyricsFormats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsFormats.swift; sourceTree = "<group>"; };
@@ -286,6 +303,7 @@
 		A0B1849A4B43FDE998477DCD /* MusicActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicActivity.swift; sourceTree = "<group>"; };
 		A1BB9D5691BF0A0E2C2353C0 /* NowPlayingControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingControls.swift; sourceTree = "<group>"; };
 		A4C35182BA1423448CFC1647 /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesView.swift; sourceTree = "<group>"; };
+		789D53EA21094E5A7305C8F3 /* PlaySession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaySession.swift; sourceTree = "<group>"; };
 		A4D8066B9F32F9D800B9B7A4 /* ScrobbleQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleQueue.swift; sourceTree = "<group>"; };
 		A62DB69DC05BE11EC4A823BA /* NowPlayingLyricsLanguageButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingLyricsLanguageButton.swift; sourceTree = "<group>"; };
 		A6F4E5465277077731AD63E3 /* AMLLWordEmphasis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AMLLWordEmphasis.swift; sourceTree = "<group>"; };
@@ -496,6 +514,7 @@
 				147BA2C0B4FEE2E772D8559E /* DownloadManager.swift */,
 				1C42932DFE1E7FCC74205F5A /* Equalizer.swift */,
 				EF46004C1AC70F485CC40F69 /* MixOfflineStore.swift */,
+				789D53EA21094E5A7305C8F3 /* PlaySession.swift */,
 				A4D8066B9F32F9D800B9B7A4 /* ScrobbleQueue.swift */,
 				8FBBD295F2B904EE2F8F5975 /* SleepTimer.swift */,
 			);
@@ -643,6 +662,14 @@
 				AE0BEAFAC7BB14CB9B4F47E3 /* MixArtworkTests.swift */,
 				6559DAE3533842181CB8DC78 /* MixOfflineStoreTests.swift */,
 				CA9BB476A914C8B6BDDDB6BD /* PlaylistImageTests.swift */,
+				D73CCDC4492AE9DF647D0C07 /* AppStateObservationTests.swift */,
+				B2387124F40B49E4A57FBBA0 /* PreloadTests.swift */,
+				B2C945CDE6DDFA3F6B8D7330 /* ImageRenderingTests.swift */,
+				64D95DFB2DEFEC1156381DD9 /* PlayLoggingTests.swift */,
+				51ACEC60581814875A8156A0 /* TrackMenuTests.swift */,
+				C9ADED1A23D2E5EF75A416AF /* CollectionFavoriteTests.swift */,
+				C13D889FE529F3AD215626A2 /* DetailHeaderTests.swift */,
+				D4C99C146ACC54EE35D3B5D7 /* HomeFeedTests.swift */,
 				3B04FFD3641F0109930BC034 /* TrackFavoriteTests.swift */,
 			);
 			path = SwingMusicTests;
@@ -885,6 +912,14 @@
 				C26382E31910C4CF7928C04D /* MixArtworkTests.swift in Sources */,
 				2EAB77992CDD8F49222653EF /* MixOfflineStoreTests.swift in Sources */,
 				37BA864BF7EE82A90179D271 /* PlaylistImageTests.swift in Sources */,
+				CBC86B676CF557A4550CBE7A /* AppStateObservationTests.swift in Sources */,
+				D9BCE62F42E085479423711D /* PreloadTests.swift in Sources */,
+				A06F00166E74C570240116A1 /* ImageRenderingTests.swift in Sources */,
+				ADF61B5D0A86046C7B82DCD6 /* PlayLoggingTests.swift in Sources */,
+				A06AE942332B7FAFD48D5B60 /* TrackMenuTests.swift in Sources */,
+				90F29D12252926F767E859CB /* CollectionFavoriteTests.swift in Sources */,
+				0E55F17D03C5F778DD70E650 /* DetailHeaderTests.swift in Sources */,
+				12A01F72DAF33A8DADB1A318 /* HomeFeedTests.swift in Sources */,
 				A952C3F97E798689ECF08C4F /* TrackFavoriteTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1000,6 +1035,7 @@
 				A74D2341185790E3175CAA89 /* RecentTrack.swift in Sources */,
 				2EFA62D7B5E27FAB375F24AA /* RecentlyPlayedWidget.swift in Sources */,
 				4B5F7B1A086B26E944A25123 /* RepeatMode.swift in Sources */,
+				8E9A0A18CF9B51A51B437399 /* PlaySession.swift in Sources */,
 				8A9A6898DDA445883226813C /* ScrobbleQueue.swift in Sources */,
 				C55369F89E8375F9E22BFC39 /* SearchView.swift in Sources */,
 				880C3A833182ED53D142CEAD /* SettingsView.swift in Sources */,
@@ -1035,7 +1071,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CFBundleDisplayName = "Swing Music Client";
+				CFBundleDisplayName = "Swing Music";
 				CODE_SIGN_ENTITLEMENTS = SwingMusic/SwingMusic.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
@@ -1259,7 +1295,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CFBundleDisplayName = "Swing Music Client";
+				CFBundleDisplayName = "Swing Music";
 				CODE_SIGN_ENTITLEMENTS = SwingMusic/SwingMusic.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;

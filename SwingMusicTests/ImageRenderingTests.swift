@@ -1,0 +1,80 @@
+import Testing
+import UIKit
+@testable import Swing_Music_Client
+
+struct ImageMemoryCacheTests {
+    private func image(_ side: CGFloat) -> UIImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in }
+    }
+
+    @Test func storedImagesComeBackAndCanBeRemoved() {
+        let cache = ImageMemoryCache(), img = image(10)
+
+        cache["a"] = img
+        #expect(cache["a"] === img)
+
+        cache["a"] = nil
+        #expect(cache["a"] == nil)
+    }
+
+    // The cost limit is in bytes of decoded bitmap, so the cost has to be pixels × 4.
+    @Test func costIsTheDecodedBitmapSize() {
+        #expect(ImageMemoryCache.cost(of: image(256)) == 256 * 256 * 4)
+    }
+}
+
+struct AmbientBlurTests {
+    private let red: UIImage = {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: 300, height: 300), format: format).image { ctx in
+            UIColor.red.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 300, height: 300))
+        }
+    }()
+
+    // Alpha of the pixel in the middle of the given row.
+    private func alpha(_ image: UIImage, row: Int) -> CGFloat {
+        let cg = image.cgImage!
+        var px = [UInt8](repeating: 0, count: 4)
+        let ctx = CGContext(data: &px, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.draw(cg, in: CGRect(x: -cg.width / 2, y: row - cg.height + 1, width: cg.width, height: cg.height))
+        return CGFloat(px[3]) / 255
+    }
+
+    @Test func itRendersAtAQuarterOfTheDisplayedSize() throws {
+        let out = try #require(AmbientBlur.render(red, size: CGSize(width: 400, height: 520), dark: true))
+
+        #expect(out.cgImage?.width == 100)
+        #expect(out.cgImage?.height == 130)
+    }
+
+    @Test func itIsHalfOpaqueAtTheTopAndFadesOutTowardsTheBottom() throws {
+        let out = try #require(AmbientBlur.render(red, size: CGSize(width: 400, height: 520), dark: true))
+
+        #expect(abs(alpha(out, row: 0) - 0.5) < 0.05)
+        #expect(alpha(out, row: 128) < 0.05)
+    }
+}
+
+// The server's thumbnails are WebP, so they have to decode off the main thread at full size.
+struct ImageDecodingTests {
+    // 1×1 lossy (VP8) and lossless (VP8L) WebP images, as used for WebP feature detection.
+    private let lossy = Data(base64Encoded: "UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA")!
+    private let lossless = Data(base64Encoded: "UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==")!
+
+    @Test func webPImagesDecodeAtTheirFullSize() async throws {
+        for data in [lossy, lossless] {
+            let img = try #require(await ImageDecoding.decoded(data))
+            #expect(img.size == CGSize(width: 1, height: 1))
+            #expect(img.cgImage != nil)
+        }
+    }
+
+    @Test func dataThatIsNotAnImageGivesNothing() async {
+        #expect(await ImageDecoding.decoded(Data("{\"error\": 422}".utf8)) == nil)
+    }
+}

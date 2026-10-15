@@ -185,7 +185,7 @@ struct NowPlayingLandscapeSongHeader: View {
 
 // The artist line under the title: tapping it lists the track's artists and album.
 struct NowPlayingArtistLine<Label: View>: View {
-    @EnvironmentObject private var state: AppState
+    @Environment(AppState.self) private var state
     let song: Song
     @ViewBuilder let label: Label
     @State private var showsArtists = false
@@ -196,7 +196,7 @@ struct NowPlayingArtistLine<Label: View>: View {
             .accessibilityHint("Shows the artists and album of this song")
             .sheet(isPresented: $showsArtists) {
                 NowPlayingArtistsSheet(song: song)
-                    .environmentObject(state)
+                    .environment(state)
                     .presentationDetents([.height(CGFloat(NowPlayingArtistsSheet.rowCount(for: song)) * 64 + 64)])
                     .presentationDragIndicator(.visible)
             }

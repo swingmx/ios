@@ -3,7 +3,7 @@ import SwiftUI
 // Opened by tapping the artist line in the player: every artist on the track, then its album,
 // each opening its page. Mirrors the web client, where each artist name is its own link.
 struct NowPlayingArtistsSheet: View {
-    @EnvironmentObject private var state: AppState
+    @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
 
     let song: Song
@@ -42,7 +42,7 @@ struct NowPlayingArtistsSheet: View {
 }
 
 private struct ArtistRow: View {
-    @EnvironmentObject private var state: AppState
+    @Environment(AppState.self) private var state
     let artist: Artist
     let open: (Artist) -> Void
     @State private var isFavorite: Bool?
@@ -50,7 +50,7 @@ private struct ArtistRow: View {
     var body: some View {
         SheetRow(title: artist.name, subtitle: "Artist", isFavorite: isFavorite,
                  open: { open(artist) },
-                 toggle: { fav in await state.setArtistFavorite(artist, fav) }) {
+                 toggle: { fav in await state.setArtistFavorite(artist, fav) == fav }) {
             ArtistAvatar(artist: artist, size: 52)
         }
         .task(id: artist.artisthash) {
@@ -60,7 +60,7 @@ private struct ArtistRow: View {
 }
 
 private struct AlbumRow: View {
-    @EnvironmentObject private var state: AppState
+    @Environment(AppState.self) private var state
     let album: Album
     let open: (Album) -> Void
     @State private var isFavorite: Bool?
@@ -68,7 +68,7 @@ private struct AlbumRow: View {
     var body: some View {
         SheetRow(title: album.title, subtitle: "Album", isFavorite: isFavorite,
                  open: { open(album) },
-                 toggle: { fav in await state.setAlbumFavorite(album, fav) }) {
+                 toggle: { fav in await state.setAlbumFavorite(album, fav) == fav }) {
             AlbumCover(album: album, size: 52)
         }
         .task(id: album.albumhash) {

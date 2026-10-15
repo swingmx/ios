@@ -38,7 +38,7 @@ private let localGenres: [GenreInfo] = [
 ]
 
 struct SearchView: View {
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @State private var query = ""
     @State private var scope: SearchScope = .all
     @State private var result: SearchResult?
@@ -52,6 +52,7 @@ struct SearchView: View {
     }
 
     var body: some View {
+        @Bindable var state = state
         NavigationStack(path: $state.searchPath) {
             content
                 .navigationTitle("Search")
@@ -61,8 +62,7 @@ struct SearchView: View {
                 }
                 .onSubmit(of: .search) { runSearch(query, delay: 0) }
                 .onChange(of: query) { _, v in runSearch(v, delay: 300_000_000) }
-                .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash) }
-                .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash) }
+                .appDestinations(zoom: nil)
         }
     }
 
@@ -159,7 +159,7 @@ struct SearchView: View {
                         } label: {
                             row(image: API.shared.img(t.image, size: "small"), round: false,
                                 title: t.title, subtitle: t.artist,
-                                playing: state.player.current == t, explicit: t.isExplicit)
+                                playing: state.isCurrentTrack(t), explicit: t.isExplicit)
                         }
                         .tint(.primary)
                         .swipeActions(edge: .trailing) {
@@ -245,7 +245,7 @@ struct SearchView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.body)
-                    .foregroundStyle(playing ? Color.accentColor : .primary)
+                    .foregroundStyle(playing ? Color.appAccent : .primary)
                     .lineLimit(1)
                     .explicitBadge(explicit)
                 Text(subtitle)
@@ -257,7 +257,7 @@ struct SearchView: View {
             if playing {
                 Image(systemName: "speaker.wave.2.fill")
                     .font(.footnote)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.appAccent)
             }
         }
         .contentShape(.rect)

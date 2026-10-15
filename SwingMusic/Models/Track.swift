@@ -193,6 +193,14 @@ struct Artist: Codable, Identifiable, Hashable {
 }
 
 extension Artist {
+    // The server names an artist's image after the artist. Stubs built from a track use this rather
+    // than the track's album art, which the artist screen would otherwise show as the portrait.
+    static func imageFile(for hash: String) -> String { "\(hash).webp" }
+
+    init(stub hash: String, name: String) {
+        self.init(stub: hash, name: name, image: Artist.imageFile(for: hash))
+    }
+
     init(stub hash: String, name: String, image: String) {
         self.init(artisthash: hash, name: name, image: image,
                   trackcount: nil, albumcount: nil, duration: nil, genres: nil, color: nil)
@@ -209,6 +217,17 @@ extension Album {
 
 struct PlaylistImage: Codable, Hashable {
     let image: String?
+
+    private enum CodingKeys: String, CodingKey { case image }
+
+    // /playlists sends {"image": "<hash>.webp", "color": …}; the home feed sends just "<hash>.webp".
+    init(from decoder: Decoder) throws {
+        if let hash = try? decoder.singleValueContainer().decode(String.self) {
+            image = hash
+        } else {
+            image = try decoder.container(keyedBy: CodingKeys.self).decodeIfPresent(String.self, forKey: .image)
+        }
+    }
 }
 
 struct Playlist: Codable, Identifiable, Hashable {
@@ -528,12 +547,20 @@ struct Mix: Codable, Identifiable, Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
+// Your favorite songs as one item, as Recently Played shows them after playing from favorites.
+struct FavoritesItem: Codable, Hashable {
+    // The last favorited track's artwork.
+    let image: String?
+    let count: Int?
+}
+
 enum HomeItem: Identifiable, Hashable {
     case album(Album)
     case artist(Artist)
     case track(Track)
     case playlist(Playlist)
     case mix(Mix)
+    case favorites(FavoritesItem)
 
     var id: String {
         switch self {
@@ -542,6 +569,21 @@ enum HomeItem: Identifiable, Hashable {
         case .track(let t): "tr:\(t.trackhash)"
         case .playlist(let p): "pl:\(p.id)"
         case .mix(let m): "mix:\(m.id)"
+        case .favorites: "favorites"
+        }
+    }
+
+    // One item of a home section, from its "type" and "item" JSON; nil for kinds the app doesn't show.
+    static func decode(type: String, json: Data) -> HomeItem? {
+        let d = JSONDecoder()
+        switch type {
+        case "album": return (try? d.decode(Album.self, from: json)).map(HomeItem.album)
+        case "artist": return (try? d.decode(Artist.self, from: json)).map(HomeItem.artist)
+        case "track": return (try? d.decode(Track.self, from: json)).map(HomeItem.track)
+        case "playlist": return (try? d.decode(Playlist.self, from: json)).map(HomeItem.playlist)
+        case "mix": return (try? d.decode(Mix.self, from: json)).map(HomeItem.mix)
+        case "favorite": return (try? d.decode(FavoritesItem.self, from: json)).map(HomeItem.favorites)
+        default: return nil
         }
     }
 }

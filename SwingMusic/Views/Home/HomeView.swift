@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct HomeView: View {
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) var state
     @State private var showSettings = false
     @State private var heroes: [HeroPick] = []
     @Namespace private var zoomNS
@@ -13,7 +13,7 @@ struct HomeView: View {
     }
 
     private enum HomeRoute: Hashable {
-        case allAlbums, allArtists
+        case allAlbums, allArtists, favoriteSongs
     }
 
     @State private var didLoad = false
@@ -21,6 +21,7 @@ struct HomeView: View {
     private var isLoading: Bool { !didLoad && state.homeSections.isEmpty }
 
     var body: some View {
+        @Bindable var state = state
         NavigationStack(path: $state.homePath) {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 28) {
@@ -59,13 +60,10 @@ struct HomeView: View {
                 switch route {
                 case .allAlbums: AlbumsGridView()
                 case .allArtists: ArtistsGridView()
+                case .favoriteSongs: FavoriteTracksView()
                 }
             }
-            .navigationDestination(for: Album.self) { AlbumDetailView(hash: $0.albumhash).navigationTransition(.zoom(sourceID: "album-\($0.albumhash)", in: zoomNS)) }
-            .navigationDestination(for: Artist.self) { ArtistDetailView(hash: $0.artisthash).navigationTransition(.zoom(sourceID: "artist-\($0.artisthash)", in: zoomNS)) }
-            .navigationDestination(for: Playlist.self) { PlaylistDetailView(id: $0.id, name: $0.name).navigationTransition(.zoom(sourceID: "playlist-\($0.id)", in: zoomNS)) }
-            .navigationDestination(for: Mix.self) { MixDetailView(mix: $0) }
-            .navigationDestination(for: Folder.self) { FolderBrowserView(path: $0.path, title: $0.name) }
+            .appDestinations(zoom: zoomNS)
         }
         .environment(\.zoomNamespace, zoomNS)
         .task {
@@ -184,7 +182,7 @@ struct HomeView: View {
     }
 
     private func chartRow(rank: Int, track: Track, queue: [Track]) -> some View {
-        let active = state.player.current == track
+        let active = state.isCurrentTrack(track)
         return Button {
             playTrack(track, from: queue)
         } label: {
@@ -192,7 +190,7 @@ struct HomeView: View {
                 Text("\(rank)")
                     .font(.system(size: 22, weight: .heavy, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(active ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(active ? AnyShapeStyle(Color.appAccent) : AnyShapeStyle(.tertiary))
                     .frame(width: 30, alignment: .center)
 
                 ZStack {
@@ -293,11 +291,25 @@ struct HomeView: View {
             }
             .buttonStyle(PressableCardStyle())
             .contextMenu { trackMenuItems(t) }
+        case .favorites(let f):
+            NavigationLink(value: HomeRoute.favoriteSongs) {
+                VStack(alignment: .leading, spacing: 8) {
+                    FavoritesArtwork(image: f.image)
+                        .frame(width: 150, height: 150)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Favorite Songs").font(.system(size: 15, weight: .bold)).foregroundStyle(.primary).lineLimit(1)
+                        Text("Playlist").font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    .frame(width: 150, alignment: .leading)
+                }
+            }
+            .buttonStyle(PressableCardStyle())
         case .mix(let m):
             NavigationLink(value: m) {
                 VStack(alignment: .leading, spacing: 8) {
                     MixArtwork(mix: m, cornerRadius: 12)
                         .frame(width: 150, height: 150)
+                        .zoomSource("mix-\(m.id)")
                     VStack(alignment: .leading, spacing: 2) {
                         Text(m.tagline?.isEmpty == false ? m.tagline! : m.title)
                             .font(.system(size: 13, weight: .medium))
@@ -495,5 +507,27 @@ struct PressableCardStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .opacity(configuration.isPressed ? 0.8 : 1)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+// The favorites card's cover: the last favorited song's artwork, blurred, under a heart.
+private struct FavoritesArtwork: View {
+    let image: String?
+
+    var body: some View {
+        ZStack {
+            if let image, let url = API.shared.img(image, size: "small") {
+                Img(url: url, radius: 0)
+                    .blur(radius: 18, opaque: true)
+                    .overlay(Color.black.opacity(0.25))
+            } else {
+                Color.primary.opacity(0.08)
+            }
+            Image(systemName: "heart.fill")
+                .font(.system(size: 52, weight: .semibold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
