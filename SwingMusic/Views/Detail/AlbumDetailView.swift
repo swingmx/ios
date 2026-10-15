@@ -96,7 +96,7 @@ struct AlbumDetailView: View {
                 } label: {
                     Text(info.artist)
                         .font(.title3)
-                        .foregroundStyle(Color.appAccent)
+                        .foregroundStyle(.tint)
                 }
                 .buttonStyle(.plain)
                 Text(Self.subtitle(info, tracks: tracks))
