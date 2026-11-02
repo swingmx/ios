@@ -134,6 +134,8 @@ final class AudioPlayer: ObservableObject {
     private var obs: Any?
     private var statusObs: NSKeyValueObservation?
     private var assetLoader: AuthStreamLoader?
+    // The outgoing track's loader, kept until its crossfade ends.
+    private var fadingLoader: AuthStreamLoader?
     // The play being counted for the server; see PlaySession.
     private var session: PlaySession?
     private var sessionSavedAt = 0.0
@@ -561,6 +563,7 @@ final class AudioPlayer: ObservableObject {
         if !isCrossfading {
             discardPrepared()
             fadeTimer?.invalidate(); fadeTimer = nil
+            fadingLoader = nil
         }
         log()
         lastActivitySecond = -1
@@ -589,7 +592,7 @@ final class AudioPlayer: ObservableObject {
             let item = AVPlayerItem(url: localURL)
             observeFailure(of: item, track: track)
             player = AVPlayer(playerItem: item)
-            player?.volume = volume
+            player?.volume = isCrossfading ? 0 : volume
 
             NotificationCenter.default.addObserver(self, selector: #selector(ended), name: .AVPlayerItemDidPlayToEndTime, object: item)
             setupTimeObserver()
@@ -655,7 +658,7 @@ final class AudioPlayer: ObservableObject {
         let item = AVPlayerItem(asset: asset)
         observeFailure(of: item, track: track)
         player = AVPlayer(playerItem: item)
-        player?.volume = volume
+        player?.volume = isCrossfading ? 0 : volume
         player?.allowsExternalPlayback = false
 
         NotificationCenter.default.addObserver(self, selector: #selector(ended), name: .AVPlayerItemDidPlayToEndTime, object: item)
@@ -736,6 +739,7 @@ final class AudioPlayer: ObservableObject {
     // Plays the preloaded next track straight away, without the gap of loading it from scratch.
     private func handOver(to prep: Prepared) {
         fadeTimer?.invalidate(); fadeTimer = nil
+        fadingLoader = nil
         if let o = obs { player?.removeTimeObserver(o); obs = nil }
         NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)
         player?.pause()
@@ -883,6 +887,7 @@ final class AudioPlayer: ObservableObject {
         isCrossfading = true
 
         let oldPlayer = player
+        fadingLoader = assetLoader
         let oldInfo = current.flatMap { AutoMixStore.shared.info(for: $0.trackhash) }
         if let item = oldPlayer?.currentItem {
             NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: item)
@@ -919,7 +924,7 @@ final class AudioPlayer: ObservableObject {
         fadeTimer?.invalidate()
         let start = CACurrentMediaTime()
         let d = max(0.5, duration)
-        fadeTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self, weak old, weak new] timer in
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self, weak new] timer in
             Task { @MainActor in
                 guard let self else { timer.invalidate(); return }
                 let x = min(1, (CACurrentMediaTime() - start) / d)
@@ -933,6 +938,7 @@ final class AudioPlayer: ObservableObject {
                 if x >= 1 {
                     timer.invalidate()
                     old?.pause()
+                    self.fadingLoader = nil
                     new?.volume = v
                     if let n = new, n.rate > 0 { n.rate = 1 }
                     self.isCrossfading = false
