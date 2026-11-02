@@ -39,7 +39,7 @@ struct DownloadsView: View {
                             .padding(.bottom, 4)
 
                             ForEach(Array(singles.enumerated()), id: \.element.id) { i, track in
-                                TrackRow(track: track, num: i + 1, active: state.isCurrentTrack(track)) {
+                                TrackRow(track: track, active: state.isCurrentTrack(track)) {
                                     state.player.play(track, from: singles)
                                 }
                                 .swipeActions(edge: .trailing) {
@@ -186,7 +186,7 @@ struct DownloadedGroupView: View {
                 .padding(.horizontal, 16).padding(.vertical, 12)
 
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
-                    TrackRow(track: t, num: i + 1, active: state.isCurrentTrack(t)) {
+                    TrackRow(track: t, active: state.isCurrentTrack(t)) {
                         state.player.play(t, from: tracks)
                     }
                 }

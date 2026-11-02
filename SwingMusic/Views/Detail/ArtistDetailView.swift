@@ -142,7 +142,7 @@ struct ArtistDetailView: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(d.tracks.prefix(5).enumerated()), id: \.element.id) { i, t in
-                    TrackRow(track: t, num: i + 1, active: state.isCurrentTrack(t)) {
+                    TrackRow(track: t, active: state.isCurrentTrack(t)) {
                         Task { state.player.play(t, from: await allTracks(d), source: .artist(hash)) }
                     }
                 }
@@ -350,7 +350,7 @@ struct ArtistTracksView: View {
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
-                        TrackRow(track: t, num: i + 1, active: state.isCurrentTrack(t)) {
+                        TrackRow(track: t, active: state.isCurrentTrack(t)) {
                             state.player.play(t, from: tracks, source: .artist(hash))
                         }
                     }

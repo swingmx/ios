@@ -18,7 +18,7 @@ struct MixDetailView: View {
                     ProgressView().tint(.secondary).frame(maxWidth: .infinity, minHeight: 200)
                 } else {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
-                        TrackRow(track: t, num: i + 1, active: state.isCurrentTrack(t)) {
+                        TrackRow(track: t, active: state.isCurrentTrack(t)) {
                             state.player.play(t, from: tracks, source: source)
                         }
                     }

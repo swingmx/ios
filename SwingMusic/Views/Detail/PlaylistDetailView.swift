@@ -17,7 +17,7 @@ struct PlaylistDetailView: View {
 
                 VStack(spacing: 0) {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
-                        TrackRow(track: t, num: i + 1, active: state.isCurrentTrack(t)) {
+                        TrackRow(track: t, active: state.isCurrentTrack(t)) {
                             state.player.play(t, from: tracks, source: .playlist(id))
                         }
                     }

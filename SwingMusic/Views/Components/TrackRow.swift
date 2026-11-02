@@ -69,6 +69,12 @@ struct TrackRow: View {
     var showArt: Bool = true
     var onTap: () -> Void
 
+    // Sizes at the default text size, scaled with the user's text size setting. The .body and
+    // .subheadline styles also scale but start 2 pt larger, which made rows feel oversized.
+    @ScaledMetric(relativeTo: .body) private var titleSize: CGFloat = 15
+    @ScaledMetric(relativeTo: .subheadline) private var detailSize: CGFloat = 13
+    @ScaledMetric(relativeTo: .body) private var numberSize: CGFloat = 14
+
     var body: some View {
         HStack(spacing: 12) {
             Button(action: onTap) {
@@ -79,7 +85,7 @@ struct TrackRow: View {
                                 NowPlayingIndicator(color: .appAccent)
                             } else {
                                 Text("\(n)")
-                                    .font(.body.monospacedDigit())
+                                    .font(.system(size: numberSize, weight: .medium).monospacedDigit())
                                     .foregroundStyle(.secondary)
                                     .fixedSize()
                             }
@@ -100,24 +106,20 @@ struct TrackRow: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(track.title)
-                            .font(.body)
+                            .font(.system(size: titleSize))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                             .explicitBadge(track.isExplicit)
                         HStack(spacing: 4) {
                             downloadIndicator
                             Text(track.allArtists)
-                                .font(.subheadline)
+                                .font(.system(size: detailSize))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
                     }
 
                     Spacer(minLength: 8)
-
-                    Text(track.duration.mmss)
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
                 }
                 .contentShape(Rectangle())
             }
