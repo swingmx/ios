@@ -26,7 +26,19 @@ struct HomeFeedTests {
         #expect(decode("artist", #"{"artisthash": "ar1", "name": "Adele", "image": "ar1.webp"}"#)?.id == "ar:ar1")
     }
 
+    // Recently played/added folders arrive as {path, count}; the card shows the path's last component.
+    @Test func foldersDecodeWithANameFromTheirPath() throws {
+        let item = try #require(decode("folder", #"{"path": "/music/Albums/Mutoriah/", "count": 12}"#))
+
+        guard case .folder(let f) = item else { Issue.record("not a folder"); return }
+        #expect(f.name == "Mutoriah")
+        #expect(f.path == "/music/Albums/Mutoriah/")
+        #expect(f.trackcount == 12)
+        #expect(item.id == "fo:/music/Albums/Mutoriah/")
+    }
+
     @Test func kindsTheAppDoesNotShowAreSkipped() {
-        #expect(decode("folder", #"{"path": "/music", "count": 3}"#) == nil)
+        #expect(decode("folder", #"{"count": 3}"#) == nil)
+        #expect(decode("genre", #"{"name": "Pop"}"#) == nil)
     }
 }

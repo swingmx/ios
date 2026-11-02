@@ -291,6 +291,25 @@ struct HomeView: View {
             }
             .buttonStyle(PressableCardStyle())
             .contextMenu { trackMenuItems(t) }
+        case .folder(let folder):
+            NavigationLink(value: folder) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ZStack {
+                        Color.primary.opacity(0.08)
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 48, weight: .regular))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 150, height: 150)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(folder.name).font(.system(size: 15, weight: .bold)).foregroundStyle(.primary).lineLimit(1)
+                        Text("Folder").font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    .frame(width: 150, alignment: .leading)
+                }
+            }
+            .buttonStyle(PressableCardStyle())
         case .favorites(let f):
             NavigationLink(value: HomeRoute.favoriteSongs) {
                 VStack(alignment: .leading, spacing: 8) {

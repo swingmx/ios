@@ -561,6 +561,7 @@ enum HomeItem: Identifiable, Hashable {
     case playlist(Playlist)
     case mix(Mix)
     case favorites(FavoritesItem)
+    case folder(Folder)
 
     var id: String {
         switch self {
@@ -570,6 +571,7 @@ enum HomeItem: Identifiable, Hashable {
         case .playlist(let p): "pl:\(p.id)"
         case .mix(let m): "mix:\(m.id)"
         case .favorites: "favorites"
+        case .folder(let f): "fo:\(f.path)"
         }
     }
 
@@ -583,6 +585,11 @@ enum HomeItem: Identifiable, Hashable {
         case "playlist": return (try? d.decode(Playlist.self, from: json)).map(HomeItem.playlist)
         case "mix": return (try? d.decode(Mix.self, from: json)).map(HomeItem.mix)
         case "favorite": return (try? d.decode(FavoritesItem.self, from: json)).map(HomeItem.favorites)
+        case "folder":
+            // Sent as {path, count}: the name is the path's last component.
+            guard let f = try? d.decode(Folder.self, from: json), !f.path.isEmpty else { return nil }
+            let name = f.name.isEmpty ? (f.path as NSString).lastPathComponent : f.name
+            return .folder(Folder(path: f.path, name: name, trackcount: f.trackcount))
         default: return nil
         }
     }
