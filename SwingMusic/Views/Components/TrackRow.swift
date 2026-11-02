@@ -168,7 +168,7 @@ struct TrackRow: View {
                     .contentShape(Rectangle())
             }
         }
-        .padding(.horizontal, 16).padding(.vertical, 8)
+        .padding(.horizontal, DetailLayout.inset).padding(.vertical, 8)
         .pullActions(
             leading: PullAction(label: "Add to queue", icon: "text.badge.plus", armedColor: .green) {
                 AudioPlayer.shared.addLast(track)

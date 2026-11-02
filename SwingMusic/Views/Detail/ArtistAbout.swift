@@ -90,7 +90,7 @@ struct ArtistAboutSection: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("About \(artistName)")
                         .font(.title2.bold())
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, DetailLayout.inset)
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text(summary.extract)
@@ -115,7 +115,7 @@ struct ArtistAboutSection: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(DetailCardFill.color, in: .rect(cornerRadius: 20))
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, DetailLayout.inset)
                 }
                 .transition(.opacity)
             }

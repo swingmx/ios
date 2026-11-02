@@ -94,7 +94,7 @@ struct SearchView: View {
         } else {
             List {
                 Section {
-                    ForEach(recents) { item in recentRow(item) }
+                    ForEach(recents) { item in recentRow(item).searchInsets() }
                         .onDelete { offsets in
                             recents.remove(atOffsets: offsets)
                             SearchHistory.save(recents)
@@ -106,6 +106,7 @@ struct SearchView: View {
                         Button("Clear") { SearchHistory.clear(); recents = [] }
                             .textCase(nil)
                     }
+                    .searchInsets()
                 }
             }
             .listStyle(.plain)
@@ -148,10 +149,10 @@ struct SearchView: View {
         let limit = scope == .all ? 5 : .max
         return List {
             if scope == .all, let top = r.top_result, !top.displayName.isEmpty {
-                Section("Top Result") { topResultRow(top, tracks: tracks) }
+                Section { topResultRow(top, tracks: tracks).searchInsets() } header: { Text("Top Result").searchInsets() }
             }
             if scope == .all || scope == .songs, !tracks.isEmpty {
-                Section("Songs") {
+                Section {
                     ForEach(tracks.prefix(limit)) { t in
                         Button {
                             record(RecentSearchItem(kind: .track, hash: t.trackhash, title: t.title, subtitle: t.artist, image: t.image, track: t))
@@ -168,11 +169,12 @@ struct SearchView: View {
                             Button { state.player.addLast(t) } label: { Label("Play Last", systemImage: "text.line.last.and.arrowtriangle.forward") }
                                 .tint(.orange)
                         }
+                        .searchInsets()
                     }
-                }
+                } header: { Text("Songs").searchInsets() }
             }
             if scope == .all || scope == .albums, !albums.isEmpty {
-                Section("Albums") {
+                Section {
                     ForEach(albums.prefix(limit)) { a in
                         Button {
                             record(RecentSearchItem(kind: .album, hash: a.albumhash, title: a.title, subtitle: a.artist, image: a.image, track: nil))
@@ -185,11 +187,12 @@ struct SearchView: View {
                             }
                         }
                         .tint(.primary)
+                        .searchInsets()
                     }
-                }
+                } header: { Text("Albums").searchInsets() }
             }
             if scope == .all || scope == .artists, !artists.isEmpty {
-                Section("Artists") {
+                Section {
                     ForEach(artists.prefix(limit)) { a in
                         Button {
                             record(RecentSearchItem(kind: .artist, hash: a.artisthash, title: a.name, subtitle: "Artist", image: a.image, track: nil))
@@ -202,8 +205,9 @@ struct SearchView: View {
                             }
                         }
                         .tint(.primary)
+                        .searchInsets()
                     }
-                }
+                } header: { Text("Artists").searchInsets() }
             }
         }
         .listStyle(.plain)
@@ -338,5 +342,12 @@ enum SearchHistory {
         if let data = try? JSONEncoder().encode(items) {
             UserDefaults.standard.set(data, forKey: key)
         }
+    }
+}
+
+private extension View {
+    // Rows and section headers at the same inset as album and artist screens, in line with the mini player.
+    func searchInsets() -> some View {
+        listRowInsets(.horizontal, DetailLayout.inset)
     }
 }

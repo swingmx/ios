@@ -1,5 +1,13 @@
 import SwiftUI
 
+// The horizontal inset on album and artist screens. The Play button sits at it, and headers, track
+// rows and card rows use it too so their leading edges line up with Play. 24 pt sits just inside the
+// floating mini player's glass edge (about 20–21 pt in from the screen edge on iPhone), so rows line
+// up with it and none of their edges show past its rim as they scroll under it.
+enum DetailLayout {
+    static let inset: CGFloat = 24
+}
+
 struct DetailPlayButtons: View {
     let play: () -> Void
     let shuffle: () -> Void
@@ -26,7 +34,7 @@ struct DetailPlayButtons: View {
             }
             .buttonStyle(DetailButtonStyle(prominent: false, accent: tint ?? .appAccent))
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, DetailLayout.inset)
     }
 }
 
@@ -124,7 +132,7 @@ struct StatsRow: View {
             Text("Stats")
                 .font(.title2.bold())
                 .foregroundStyle(.primary)
-                .padding(.horizontal, 18)
+                .padding(.horizontal, DetailLayout.inset)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -132,7 +140,7 @@ struct StatsRow: View {
                         card(stat)
                     }
                 }
-                .padding(.horizontal, 18)
+                .padding(.horizontal, DetailLayout.inset)
             }
         }
     }

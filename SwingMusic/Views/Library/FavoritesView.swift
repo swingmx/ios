@@ -132,7 +132,7 @@ struct FavoritesView: View {
                 .scrollTargetLayout()
             }
             .scrollTargetBehavior(.viewAligned)
-            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .contentMargins(.horizontal, DetailLayout.inset, for: .scrollContent)
             .scrollClipDisabled()
         }
     }
@@ -149,7 +149,7 @@ struct FavoritesView: View {
                 .scrollTargetLayout()
             }
             .scrollTargetBehavior(.viewAligned)
-            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .contentMargins(.horizontal, DetailLayout.inset, for: .scrollContent)
             .scrollClipDisabled()
         }
     }
@@ -172,7 +172,7 @@ struct FavoritesView: View {
                 label
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, DetailLayout.inset)
     }
 }
 

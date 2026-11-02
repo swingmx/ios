@@ -118,7 +118,7 @@ struct FavoriteTracksView: View {
             FavoritesListHeader(
                 title: "Favorite Songs",
                 tagline: FavoritesListHeader.tagline(count: state.favTracksTotal, singular: "song", plural: "songs"),
-                leading: 16)
+                leading: FavoritesListHeader.margin)
             LazyVStack(spacing: 0) {
                 ForEach(Array(state.favTracks.enumerated()), id: \.element.id) { i, t in
                     TrackRow(track: t, active: state.isCurrentTrack(t)) {
@@ -146,15 +146,14 @@ struct FavoriteTracksView: View {
 struct FavoriteAlbumsGridView: View {
     @Environment(AppState.self) var state
     @State private var width: CGFloat = 0
-    private let cols = [GridItem(.adaptive(minimum: FavoritesListHeader.albumCard), spacing: FavoritesListHeader.gridSpacing)]
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             FavoritesListHeader(
                 title: "Favorite Albums",
                 tagline: FavoritesListHeader.tagline(count: state.favAlbumsTotal, singular: "album", plural: "albums"),
-                leading: FavoritesListHeader.firstAlbumInset(width: width))
-            LazyVGrid(columns: cols, spacing: 18) {
+                leading: FavoritesListHeader.margin)
+            LazyVGrid(columns: FavoritesListHeader.gridColumns(width: width, card: FavoritesListHeader.albumCard), spacing: 18) {
                 ForEach(Array(state.favAlbums.enumerated()), id: \.element.id) { i, a in
                     NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
                         .buttonStyle(.plain)
@@ -165,7 +164,7 @@ struct FavoriteAlbumsGridView: View {
                         }
                 }
             }
-            .padding(.horizontal, 16).padding(.bottom, 100)
+            .padding(.horizontal, FavoritesListHeader.margin).padding(.bottom, 100)
             if state.favAlbums.count < state.favAlbumsTotal {
                 ProgressView().tint(.secondary).padding(.vertical, 20)
             }
@@ -181,17 +180,16 @@ struct FavoriteAlbumsGridView: View {
 struct FavoriteArtistsGridView: View {
     @Environment(AppState.self) var state
     @State private var width: CGFloat = 0
-    private let cols = [GridItem(.adaptive(minimum: 120), spacing: 14)]
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             FavoritesListHeader(
                 title: "Favorite Artists",
                 tagline: FavoritesListHeader.tagline(count: state.favArtistsTotal, singular: "artist", plural: "artists"),
-                leading: FavoritesListHeader.firstAlbumInset(width: width))
-            LazyVGrid(columns: cols, spacing: 18) {
+                leading: FavoritesListHeader.margin)
+            LazyVGrid(columns: FavoritesListHeader.gridColumns(width: width, card: FavoritesListHeader.artistCard), spacing: 18) {
                 ForEach(Array(state.favArtists.enumerated()), id: \.element.id) { i, a in
-                    NavigationLink(value: a) { ArtistCard(artist: a, size: 110) }
+                    NavigationLink(value: a) { ArtistCard(artist: a, size: FavoritesListHeader.artistCard) }
                         .buttonStyle(.plain)
                         .onAppear {
                             if i >= state.favArtists.count - 4 {
@@ -200,7 +198,7 @@ struct FavoriteArtistsGridView: View {
                         }
                 }
             }
-            .padding(.horizontal, 16).padding(.bottom, 100)
+            .padding(.horizontal, FavoritesListHeader.margin).padding(.bottom, 100)
             if state.favArtists.count < state.favArtistsTotal {
                 ProgressView().tint(.secondary).padding(.vertical, 20)
             }
@@ -237,8 +235,11 @@ struct FavoritesListHeader: View {
     let tagline: String
     let leading: CGFloat
 
-    static let margin: CGFloat = 16
+    // The same inset as album and artist screens, so titles, rows and cards line up with Play and the mini player.
+    static let margin: CGFloat = DetailLayout.inset
     static let albumCard: CGFloat = 150
+    // Three to a row on an iPhone inside the margins.
+    static let artistCard: CGFloat = 104
     static let gridSpacing: CGFloat = 14
 
     var body: some View {
@@ -261,11 +262,18 @@ struct FavoritesListHeader: View {
         "You have \(count) favorited \(count == 1 ? singular : plural)"
     }
 
-    static func firstAlbumInset(width: CGFloat) -> CGFloat {
+    // As many card-wide columns as fit with at least gridSpacing between them, spread so the first card
+    // starts and the last ends exactly on the margin.
+    static func gridLayout(width: CGFloat, card: CGFloat) -> (columns: Int, spacing: CGFloat) {
         let available = width - margin * 2
-        guard available >= albumCard else { return margin }
-        let columns = max(1, ((available + gridSpacing) / (albumCard + gridSpacing)).rounded(.down))
-        let columnWidth = (available - gridSpacing * (columns - 1)) / columns
-        return margin + (columnWidth - albumCard) / 2
+        guard available >= card else { return (1, 0) }
+        let columns = max(1, Int(((available + gridSpacing) / (card + gridSpacing)).rounded(.down)))
+        let spacing = columns > 1 ? (available - CGFloat(columns) * card) / CGFloat(columns - 1) : 0
+        return (columns, spacing)
+    }
+
+    static func gridColumns(width: CGFloat, card: CGFloat) -> [GridItem] {
+        let layout = gridLayout(width: width, card: card)
+        return Array(repeating: GridItem(.fixed(card), spacing: layout.spacing), count: layout.columns)
     }
 }

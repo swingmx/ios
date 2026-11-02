@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Swing_Music_Client
 
@@ -8,19 +9,31 @@ struct FavoritesHeaderTests {
         #expect(FavoritesListHeader.tagline(count: 0, singular: "artist", plural: "artists") == "You have 0 favorited artists")
     }
 
-    // iPhone 17: 402pt wide leaves 370pt, two 178pt columns, each centering a 150pt card 14pt in.
-    @Test func onAnIPhoneTheHeaderStartsWhereTheFirstAlbumArtworkDoes() {
-        #expect(FavoritesListHeader.firstAlbumInset(width: 402) == 30)
+    // iPhone 15 Pro: 393pt wide leaves 345pt inside the 24pt margins: two 150pt album cards 45pt apart.
+    @Test func onAnIPhoneAlbumCardsSitOnTheMargins() {
+        let layout = FavoritesListHeader.gridLayout(width: 393, card: FavoritesListHeader.albumCard)
+        #expect(layout.columns == 2)
+        #expect(layout.spacing == 45)
     }
 
-    @Test func widerScreensFitMoreColumnsAndAdjustTheInset() {
-        // 1024pt: six columns of about 153.7pt, so the artwork starts about 17.8pt in.
-        let inset = FavoritesListHeader.firstAlbumInset(width: 1024)
-        #expect(abs(inset - 17.83) < 0.01)
+    @Test func artistCardsFitThreeToARowOnAnIPhone() {
+        let layout = FavoritesListHeader.gridLayout(width: 393, card: FavoritesListHeader.artistCard)
+        #expect(layout.columns == 3)
+        #expect(layout.spacing == 16.5)
     }
 
-    @Test func screensTooNarrowForACardUseThePlainMargin() {
-        #expect(FavoritesListHeader.firstAlbumInset(width: 0) == 16)
-        #expect(FavoritesListHeader.firstAlbumInset(width: 170) == 16)
+    // Columns and spacing always add up to the width between the margins.
+    @Test func widerScreensFitMoreColumnsEdgeToEdge() {
+        let width: CGFloat = 1024, card = FavoritesListHeader.albumCard
+        let layout = FavoritesListHeader.gridLayout(width: width, card: card)
+        #expect(layout.columns == 6)
+        let used = CGFloat(layout.columns) * card + CGFloat(layout.columns - 1) * layout.spacing
+        #expect(abs(used - (width - FavoritesListHeader.margin * 2)) < 0.001)
+        #expect(layout.spacing >= FavoritesListHeader.gridSpacing)
+    }
+
+    @Test func screensTooNarrowForACardUseOneColumn() {
+        #expect(FavoritesListHeader.gridLayout(width: 0, card: 150).columns == 1)
+        #expect(FavoritesListHeader.gridLayout(width: 170, card: 150).columns == 1)
     }
 }

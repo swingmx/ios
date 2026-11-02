@@ -138,7 +138,7 @@ struct ArtistDetailView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, DetailLayout.inset)
 
             VStack(spacing: 0) {
                 ForEach(Array(d.tracks.prefix(5).enumerated()), id: \.element.id) { i, t in
@@ -163,7 +163,7 @@ struct ArtistDetailView: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, DetailLayout.inset)
         .contentShape(.rect)
     }
 
@@ -181,7 +181,7 @@ struct ArtistDetailView: View {
                                 .background(DetailCardFill.color, in: .capsule)
                         }
                     }
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, DetailLayout.inset)
                 }
             }
         }
@@ -217,7 +217,7 @@ struct ArtistDetailView: View {
                                 .buttonStyle(.plain)
                             }
                         }
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, DetailLayout.inset)
                     }
                 }
             }
@@ -257,7 +257,7 @@ struct ArtistDetailView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 18)
+                .padding(.horizontal, DetailLayout.inset)
             }
         }
     }
