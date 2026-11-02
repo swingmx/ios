@@ -70,10 +70,10 @@ struct TrackRow: View {
     var onTap: () -> Void
 
     // Sizes at the default text size, scaled with the user's text size setting. The .body and
-    // .subheadline styles also scale but start 2 pt larger, which made rows feel oversized.
-    @ScaledMetric(relativeTo: .body) private var titleSize: CGFloat = 15
-    @ScaledMetric(relativeTo: .subheadline) private var detailSize: CGFloat = 13
-    @ScaledMetric(relativeTo: .body) private var numberSize: CGFloat = 14
+    // .subheadline styles also scale but start a point larger, which made rows feel oversized.
+    @ScaledMetric(relativeTo: .body) private var titleSize: CGFloat = 16
+    @ScaledMetric(relativeTo: .subheadline) private var detailSize: CGFloat = 14
+    @ScaledMetric(relativeTo: .body) private var numberSize: CGFloat = 15
 
     var body: some View {
         HStack(spacing: 12) {

@@ -133,13 +133,25 @@ private struct MiniPlayerItem<Content: View>: View {
             .popupTitle(verbatim: currentTrack?.title ?? "", subtitle: currentTrack?.allArtists)
             .popupImage(barImage)
             .popupBarItems {
-                ToolbarItemGroup(placement: .popupBar) {
+                ToolbarItem(placement: .popupBar) {
                     Button {
                         player.toggle()
                     } label: {
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     }
-                    if popupBarPlacement != .inline {
+                }
+                if popupBarPlacement != .inline {
+                    // An empty, disabled item between play/pause and next, so reaching for one doesn't
+                    // hit the other. A spacer was too narrow, and padding doesn't survive the conversion
+                    // to bar button items.
+                    ToolbarItem(placement: .popupBar) {
+                        Button {} label: {
+                            Image(uiImage: MiniPlayerGap.image).renderingMode(.original)
+                        }
+                        .disabled(true)
+                        .accessibilityHidden(true)
+                    }
+                    ToolbarItem(placement: .popupBar) {
                         Button {
                             player.next()
                         } label: {
@@ -163,6 +175,15 @@ private struct MiniPlayerItem<Content: View>: View {
             barImage = Image(uiImage: ui)
         }
     }
+}
+
+// A clear 3 × 20 pt image: the slim, invisible icon for the gap between the mini player's buttons.
+private enum MiniPlayerGap {
+    static let image: UIImage = {
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: 3, height: 20), format: format).image { _ in }
+    }()
 }
 
 // On iOS 26 the tab bar and the mini player float with gaps around them, and the mini player's bar
