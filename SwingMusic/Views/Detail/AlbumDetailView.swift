@@ -43,7 +43,7 @@ struct AlbumDetailView: View {
             }
         }
         .squeezeMiniPlayer(state)
-        .detailBackground(bgImage, color: info.color)
+        .detailBackground(bgImage)
         .detailScrollTitle(info.title, after: 330)
         .toolbar {
             if let d = detail {
@@ -96,7 +96,7 @@ struct AlbumDetailView: View {
                 } label: {
                     Text(info.artist)
                         .font(.title3)
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(Color.appAccent)
                 }
                 .buttonStyle(.plain)
                 Text(Self.subtitle(info, tracks: tracks))

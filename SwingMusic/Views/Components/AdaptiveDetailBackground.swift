@@ -171,48 +171,25 @@ extension EnvironmentValues {
     }
 }
 
-// The detail screens' background: the whole page in the artwork's color once the cover has loaded,
-// with the blurred cover fading out behind the header, as on Apple Music's album pages.
+// The detail screens' blurred artwork background, scrolling with the header so the track list
+// below it sits on the plain background. Pulling down past the top leaves it anchored in place.
 private struct DetailBackground: ViewModifier {
     let image: UIImage?
-    var serverColor: String?
     @State private var scrolled: CGFloat = 0
-    @State private var palette: ArtworkPalette?
 
     func body(content: Content) -> some View {
         content
-            .environment(\.detailTint, palette?.accent)
-            .tint(palette?.accent)
-            .environment(\.colorScheme, palette == nil ? colorSchemeFallback : .dark)
             .onScrollGeometryChange(for: CGFloat.self) { geo in
                 max(0, geo.contentOffset.y + geo.contentInsets.top)
             } action: { _, value in
                 scrolled = value
             }
-            .background {
-                if let palette {
-                    ZStack(alignment: .top) {
-                        palette.background
-                        LinearGradient(colors: [.white.opacity(0.06), .clear, .black.opacity(0.18)],
-                                       startPoint: .top, endPoint: .bottom)
-                    }
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-                } else {
-                    AdaptiveDetailBackground(image: image, scrollOffset: scrolled)
-                }
-            }
-            .animation(.easeInOut(duration: 0.5), value: palette)
-            .task(id: "\(serverColor ?? "")|\(image.map { "\(ObjectIdentifier($0).hashValue)" } ?? "")") {
-                palette = ArtworkPalette.make(image: image, serverColor: serverColor)
-            }
+            .background { AdaptiveDetailBackground(image: image, scrollOffset: scrolled) }
     }
-
-    @Environment(\.colorScheme) private var colorSchemeFallback
 }
 
 extension View {
-    func detailBackground(_ image: UIImage?, color: String? = nil) -> some View {
-        modifier(DetailBackground(image: image, serverColor: color))
+    func detailBackground(_ image: UIImage?) -> some View {
+        modifier(DetailBackground(image: image))
     }
 }
