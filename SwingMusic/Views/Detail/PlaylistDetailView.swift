@@ -3,7 +3,10 @@ import SwiftUI
 struct PlaylistDetailView: View {
     let id: String
     let name: String
+    // The playlist as it was when opened, so its cover shows straight away.
+    var playlist: Playlist? = nil
     @Environment(AppState.self) var state
+    @State private var info: Playlist?
     @State private var tracks: [Track] = []
     @State private var loading = true
     @State private var bgImage: UIImage?
@@ -48,7 +51,7 @@ struct PlaylistDetailView: View {
         VStack(spacing: 14) {
             GeometryReader { geo in
                 let minY = geo.frame(in: .scrollView).minY
-                PlaylistImageGrid(playlist: state.allPlaylists.first { $0.id == id }, size: coverSize)
+                PlaylistImageGrid(playlist: cover, size: coverSize)
                     .scaleEffect(minY > 0 ? 1 + minY / 600 : 1 + minY / 2400, anchor: .bottom)
                     .offset(y: minY > 0 ? -minY * 0.3 : -minY * 0.2)
                     .opacity(minY < 0 ? max(0.25, 1 + minY / 500) : 1)
@@ -75,6 +78,12 @@ struct PlaylistDetailView: View {
         }
     }
 
+    // The server's copy once loaded, before that the one this was opened with. The library's list is
+    // only a fallback: it is empty until the Playlists screen has been opened.
+    private var cover: Playlist? {
+        info ?? playlist ?? state.allPlaylists.first { $0.id == id }
+    }
+
     private var coverSize: CGFloat {
         UIDevice.current.userInterfaceIdiom == .pad ? 300 : 250
     }
@@ -82,6 +91,7 @@ struct PlaylistDetailView: View {
     private func load() async {
         if let d = try? await API.shared.playlist(id) {
             tracks = d.tracks
+            info = d.info
             await loadBgImage(p: d.info)
         } else if let group = DownloadManager.shared.downloadGroups.first(where: { $0.id == "playlist:\(id)" }) {
             tracks = DownloadManager.shared.tracks(in: group)

@@ -39,7 +39,7 @@ extension View {
                 ArtistDetailView(artist: $0).zoomTransition("artist-\($0.artisthash)", in: ns)
             }
             .navigationDestination(for: Playlist.self) {
-                PlaylistDetailView(id: $0.id, name: $0.name).zoomTransition("playlist-\($0.id)", in: ns)
+                PlaylistDetailView(id: $0.id, name: $0.name, playlist: $0).zoomTransition("playlist-\($0.id)", in: ns)
             }
             .navigationDestination(for: Folder.self) { FolderBrowserView(path: $0.path, title: $0.name) }
             .navigationDestination(for: Mix.self) {
