@@ -8,6 +8,7 @@ struct SwingMusicApp: App {
 
     @MainActor
     private func reloadAfterServerSwitch() async {
+        await state.loadUser()
         await state.loadHome()
         await state.loadHomeSections()
         await state.loadPlaylists()

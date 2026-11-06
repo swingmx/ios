@@ -79,3 +79,118 @@ struct AlbumStatsTests {
         #expect(try API.decodeAlbumTracks(data).map(\.trackhash) == ["t1"])
     }
 }
+
+// The server takes editions out of album titles and sends them as `versions`.
+struct AlbumVersionsTests {
+    private func album(_ versions: [String]?) -> Album {
+        var a = Album(stub: "h", title: "Rumours", image: "h.webp", date: nil, albumartists: nil)
+        a.versions = versions
+        return a
+    }
+
+    @Test func versionsDecodeAndAreOptional() throws {
+        let with = try JSONDecoder().decode(Album.self, from: Data(
+            #"{"albumhash": "a", "title": "Rumours", "image": "a.webp", "versions": ["super deluxe", "remaster"]}"#.utf8))
+        let without = try JSONDecoder().decode(Album.self, from: Data(
+            #"{"albumhash": "a", "title": "Rumours", "image": "a.webp"}"#.utf8))
+
+        #expect(with.versions == ["super deluxe", "remaster"])
+        #expect(without.versions == nil)
+    }
+
+    // A bad edition card shouldn't stop the album from loading.
+    @Test func otherVersionsDecodeAndSkipMalformedOnes() throws {
+        let json = #"""
+        {"info": {"albumhash": "a", "title": "Rumours", "image": "a.webp"},
+         "tracks": [],
+         "other_versions": [{"albumhash": "b", "title": "Rumours", "image": "b.webp", "versions": ["deluxe"]},
+                            {"title": "no hash"}]}
+        """#
+        let d = try JSONDecoder().decode(AlbumDetail.self, from: Data(json.utf8))
+
+        #expect(d.otherVersions?.map(\.albumhash) == ["b"])
+    }
+
+    @Test func albumsWithoutOtherVersionsStillDecode() throws {
+        let json = #"{"info": {"albumhash": "a", "title": "Rumours", "image": "a.webp"}, "tracks": []}"#
+        let d = try JSONDecoder().decode(AlbumDetail.self, from: Data(json.utf8))
+
+        #expect(d.otherVersions == nil)
+    }
+
+    // Explicit has its own badge by the title.
+    @Test func explicitIsNotShownAsAVersion() {
+        #expect(AlbumVersions.shown(album(["explicit", "deluxe"])) == ["deluxe"])
+        #expect(AlbumVersions.cardLabel(album(["explicit"])) == nil)
+        #expect(AlbumVersions.cardLabel(album(nil)) == nil)
+    }
+
+    @Test func aCardShowsTheFirstVersion() {
+        #expect(AlbumVersions.cardLabel(album(["anniversary", "remaster"])) == "anniversary")
+    }
+
+    // Next to the remastered edition, the deluxe remaster reads as DELUXE, not REMASTER again.
+    @Test func nextToAnotherEditionACardShowsWhatDiffers() {
+        let current = album(["remaster"])
+
+        #expect(AlbumVersions.cardLabel(album(["remaster", "deluxe"]), comparedTo: current) == "deluxe")
+        #expect(AlbumVersions.cardLabel(album(["remaster"]), comparedTo: current) == "remaster")
+    }
+}
+
+// Album cards on an artist's page, as the web client shows them.
+struct AlbumCardSubtitleTests {
+    // 1 June 2019, midday UTC, so the year is 2019 in any time zone.
+    private let date = 1_559_390_400
+
+    private func album(_ artists: [(String, String)], date: Int?) -> Album {
+        Album(stub: "h", title: "T", image: "h.webp", date: date,
+              albumartists: artists.map { TrackArtist(name: $0.1, artisthash: $0.0) })
+    }
+
+    @Test func theArtistsOwnAlbumShowsJustTheYear() {
+        #expect(album([("me", "Me")], date: date).cardSubtitle(onArtistPage: "me") == "2019")
+    }
+
+    @Test func aSharedAlbumShowsTheYearAndTheOtherArtist() {
+        let a = album([("me", "Me"), ("them", "Them"), ("third", "Third")], date: date)
+        #expect(a.cardSubtitle(onArtistPage: "me") == "2019 · Them")
+    }
+
+    // On Appearances the album artist is someone else.
+    @Test func anAppearanceShowsTheAlbumArtist() {
+        #expect(album([("them", "Them")], date: date).cardSubtitle(onArtistPage: "me") == "2019 · Them")
+    }
+
+    @Test func withoutADateOnlyTheArtistIsShown() {
+        #expect(album([("me", "Me"), ("them", "Them")], date: nil).cardSubtitle(onArtistPage: "me") == "Them")
+    }
+
+    @Test func elsewhereTheCardShowsTheAlbumArtist() {
+        #expect(album([("me", "Me"), ("them", "Them")], date: date).cardSubtitle() == "Me")
+    }
+}
+
+// "More from" arrives keyed by artist; rows follow the album artists' order.
+struct AlbumMoreFromTests {
+    @Test func rowsFollowTheAlbumArtistsAndSkipEmptyOnes() throws {
+        let json = #"""
+        {"info": {"albumhash": "a", "title": "T", "image": "a.webp",
+                  "albumartists": [{"name": "First", "artisthash": "one"}, {"name": "Second", "artisthash": "two"},
+                                   {"name": "Third", "artisthash": "three"}]},
+         "tracks": [],
+         "more_from": {"two": [{"albumhash": "b", "title": "B", "image": "b.webp"}, {"title": "broken"}],
+                       "one": [{"albumhash": "c", "title": "C", "image": "c.webp"}],
+                       "three": []}}
+        """#
+        let d = try JSONDecoder().decode(AlbumDetail.self, from: Data(json.utf8))
+
+        #expect(d.moreFromSections.map(\.artist.name) == ["First", "Second"])
+        #expect(d.moreFromSections.map { $0.albums.map(\.albumhash) } == [["c"], ["b"]])
+    }
+
+    @Test func albumsWithoutMoreFromHaveNoRows() throws {
+        let json = #"{"info": {"albumhash": "a", "title": "T", "image": "a.webp"}, "tracks": []}"#
+        #expect(try JSONDecoder().decode(AlbumDetail.self, from: Data(json.utf8)).moreFromSections.isEmpty)
+    }
+}

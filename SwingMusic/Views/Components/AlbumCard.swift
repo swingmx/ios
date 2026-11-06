@@ -46,7 +46,7 @@ extension View {
                 MixDetailView(mix: $0).zoomTransition("mix-\($0.id)", in: ns)
             }
             .navigationDestination(for: ArtistAlbumSection.self) {
-                ArtistAlbumsGridView(title: $0.title, albums: $0.albums)
+                ArtistAlbumsGridView(title: $0.title, albums: $0.albums, artisthash: $0.artisthash)
             }
     }
 }
@@ -54,7 +54,13 @@ extension View {
 struct AlbumCard: View {
     let album: Album
     var size: CGFloat = 150
+    // The edition this card sits next to, if any, so its tag shows how this one differs.
+    var comparedTo: Album? = nil
+    // The artist whose page the card is on, if any: the second line then shows the year and any other artist.
+    var onArtistPage: String? = nil
     @Environment(\.colorScheme) private var scheme
+
+    private var versionLabel: String? { AlbumVersions.cardLabel(album, comparedTo: comparedTo) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -66,10 +72,14 @@ struct AlbumCard: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                Text(album.artist)
+                Text(album.cardSubtitle(onArtistPage: onArtistPage))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                if let v = versionLabel {
+                    AlbumVersionTag(text: v, size: 9)
+                        .padding(.top, 3)
+                }
             }
             .frame(width: size, alignment: .leading)
         }
@@ -131,6 +141,40 @@ struct ArtistCard: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .frame(width: size)
+        }
+    }
+}
+
+// An album edition ("DELUXE", "REMASTER") in the web client's colors: orange caps on a translucent
+// amber fill (its MasterFlag).
+struct AlbumVersionTag: View {
+    let text: String
+    var size: CGFloat = 10
+
+    static let textColor = Color(red: 1, green: 153 / 255, blue: 0)
+    static let fill = Color(red: 184 / 255, green: 108 / 255, blue: 21 / 255).opacity(0.281)
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: size, weight: .semibold))
+            .lineLimit(1)
+            .fixedSize()
+            .foregroundStyle(Self.textColor)
+            .padding(.horizontal, size * 0.5)
+            .padding(.vertical, size * 0.2)
+            .background(Self.fill, in: RoundedRectangle(cornerRadius: size * 0.4, style: .continuous))
+            .opacity(0.75)
+            .accessibilityLabel(text)
+    }
+}
+
+// Every edition an album names, for its own screen.
+struct AlbumVersionTags: View {
+    let album: Album
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(AlbumVersions.shown(album), id: \.self) { AlbumVersionTag(text: $0) }
         }
     }
 }

@@ -216,6 +216,51 @@ struct AlbumCover: View {
     }
 }
 
+struct UserAvatar: View {
+    @Environment(AppState.self) var state
+    var size: CGFloat
+    var photoSize: CGFloat? = nil
+    var symbol = "person.crop.circle"
+
+    @State private var photo: UIImage?
+
+    private var url: URL? {
+        guard state.hasUserImage, let image = state.user?.image else { return nil }
+        return API.shared.userImg(image)
+    }
+
+    var body: some View {
+        let frame = url == nil ? size : (photoSize ?? size)
+        Group {
+            if let photo, url != nil {
+                Image(uiImage: photo).resizable().scaledToFill()
+                    .frame(width: frame, height: frame)
+                    .clipShape(Circle())
+            } else {
+                Image(systemName: symbol).resizable().scaledToFit()
+                    .frame(width: size, height: size)
+            }
+        }
+        .frame(width: frame, height: frame)
+        .task(id: url) { await load() }
+    }
+
+    private func load() async {
+        guard let url else { photo = nil; return }
+        if let hit = Img.cache[url.absoluteString] ?? ImageDiskCache.image(for: url) { photo = hit; return }
+
+        var req = URLRequest(url: url)
+        if let t = API.shared.token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+        guard let (data, resp) = try? await Net.session.data(for: req),
+              (resp as? HTTPURLResponse).map({ (200...299).contains($0.statusCode) }) ?? false,
+              let ui = await ImageDecoding.decoded(data) else { return }
+
+        Img.cache[url.absoluteString] = ui
+        ImageDiskCache.storeOffline(data, for: url)
+        photo = ui
+    }
+}
+
 struct ArtistAvatar: View {
     let artist: Artist
     var size: CGFloat = 100

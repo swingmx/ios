@@ -156,10 +156,14 @@ struct Album: Codable, Identifiable, Hashable {
     let copyright: String?
     // Sent with an album's own page; absent on cards.
     var isFavorite: Bool? = nil
+    // The editions the full title names ("deluxe", "remaster", …). The server takes them out of the
+    // title, so this is the only thing telling two editions of an album apart. Absent on older servers.
+    var versions: [String]? = nil
 
     enum CodingKeys: String, CodingKey {
         case albumhash, title, image, date, duration, trackcount, albumartists, color, blurhash, copyright
         case isFavorite = "is_favorite"
+        case versions
     }
 
     var artist: String { albumartists?.first?.name ?? "Unknown Artist" }
@@ -289,6 +293,72 @@ struct AlbumDetail: Codable {
     let tracks: [Track]
     // Same shape as the artist's, minus the top album and plus how complete the album is.
     var stats: [ArtistStat]? = nil
+    // The same album's other editions by the same artist, as cards.
+    var otherVersions: [Album]? = nil
+    // Each album artist's other albums, keyed by artist hash.
+    var moreFrom: [String: [Album]]? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case info, tracks, stats
+        case otherVersions = "other_versions"
+        case moreFrom = "more_from"
+    }
+
+    // The "More from" rows in album artist order, as the web client lists them, leaving out empty ones.
+    var moreFromSections: [(artist: TrackArtist, albums: [Album])] {
+        guard let moreFrom else { return [] }
+        return (info.albumartists ?? []).compactMap { a in
+            guard let albums = moreFrom[a.artisthash], !albums.isEmpty else { return nil }
+            return (a, albums)
+        }
+    }
+}
+
+extension AlbumDetail {
+    // In an extension so the memberwise initializer stays. A malformed edition is dropped rather than
+    // failing the whole album.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        info = try c.decode(Album.self, forKey: .info)
+        tracks = try c.decode([Track].self, forKey: .tracks)
+        stats = try c.decodeIfPresent([ArtistStat].self, forKey: .stats)
+        otherVersions = (try? c.decodeIfPresent([LossyAlbum].self, forKey: .otherVersions))?.compactMap(\.album)
+        moreFrom = (try? c.decodeIfPresent([String: [LossyAlbum]].self, forKey: .moreFrom))?
+            .mapValues { $0.compactMap(\.album) }
+    }
+
+    private struct LossyAlbum: Decodable {
+        let album: Album?
+        init(from decoder: Decoder) throws { album = try? Album(from: decoder) }
+    }
+}
+
+extension Album {
+    // A card's second line. On an artist's page, as the web client does: the year, then the first other
+    // album artist ("2019 · Drake"), or just the year when the album is that artist's alone.
+    // Elsewhere, the album artist.
+    func cardSubtitle(onArtistPage artisthash: String? = nil) -> String {
+        guard let artisthash else { return artist }
+        let year = date.map { Date(timeIntervalSince1970: TimeInterval($0)).formatted(.dateTime.year()) }
+        let other = albumartists?.first { $0.artisthash != artisthash }?.name
+        return [year, other].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+// Which of an album's editions to show, and how.
+enum AlbumVersions {
+    // Explicit already has its own badge next to the title.
+    static func shown(_ album: Album) -> [String] {
+        (album.versions ?? []).filter { !$0.isEmpty && $0.lowercased() != "explicit" }
+    }
+
+    // The one tag a card has room for. Next to another edition (on its album screen), the first
+    // version that edition lacks, so a row of editions doesn't repeat the one they share.
+    static func cardLabel(_ album: Album, comparedTo other: Album? = nil) -> String? {
+        let own = shown(album)
+        let theirs = Set(other.map(shown) ?? [])
+        return own.first { !theirs.contains($0) } ?? own.first
+    }
 }
 
 struct ArtistStat: Codable, Hashable {
@@ -310,7 +380,10 @@ struct ArtistDetail: Decodable {
         artist = try c.decode(Artist.self, forKey: .artist)
         tracks = (try? c.decode([Track].self, forKey: .tracks)) ?? []
         stats = try? c.decode([ArtistStat].self, forKey: .stats)
-        albumSections = (try? c.decode(ArtistAlbumGroups.self, forKey: .albums))?.sections ?? []
+        let artisthash = artist.artisthash
+        albumSections = ((try? c.decode(ArtistAlbumGroups.self, forKey: .albums))?.sections ?? []).map {
+            ArtistAlbumSection(title: $0.title, albums: $0.albums, artisthash: artisthash)
+        }
     }
 }
 
@@ -412,6 +485,11 @@ struct AuthResponse: Codable {
     let msg: String?
 }
 
+struct User: Codable {
+    let username: String
+    let image: String?
+}
+
 struct ColorResponse: Codable {
     let color: String?
 }
@@ -423,6 +501,8 @@ struct FavoriteCheckResponse: Codable {
 struct ArtistAlbumSection: Decodable, Hashable {
     let title: String
     let albums: [Album]
+    // The artist whose page these albums are on, so their cards can leave that artist out.
+    var artisthash: String? = nil
 }
 
 struct Folder: Decodable, Identifiable, Hashable {

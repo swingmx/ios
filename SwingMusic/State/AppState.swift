@@ -35,8 +35,29 @@ final class AppState {
     let scroll = ScrollTracker.shared
     var authed = false {
         // Plays made while logged out were waiting for a session to send them with.
-        didSet { if authed, !oldValue { Task { await ScrobbleQueue.shared.flush() } } }
+        didSet {
+            if authed, !oldValue {
+                Task { await ScrobbleQueue.shared.flush() }
+                Task { await loadUser() }
+            }
+        }
     }
+    // Saved to UserDefaults. The previous image file is removed when the image changes.
+    var user: User? {
+        didSet {
+            if let user, let data = try? JSONEncoder().encode(user) {
+                UserDefaults.standard.set(data, forKey: Self.userKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.userKey)
+            }
+
+            if let old = oldValue?.image, !old.isEmpty, old != user?.image, let url = API.shared.userImg(old) {
+                ImageDiskCache.removeOffline(for: url)
+            }
+        }
+    }
+    var hasUserImage: Bool { !(user?.image ?? "").isEmpty }
+    private static let userKey = "currentUser"
     var tab: Tab = .home
     var accent: Color = .white
 
@@ -130,6 +151,9 @@ final class AppState {
             .sink { [weak self] _ in self?.keyboardVisible = false }
             .store(in: &bag)
         authed = API.shared.authed
+        if authed, let data = UserDefaults.standard.data(forKey: Self.userKey) {
+            user = try? JSONDecoder().decode(User.self, from: data)
+        }
         player.$current
             .removeDuplicates()
             .sink { [weak self] t in
@@ -173,7 +197,12 @@ final class AppState {
     func logout() {
         API.shared.logout()
         authed = false
+        user = nil
         Task { await ActivityManager.shared.end() }
+    }
+
+    func loadUser() async {
+        do { user = try await API.shared.currentUser() } catch { print("Error loaded user: \(error)") }
     }
 
     func loadHome() async {

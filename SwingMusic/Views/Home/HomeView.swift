@@ -45,13 +45,13 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: {
-                        Image(systemName: "person.crop.circle")
-                            .font(.system(size: 22))
+                        UserAvatar(size: 22, photoSize: 44)
                             .foregroundStyle(.primary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Settings")
                 }
+                .sharedBackgroundVisibility(state.hasUserImage ? .hidden : .automatic)
             }
             .navigationDestination(isPresented: $showSettings) {
                 SettingsView()
@@ -349,7 +349,7 @@ struct HomeView: View {
 
     private func albumRail(_ albums: [Album]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 14) {
+            LazyHStack(alignment: .top, spacing: 14) {
                 ForEach(albums) { a in
                     NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
                         .buttonStyle(PressableCardStyle())

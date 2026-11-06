@@ -20,7 +20,7 @@ enum AlbumSort: String, CaseIterable, Identifiable {
 struct AlbumsGridView: View {
     @Environment(AppState.self) var state
     @AppStorage("albumsSort") private var sortRaw = AlbumSort.recentlyAdded.rawValue
-    private let cols = [GridItem(.adaptive(minimum: 150), spacing: 14)]
+    private let cols = [GridItem(.adaptive(minimum: 150), spacing: 14, alignment: .top)]
 
     private var sort: AlbumSort { AlbumSort(rawValue: sortRaw) ?? .recentlyAdded }
 
@@ -213,7 +213,7 @@ struct FavoriteArtistsGridView: View {
 
 struct RecentlyAddedView: View {
     @Environment(AppState.self) var state
-    private let cols = [GridItem(.adaptive(minimum: 150), spacing: 14)]
+    private let cols = [GridItem(.adaptive(minimum: 150), spacing: 14, alignment: .top)]
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -274,6 +274,6 @@ struct FavoritesListHeader: View {
 
     static func gridColumns(width: CGFloat, card: CGFloat) -> [GridItem] {
         let layout = gridLayout(width: width, card: card)
-        return Array(repeating: GridItem(.fixed(card), spacing: layout.spacing), count: layout.columns)
+        return Array(repeating: GridItem(.fixed(card), spacing: layout.spacing, alignment: .top), count: layout.columns)
     }
 }

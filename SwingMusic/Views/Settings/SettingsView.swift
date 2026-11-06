@@ -12,12 +12,11 @@ struct SettingsView: View {
         List {
             Section {
                 HStack(spacing: 16) {
-                    Image(systemName: "person.circle.fill")
-                        .font(.system(size: 56))
+                    UserAvatar(size: 56, symbol: "person.circle.fill")
                         .foregroundStyle(.blue)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Swing Music")
+                        Text(state.user?.username ?? "Swing Music")
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(.primary)
                         Text(API.shared.base)

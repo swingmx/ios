@@ -129,9 +129,7 @@ struct FavoritesView: View {
                         NavigationLink(value: a) { AlbumCard(album: a, size: 150) }.buttonStyle(.plain)
                     }
                 }
-                .scrollTargetLayout()
             }
-            .scrollTargetBehavior(.viewAligned)
             .contentMargins(.horizontal, DetailLayout.inset, for: .scrollContent)
             .scrollClipDisabled()
         }
@@ -146,9 +144,7 @@ struct FavoritesView: View {
                         NavigationLink(value: a) { ArtistCard(artist: a, size: 110) }.buttonStyle(.plain)
                     }
                 }
-                .scrollTargetLayout()
             }
-            .scrollTargetBehavior(.viewAligned)
             .contentMargins(.horizontal, DetailLayout.inset, for: .scrollContent)
             .scrollClipDisabled()
         }

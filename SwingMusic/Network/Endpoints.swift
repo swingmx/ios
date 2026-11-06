@@ -19,9 +19,16 @@ extension API {
         try await get("/getall/artists", q: ["start": "\(start)", "limit": "\(limit)"])
     }
 
+    // `limit` caps each "More from" row.
     func album(_ hash: String) async throws -> AlbumDetail {
-        struct B: Encodable { let albumhash: String; let limit = 100 }
+        struct B: Encodable { let albumhash: String; let limit = 12 }
         return try await post("/album", body: B(albumhash: hash))
+    }
+
+    // Albums by artists similar to the given one, a random pick each time; empty when the server
+    // hasn't found similar artists for it.
+    func similarAlbums(artisthash: String, limit: Int = 12) async throws -> [Album] {
+        try await get("/album/similar", q: ["artisthash": artisthash, "limit": "\(limit)"])
     }
 
     func albumTracks(_ hash: String) async throws -> [Track] {
@@ -156,6 +163,10 @@ extension API {
 
     func checkFavorite(hash: String, type: String) async throws -> Bool {
         (try await get("/favorites/check", q: ["hash": hash, "type": type]) as FavoriteCheckResponse).is_favorite
+    }
+
+    func currentUser() async throws -> User {
+        try await get("/auth/user")
     }
 
     func topTracks(_ period: String = "month", limit: Int = 25) async throws -> [Track] {

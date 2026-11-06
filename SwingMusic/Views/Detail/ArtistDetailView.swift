@@ -209,10 +209,10 @@ struct ArtistDetailView: View {
                     }
 
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 14) {
+                        HStack(alignment: .top, spacing: 14) {
                             ForEach(section.albums) { a in
                                 NavigationLink(value: a) {
-                                    AlbumCard(album: a, size: 140)
+                                    AlbumCard(album: a, size: 140, onArtistPage: hash)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -374,14 +374,15 @@ struct ArtistTracksView: View {
 struct ArtistAlbumsGridView: View {
     let title: String
     let albums: [Album]
+    var artisthash: String? = nil
     @Environment(AppState.self) var state
-    private let cols = [GridItem(.adaptive(minimum: 150), spacing: 14)]
+    private let cols = [GridItem(.adaptive(minimum: 150), spacing: 14, alignment: .top)]
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVGrid(columns: cols, spacing: 18) {
                 ForEach(albums) { a in
-                    NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
+                    NavigationLink(value: a) { AlbumCard(album: a, size: 150, onArtistPage: artisthash) }
                         .buttonStyle(.plain)
                 }
             }

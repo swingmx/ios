@@ -107,6 +107,10 @@ final class API {
     func playlistImg(_ path: String) -> URL? {
         mediaImageURL(kind: "playlist", path: path, size: "")
     }
+
+    func userImg(_ path: String) -> URL? {
+        mediaImageURL(kind: "user", path: path, size: "")
+    }
     func stream(_ hash: String) -> URL? {
         streamURLs(hash).first
     }

@@ -9,6 +9,7 @@ struct AlbumDetailView: View {
     @State private var loading = true
     @State private var bgImage: UIImage?
     @State private var isOfflineCopy = false
+    @State private var similar: [Album] = []
 
     private var hash: String { album.albumhash }
     private var info: Album { detail?.info ?? album }
@@ -26,10 +27,26 @@ struct AlbumDetailView: View {
                         totalSeconds: d.info.duration ?? d.tracks.reduce(0) { $0 + $1.duration },
                         copyright: d.info.copyright
                     )
-                    // Saved stats are frozen at download time, so they are only shown live.
-                    if !isOfflineCopy, let stats = d.stats, !stats.isEmpty {
-                        StatsRow(stats: stats, color: d.info.color)
-                            .padding(.top, 28)
+                    // Below the tracks in the web client's order. None of it is kept offline.
+                    if !isOfflineCopy {
+                        if let others = d.otherVersions, !others.isEmpty {
+                            albumRow("Other Versions", albums: others, comparedTo: d.info)
+                                .padding(.top, 28)
+                        }
+                        ForEach(d.moreFromSections, id: \.artist.artisthash) { section in
+                            albumRow("More from \(section.artist.name)", albums: section.albums,
+                                     link: Artist(stub: section.artist.artisthash, name: section.artist.name))
+                                .padding(.top, 28)
+                        }
+                        // Saved stats are frozen at download time, so they are only shown live.
+                        if let stats = d.stats, !stats.isEmpty {
+                            StatsRow(stats: stats, color: d.info.color)
+                                .padding(.top, 28)
+                        }
+                        if !similar.isEmpty {
+                            albumRow("Similar Albums", albums: similar)
+                                .padding(.top, 28)
+                        }
                     }
                 } else if loading {
                     ProgressView().tint(.secondary).frame(maxWidth: .infinity, minHeight: 200)
@@ -99,10 +116,21 @@ struct AlbumDetailView: View {
                         .foregroundStyle(Color.appAccent)
                 }
                 .buttonStyle(.plain)
-                Text(Self.subtitle(info, tracks: tracks))
-                    .font(.caption.weight(.semibold))
-                    .textCase(.uppercase)
-                    .foregroundStyle(.secondary)
+                // "GENRE · YEAR · DELUXE", the editions as tags after the year.
+                HStack(spacing: 5) {
+                    let subtitle = Self.subtitle(info, tracks: tracks)
+                    let hasVersions = !AlbumVersions.shown(info).isEmpty
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                    }
+                    if hasVersions {
+                        if !subtitle.isEmpty { Text("·") }
+                        AlbumVersionTags(album: info)
+                    }
+                }
+                .font(.caption.weight(.semibold))
+                .textCase(.uppercase)
+                .foregroundStyle(.secondary)
             }
 
             DetailPlayButtons(
@@ -114,6 +142,50 @@ struct AlbumDetailView: View {
             .padding(.top, 4).padding(.bottom, 8)
         }
         .padding(.horizontal, 20)
+    }
+
+    // Laid out like the artist page's album rows. With `comparedTo`, each card's tag names what sets it
+    // apart from that album; with `link`, the title opens it.
+    private func albumRow(_ title: String, albums: [Album], comparedTo current: Album? = nil,
+                          link: Artist? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Group {
+                if let link {
+                    NavigationLink(value: link) { rowTitle(title, chevron: true) }
+                        .buttonStyle(.plain)
+                } else {
+                    rowTitle(title, chevron: false)
+                }
+            }
+            .padding(.horizontal, DetailLayout.inset)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 14) {
+                    ForEach(albums) { a in
+                        NavigationLink(value: a) {
+                            AlbumCard(album: a, size: 140, comparedTo: current)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, DetailLayout.inset)
+            }
+        }
+    }
+
+    private func rowTitle(_ title: String, chevron: Bool) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.title2.bold())
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            if chevron {
+                Image(systemName: "chevron.right")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(.rect)
     }
 
     private var coverSize: CGFloat {
@@ -185,6 +257,8 @@ struct AlbumDetailView: View {
     private func load() async {
         if let d = try? await API.shared.album(hash) {
             detail = d
+            loading = false
+            await loadSimilar(d.info)
         } else {
             let dl = DownloadManager.shared.downloadedTracks.filter { $0.albumhash == hash }
             if !dl.isEmpty {
@@ -194,6 +268,14 @@ struct AlbumDetailView: View {
             }
         }
         loading = false
+    }
+
+    // Fetched after the album, as the web client does, so it never holds up the tracks. The server picks
+    // at random, so this stays as first loaded while the screen is open.
+    private func loadSimilar(_ album: Album) async {
+        guard similar.isEmpty, let artist = album.albumartists?.first?.artisthash, !artist.isEmpty,
+              let albums = try? await API.shared.similarAlbums(artisthash: artist) else { return }
+        similar = albums.filter { $0.albumhash != album.albumhash }
     }
 
     private func loadBgImage(_ image: String) async {

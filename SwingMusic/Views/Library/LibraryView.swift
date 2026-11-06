@@ -72,7 +72,7 @@ struct LibraryView: View {
                 if !state.recentAdded.isEmpty {
                     Section(header: Text("Recently Added")) {
                         ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(spacing: 14) {
+                            LazyHStack(alignment: .top, spacing: 14) {
                                 ForEach(Array(state.recentAdded.enumerated()), id: \.offset) { _, a in
                                     NavigationLink(value: a) { AlbumCard(album: a, size: 130) }
                                         .buttonStyle(.plain)
@@ -103,13 +103,13 @@ struct LibraryView: View {
                     Button {
                         showSettings = true
                     } label: {
-                        Image(systemName: "person.crop.circle")
-                            .font(.system(size: 22))
+                        UserAvatar(size: 22, photoSize: 44)
                             .foregroundStyle(.primary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Settings")
                 }
+                .sharedBackgroundVisibility(state.hasUserImage ? .hidden : .automatic)
             }
             .alert("New Playlist", isPresented: $showingCreateAlert) {
                 TextField("Playlist Name", text: $newPlaylistName)
