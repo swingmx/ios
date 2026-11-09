@@ -27,6 +27,7 @@ final class AudioPlayer: ObservableObject {
         case search(String)
         case favorite
         case mix(id: String, sourcehash: String)
+        case work(String)
         case none
 
         var token: String {
@@ -38,6 +39,7 @@ final class AudioPlayer: ObservableObject {
             case .search(let q): "q:\(q)"
             case .favorite: "favorite"
             case .mix(let id, let sh): "mix:\(id).\(sh)"
+            case .work(let h): "wk:\(h)"
             case .none: ""
             }
         }
@@ -53,6 +55,7 @@ final class AudioPlayer: ObservableObject {
             else if let id = after("pl:") { self = .playlist(id) }
             else if let p = after("fo:") { self = .folder(p) }
             else if let q = after("q:") { self = .search(q) }
+            else if let h = after("wk:") { self = .work(h) }
             else if let m = after("mix:"), let dot = m.lastIndex(of: ".") {
                 // The source hash has no dots, so the last one separates it from the mix id.
                 self = .mix(id: String(m[..<dot]), sourcehash: String(m[m.index(after: dot)...]))
@@ -61,16 +64,27 @@ final class AudioPlayer: ObservableObject {
     }
 
     @Published var playing = false
+    @Published private(set) var handingOff = false
+    @Published var switchingTarget = false
     @Published var time: Double = 0
     @Published var total: Double = 0
     @Published var volume: Float = 0.8 {
-        didSet { player?.volume = volume }
+        didSet { player?.volume = gain }
+    }
+    var gain: Float { Self.gain(volume) }
+
+    nonisolated static func gain(_ position: Float) -> Float {
+        let pos = min(max(position, 0), 1)
+        if pos <= 0 || pos >= 1 { return pos }
+        var g = powf(powf(10, -50 / 20), 1 - pos)
+        if pos < 0.05 { g *= pos / 0.05 }
+        return min(max(g, 0), 1)
     }
 
     private var timeAnchor: Double = 0
     private var timeAnchorDate: Date = .distantPast
     @Published var shuffle = false
-    @Published var loop: LoopMode = .off
+    @Published var loop: LoopMode = .all
     @Published var crossfadeDuration: Double = UserDefaults.standard.double(forKey: "crossfadeDuration") {
         didSet {
             UserDefaults.standard.set(crossfadeDuration, forKey: "crossfadeDuration")
@@ -153,10 +167,17 @@ final class AudioPlayer: ObservableObject {
 
     private var queueCancellables = Set<AnyCancellable>()
 
+    private var rc: RemoteControl { .shared }
+    private(set) var isController = false
+    var isLoaded: Bool { player != nil }
+    var isAudible: Bool { player?.timeControlStatus == .playing }
+    var isStarting: Bool { handingOff }
+    private var pendingStart: (time: Double, play: Bool)?
+
     private init() {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
         try? AVAudioSession.sharedInstance().setActive(true)
-        remote()
+        setRemoteCommands(true)
         setupWidgetCommandPolling()
         observeInterruptions()
         restoreQueue()
@@ -236,7 +257,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     private func handleInterruption(_ notification: Notification) {
-        guard let info = notification.userInfo,
+        guard !isController, let info = notification.userInfo,
               let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
 
@@ -269,18 +290,18 @@ final class AudioPlayer: ObservableObject {
     }
 
     func play(_ track: Track, from list: [Track]? = nil, source: PlaySource = .none) {
+        if rc.subscribed {
+            rc.replace(list ?? [track], start: list?.firstIndex(of: track) ?? 0, source: source)
+            return
+        }
         log()
         // A new list without a context isn't credited to the one playing before.
         if source != .none || list != nil { self.source = source }
         if let list {
             baseOrder = list
-            if shuffle {
-                queue = [track] + SmartShuffle.shuffle(list.filter { $0 != track })
-                index = 0
-            } else {
-                queue = list
-                index = list.firstIndex(of: track) ?? 0
-            }
+            shuffle = false
+            queue = list
+            index = list.firstIndex(of: track) ?? 0
         }
         current = track
         load(track)
@@ -288,6 +309,10 @@ final class AudioPlayer: ObservableObject {
 
     func playAll(_ tracks: [Track], shuffled: Bool = false, source: PlaySource = .none) {
         guard !tracks.isEmpty else { return }
+        if rc.subscribed {
+            rc.replace(tracks, start: shuffled ? Int.random(in: tracks.indices) : 0, source: source, shuffled: shuffled)
+            return
+        }
         log()
         self.source = source
         baseOrder = tracks
@@ -301,6 +326,7 @@ final class AudioPlayer: ObservableObject {
     static let queueAnim: Animation = .spring(response: 0.35, dampingFraction: 0.85)
 
     func addLast(_ track: Track) {
+        if rc.subscribed { rc.insert([track], next: false); return }
         withAnimation(Self.queueAnim) { queue.append(track) }
         if current == nil {
             index = 0
@@ -310,6 +336,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     func addNext(_ track: Track) {
+        if rc.subscribed { rc.insert([track], next: true); return }
         if queue.isEmpty {
             addLast(track)
         } else {
@@ -319,6 +346,7 @@ final class AudioPlayer: ObservableObject {
 
     func addNext(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
+        if rc.subscribed { rc.insert(tracks, next: true); return }
         if queue.isEmpty {
             addLast(tracks)
         } else {
@@ -328,6 +356,7 @@ final class AudioPlayer: ObservableObject {
 
     func addLast(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
+        if rc.subscribed { rc.insert(tracks, next: false); return }
         let start = queue.count
         withAnimation(Self.queueAnim) { queue.append(contentsOf: tracks) }
         if current == nil {
@@ -341,6 +370,12 @@ final class AudioPlayer: ObservableObject {
     // after playback began) without restarting playback. Ignored once that track is no longer playing.
     func expandQueue(around track: Track, with full: [Track]) {
         guard queue.indices.contains(index), queue[index] == track, current == track else { return }
+        if rc.subscribed {
+            // shortcut: the rest of the list is appended in list order, not positioned around the track.
+            let queued = Set(queue.map(\.trackhash))
+            rc.insert(full.filter { !queued.contains($0.trackhash) }, next: false)
+            return
+        }
         let expanded = Self.expandedQueue(queue: queue, index: index, full: full, shuffled: shuffle)
         baseOrder = full
         withAnimation(Self.queueAnim) { queue = expanded.queue }
@@ -371,6 +406,7 @@ final class AudioPlayer: ObservableObject {
 
     func jump(to i: Int) {
         guard queue.indices.contains(i) else { return }
+        if isController { rc.jump(to: i); return }
         log()
         index = i
         current = queue[i]
@@ -378,6 +414,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     func toggleShuffle() {
+        if rc.subscribed { rc.setShuffle(!shuffle); return }
         shuffle.toggle()
         UISelectionFeedbackGenerator().selectionChanged()
         applyShuffleToUpcoming()
@@ -406,7 +443,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     private func reshuffleForNewRound() {
-        guard shuffle, queue.count > 2 else { return }
+        guard shuffle, !rc.subscribed, queue.count > 2 else { return }
         let last = queue[index]
         var next = SmartShuffle.shuffle(queue)
         if next.first == last, let i = next.indices.dropFirst().randomElement() { next.swapAt(0, i) }
@@ -414,6 +451,11 @@ final class AudioPlayer: ObservableObject {
     }
 
     func cycleLoop() {
+        if rc.subscribed {
+            rc.setRepeat(loop == .off ? .all : loop == .all ? .one : .off)
+            UISelectionFeedbackGenerator().selectionChanged()
+            return
+        }
         switch loop {
         case .off: loop = .all
         case .all: loop = .one
@@ -424,11 +466,13 @@ final class AudioPlayer: ObservableObject {
 
     func appendToQueue(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
+        if rc.subscribed { rc.insert(tracks, next: false); return }
         withAnimation(Self.queueAnim) { queue.append(contentsOf: tracks) }
     }
 
     func enqueueInterleaved(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
+        if rc.subscribed { rc.insert(tracks, next: false); return }
         for t in tracks {
             let lower = min(index + 1, queue.count)
             let pos = lower <= queue.count ? Int.random(in: lower...queue.count) : queue.count
@@ -437,6 +481,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     func next() {
+        if isController { rc.command("next"); return }
         guard !queue.isEmpty else { return }
         if let prep = prepared, !isCrossfading, prep.item.status != .failed,
            Self.isNextUp(prep.track, queue: queue, index: index, loop: loop) {
@@ -466,6 +511,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     func prev() {
+        if isController { rc.command("prev"); return }
         if time > 3 { seek(0); return }
         guard !queue.isEmpty else { return }
         index = index > 0 ? index - 1 : (loop == .all ? queue.count - 1 : 0)
@@ -474,8 +520,13 @@ final class AudioPlayer: ObservableObject {
     }
 
     func toggle() {
+        guard !handingOff, !switchingTarget else { return }
+        if isController { rc.command("toggle"); return }
         guard player != nil else {
-            if let t = current { load(t); return }
+            if let t = current {
+                if rc.subscribed { remoteLoad(index, at: time, play: true) } else { load(t) }
+                return
+            }
             return
         }
         if playing {
@@ -494,6 +545,12 @@ final class AudioPlayer: ObservableObject {
     }
 
     func seek(_ t: Double) {
+        if isController {
+            rc.command("seek", ["position_ms": Int(max(0, t) * 1000)])
+            time = t
+            return
+        }
+        defer { if rc.subscribed { rc.playheadChanged() } }
         let tol = CMTime(seconds: 0.2, preferredTimescale: 1000)
         player?.seek(to: CMTime(seconds: t, preferredTimescale: 1000), toleranceBefore: tol, toleranceAfter: tol)
         time = t
@@ -509,7 +566,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     func smoothTime(at date: Date = Date()) -> Double {
-        guard playing else { return time }
+        guard playing, !isController else { return time }
         guard let p = player, p.timeControlStatus == .playing else { return timeAnchor }
         let dt = min(max(0, date.timeIntervalSince(timeAnchorDate)), 0.5) * Double(p.rate)
         let t = timeAnchor + dt
@@ -558,7 +615,9 @@ final class AudioPlayer: ObservableObject {
         }
     }
 
-    private func load(_ track: Track) {
+    private func load(_ track: Track, start: (time: Double, play: Bool)? = nil) {
+        pendingStart = start
+        handingOff = start != nil
         extendForAutoplayIfNeeded()
         if !isCrossfading {
             discardPrepared()
@@ -568,9 +627,9 @@ final class AudioPlayer: ObservableObject {
         log()
         lastActivitySecond = -1
 
-        time = 0
+        time = start?.time ?? 0
         total = 0
-        timeAnchor = 0
+        timeAnchor = time
         timeAnchorDate = Date()
 
         if let o = obs { player?.removeTimeObserver(o); obs = nil }
@@ -578,10 +637,70 @@ final class AudioPlayer: ObservableObject {
         if !isCrossfading { player?.pause() }
 
         NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)
+        if rc.subscribed { rc.playheadChanged() }
 
         Task { [weak self] in
             await self?.startPlayback(track)
         }
+    }
+
+    func remoteLoad(_ i: Int, at seconds: Double, play: Bool) {
+        guard queue.indices.contains(i) else { return }
+        log()
+        index = i
+        current = queue[i]
+        load(queue[i], start: (seconds, play))
+    }
+
+    private func startPlayer() {
+        let start = pendingStart ?? (0, true)
+        playing = start.play
+        resetClock(to: start.time)
+        if pendingStart == nil, start.play { player?.play() }
+    }
+
+    /// Seeks to a handed-off position, then plays.
+    private func startAt(_ start: (time: Double, play: Bool)) {
+        resetClock(to: start.time)
+        let p = player
+        let tol = CMTime(seconds: 0.2, preferredTimescale: 1000)
+        p?.seek(to: CMTime(seconds: start.time, preferredTimescale: 1000), toleranceBefore: tol, toleranceAfter: tol) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.player === p else { return }
+                self.handingOff = false
+                if start.play { p?.play() }
+                if self.rc.subscribed { self.rc.playheadChanged() }
+            }
+        }
+    }
+
+    func setController(_ on: Bool) {
+        isController = on
+        setRemoteCommands(!on)
+        guard on else {
+            updateNowPlaying()
+            return
+        }
+        log()
+        discardPrepared()
+        fadeTimer?.invalidate(); fadeTimer = nil
+        isCrossfading = false
+        if let o = obs { player?.removeTimeObserver(o); obs = nil }
+        statusObs?.invalidate(); statusObs = nil
+        NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)
+        player?.pause()
+        player = nil
+        assetLoader = nil
+        fadingLoader = nil
+        playing = false
+        nowPlayingInfo = [:]
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        Task { await ActivityManager.shared.end() }
+    }
+
+    func leaveRemote() {
+        baseOrder = queue
+        if isController { setController(false) }
     }
 
     private func startPlayback(_ track: Track) async {
@@ -592,16 +711,14 @@ final class AudioPlayer: ObservableObject {
             let item = AVPlayerItem(url: localURL)
             observeFailure(of: item, track: track)
             player = AVPlayer(playerItem: item)
-            player?.volume = isCrossfading ? 0 : volume
+            player?.volume = isCrossfading ? 0 : gain
 
             NotificationCenter.default.addObserver(self, selector: #selector(ended), name: .AVPlayerItemDidPlayToEndTime, object: item)
             setupTimeObserver()
-            player?.play()
-            playing = true
+            startPlayer()
             logger.info("✅ Playing offline: \(track.title)")
             beginSession(for: track)
             total = Double(track.duration)
-            time = 0
             lastActivitySecond = -1
             updateNowPlaying()
             updateArtwork(track)
@@ -650,28 +767,27 @@ final class AudioPlayer: ObservableObject {
         var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
         comps?.scheme = "swingstream"
         let assetURL = comps?.url ?? url
-        let asset = AVURLAsset(url: assetURL)
         let ext = (track.filepath as NSString).pathExtension
+        // A VBR MP3 has no seek table, so a mid-track start lands seconds off without a full scan.
+        let precise = (pendingStart?.time ?? 0) > 0 && ext.lowercased() == "mp3"
+        let asset = AVURLAsset(url: assetURL, options: precise ? [AVURLAssetPreferPreciseDurationAndTimingKey: true] : nil)
         let loader = AuthStreamLoader(realURL: url, headers: streamHeaders, fileExtension: ext)
         asset.resourceLoader.setDelegate(loader, queue: AuthStreamLoader.queue)
         assetLoader = loader
         let item = AVPlayerItem(asset: asset)
         observeFailure(of: item, track: track)
         player = AVPlayer(playerItem: item)
-        player?.volume = isCrossfading ? 0 : volume
+        player?.volume = isCrossfading ? 0 : gain
         player?.allowsExternalPlayback = false
 
         NotificationCenter.default.addObserver(self, selector: #selector(ended), name: .AVPlayerItemDidPlayToEndTime, object: item)
         setupTimeObserver()
 
-        player?.play()
-        playing = true
+        startPlayer()
         Log.info("play", "→ trying candidate \(self.streamCandidateIndex + 1)/\(self.streamCandidates.count) via resource-loader")
         logger.info("▶️ Trying candidate \(self.streamCandidateIndex + 1)/\(self.streamCandidates.count) for \(track.title, privacy: .public)")
         beginSession(for: track)
         total = Double(track.duration)
-        time = 0
-        resetClock(to: 0)
         lastActivitySecond = -1
         updateNowPlaying()
         updateArtwork(track)
@@ -683,7 +799,7 @@ final class AudioPlayer: ObservableObject {
     private func setupTimeObserver() {
         obs = player?.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.05, preferredTimescale: 600), queue: .main) { [weak self] t in
             MainActor.assumeIsolated {
-                guard let s = self else { return }
+                guard let s = self, !s.handingOff else { return }
                 let seconds = t.seconds
                 s.time = seconds
                 s.timeAnchor = seconds
@@ -719,6 +835,8 @@ final class AudioPlayer: ObservableObject {
                 let idx = s.streamCandidateIndex + 1
                 switch status {
                 case .readyToPlay:
+                    if let start = s.pendingStart { s.startAt(start) }
+                    s.pendingStart = nil
                     Log.info("play", "✅ Candidate \(idx) readyToPlay — \(track.title)")
                 case .failed:
                     Log.error("play", "❌ Candidate \(idx)/\(s.streamCandidates.count) failed: \(err ?? "unknown") — trying next")
@@ -746,7 +864,7 @@ final class AudioPlayer: ObservableObject {
         index += 1
         current = queue[index]
         extendForAutoplayIfNeeded()
-        prep.player.volume = volume
+        prep.player.volume = gain
         adopt(prep, rate: 1)
     }
 
@@ -928,7 +1046,7 @@ final class AudioPlayer: ObservableObject {
             Task { @MainActor in
                 guard let self else { timer.invalidate(); return }
                 let x = min(1, (CACurrentMediaTime() - start) / d)
-                let v = self.volume
+                let v = self.gain
                 old?.volume = v * Float(cos(x * .pi / 2))
                 new?.volume = v * Float(sin(x * .pi / 2))
                 if startRate != 1, let n = new, n.rate > 0 {
@@ -997,8 +1115,14 @@ final class AudioPlayer: ObservableObject {
         }
     }
 
-    private func remote() {
+    private func setRemoteCommands(_ enabled: Bool) {
         let c = MPRemoteCommandCenter.shared()
+        for command in [c.playCommand, c.pauseCommand, c.nextTrackCommand, c.previousTrackCommand,
+                        c.changePlaybackPositionCommand] {
+            command.removeTarget(nil)
+            command.isEnabled = enabled
+        }
+        guard enabled else { return }
         c.playCommand.addTarget { [weak self] _ in Task { @MainActor in self?.toggle() }; return .success }
         c.pauseCommand.addTarget { [weak self] _ in Task { @MainActor in self?.toggle() }; return .success }
         c.nextTrackCommand.addTarget { [weak self] _ in Task { @MainActor in self?.next() }; return .success }
@@ -1050,7 +1174,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     private func updateNowPlayingTraced() {
-        guard let t = current else { return }
+        guard !isController, let t = current else { return }
         var info = nowPlayingInfo
         info[MPMediaItemPropertyTitle] = t.title
         info[MPMediaItemPropertyArtist] = t.allArtists
@@ -1063,7 +1187,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     private func updateArtwork(_ track: Track) {
-        guard !track.image.isEmpty else { return }
+        guard !isController, !track.image.isEmpty else { return }
 
         let sizes = ["original", "large", "medium", "small", ""]
         var seen = Set<String>()

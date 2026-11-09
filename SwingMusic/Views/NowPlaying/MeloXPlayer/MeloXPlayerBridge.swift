@@ -11,9 +11,12 @@ extension PlayerStore {
     private var p: AudioPlayer { AudioPlayer.shared }
 
     var duration: TimeInterval { p.total }
-    var isLoading: Bool { false }
+    var isLoading: Bool { handingOff }
     var volume: Double { Double(p.volume) }
-    func setVolume(_ value: Double) { p.volume = Float(value) }
+    func setVolume(_ value: Double) {
+        p.volume = Float(value)
+        if RemoteControl.shared.subscribed { RemoteControl.shared.setVolume(value) }
+    }
     func togglePlayback() { p.toggle() }
     func next() async { p.next() }
     func previous() async { p.prev() }
@@ -45,6 +48,10 @@ extension PlayerStore {
     func playFromQueue(at index: Int) async { p.jump(to: index) }
 
     func moveUpcomingQueueItems(fromOffsets source: IndexSet, toOffset destination: Int) {
+        if RemoteControl.shared.subscribed {
+            RemoteControl.shared.moveUpcoming(fromOffsets: source, toOffset: destination)
+            return
+        }
         let base = p.index + 1
         guard base < p.queue.count else { return }
         var upcoming = Array(p.queue[base...])
@@ -53,6 +60,7 @@ extension PlayerStore {
     }
 
     func addToPlaybackQueue(_ song: Song) {
+        if RemoteControl.shared.subscribed { p.addLast(song); return }
         p.queue.append(song)
     }
 

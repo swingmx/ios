@@ -9,6 +9,7 @@ final class PlayerStore {
 
     var currentSong: Song?
     var isPlaying: Bool = false
+    var handingOff: Bool = false
     var progress: TimeInterval = 0
     var seekRevision: Int = 0
     var shuffleOn: Bool = false
@@ -66,6 +67,12 @@ final class PlayerStore {
         player.$playing
             .receive(on: RunLoop.main)
             .sink { [weak self] in self?.isPlaying = $0 }
+            .store(in: &cancellables)
+
+        player.$handingOff
+            .combineLatest(player.$switchingTarget) { $0 || $1 }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] in self?.handingOff = $0 }
             .store(in: &cancellables)
 
         player.$time

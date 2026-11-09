@@ -120,7 +120,6 @@ struct SettingsView: View {
                     }
                 }
                 .tint(.green)
-
             }
 
             Section(header: Text("Storage")) {

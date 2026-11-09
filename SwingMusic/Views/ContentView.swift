@@ -125,6 +125,7 @@ private struct MiniPlayerItem<Content: View>: View {
     private let player = AudioPlayer.shared
     @State private var currentTrack: Track?
     @State private var isPlaying = false
+    @State private var handingOff = false
     @State private var barImage: Image?
     @Environment(\.popupBarPlacement) private var popupBarPlacement
 
@@ -137,7 +138,11 @@ private struct MiniPlayerItem<Content: View>: View {
                     Button {
                         player.toggle()
                     } label: {
-                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        if handingOff {
+                            ProgressView()
+                        } else {
+                            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        }
                     }
                 }
                 if popupBarPlacement != .inline {
@@ -165,6 +170,7 @@ private struct MiniPlayerItem<Content: View>: View {
                 Task { await loadBarImage(track) }
             }
             .onReceive(player.$playing) { isPlaying = $0 }
+            .onReceive(player.$handingOff.combineLatest(player.$switchingTarget) { $0 || $1 }) { handingOff = $0 }
     }
 
     private func loadBarImage(_ t: Track?) async {

@@ -26,12 +26,69 @@ struct SheetBlurBackground: View {
 }
 
 struct AirPlayButton: UIViewRepresentable {
+    var hidden = false
+    /// Bumping this opens the route picker.
+    var trigger = 0
+    var onRouteChange: (() -> Void)?
+
+    /// Picking any output in the app while another device plays moves playback to this phone.
+    @MainActor
+    final class Coordinator: NSObject, @preconcurrency AVRoutePickerViewDelegate {
+        var trigger = 0
+        var onRouteChange: (() -> Void)?
+        private var route: [String] = []
+        private var deadline = Date.distantPast
+
+        private static var outputs: [String] { AVAudioSession.sharedInstance().currentRoute.outputs.map(\.uid) }
+
+        override init() {
+            super.init()
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(routeChanged),
+                name: AVAudioSession.routeChangeNotification, object: nil
+            )
+        }
+
+        func routePickerViewWillBeginPresentingRoutes(_ v: AVRoutePickerView) {
+            route = Self.outputs
+            deadline = .distantFuture
+        }
+
+        func routePickerViewDidEndPresentingRoutes(_ v: AVRoutePickerView) {
+            // AirPlay can take a few seconds to connect after the picker closes
+            deadline = Date() + 10
+            apply()
+        }
+
+        @objc nonisolated private func routeChanged() {
+            Task { @MainActor in self.apply() }
+        }
+
+        private func apply() {
+            guard Date() < deadline, Self.outputs != route else { return }
+            deadline = .distantPast
+            let remote = RemoteControl.shared
+            guard remote.playingElsewhere != nil else { return }
+            onRouteChange?()
+            remote.transfer(to: remote.deviceID)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIView(context: Context) -> AVRoutePickerView {
         let v = AVRoutePickerView()
-        v.tintColor = .label
-        v.activeTintColor = .systemBlue
+        v.tintColor = hidden ? .clear : .label
+        v.activeTintColor = hidden ? .clear : .systemBlue
         v.prioritizesVideoDevices = false
+        v.delegate = context.coordinator
         return v
     }
-    func updateUIView(_ v: AVRoutePickerView, context: Context) {}
+
+    func updateUIView(_ v: AVRoutePickerView, context: Context) {
+        context.coordinator.onRouteChange = onRouteChange
+        guard trigger != context.coordinator.trigger else { return }
+        context.coordinator.trigger = trigger
+        (v.subviews.first { $0 is UIButton } as? UIButton)?.sendActions(for: .touchUpInside)
+    }
 }

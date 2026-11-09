@@ -39,6 +39,7 @@ final class AppState {
             if authed, !oldValue {
                 Task { await ScrobbleQueue.shared.flush() }
                 Task { await loadUser() }
+                RemoteControl.shared.start()
             }
         }
     }
@@ -195,6 +196,7 @@ final class AppState {
     }
 
     func logout() {
+        RemoteControl.shared.stop()
         API.shared.logout()
         authed = false
         user = nil

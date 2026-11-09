@@ -29,7 +29,9 @@ struct SwingMusicApp: App {
             .environment(state)
             .preferredColorScheme(state.appearanceMode.colorScheme)
             .onChange(of: scenePhase) { _, phase in
+                if phase == .background { RemoteControl.shared.didEnterBackground() }
                 if phase == .active {
+                    RemoteControl.shared.start()
                     Task {
                         if await API.shared.ensureReachable() { await reloadAfterServerSwitch() }
                         await ScrobbleQueue.shared.flush()
@@ -42,6 +44,7 @@ struct SwingMusicApp: App {
                 } else if await API.shared.ensureReachable() {
                     await reloadAfterServerSwitch()
                 }
+                RemoteControl.shared.start()
             }
             .onShake { if shakeToReport { state.beginBugReport() } }
             .sheet(isPresented: $state.showBugReport) {
