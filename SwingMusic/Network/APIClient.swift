@@ -117,6 +117,7 @@ final class API {
 
     /// Whether the server transcodes streams (premium with an active license).
     private(set) var canTranscode = false
+    private(set) var serverVersion: String?
 
     func loadCapabilities() async {
         struct Settings: Decodable {
@@ -125,9 +126,12 @@ final class API {
                 let license: License?
             }
             let licenseInfo: Info?
+            let version: String?
         }
-        let s: Settings? = try? await get("/notsettings")
-        canTranscode = s?.licenseInfo?.license?.status == "active"
+        // A failed or cancelled request keeps what is known.
+        guard let s: Settings = try? await get("/notsettings") else { return }
+        canTranscode = s.licenseInfo?.license?.status == "active"
+        serverVersion = s.version
     }
 
     /// A transcoded stream is MP3 whatever the source file is.

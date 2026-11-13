@@ -61,15 +61,9 @@ More features will be implemented in the future.
 
 Install the app via [TestFlight](https://testflight.apple.com/join/68bWKBss). When you launch the app, enter your server address, username and password to log in.
 
-### Thanks to
+### Credits
 
-- [MeloX](https://github.com/youshen2/MeloX)
-- [Apple Music-like Lyrics (AMLL)](https://github.com/Steve-xmh/applemusic-like-lyrics)
-- [Spicy Lyrics](https://github.com/Spikerko/spicy-lyrics)
-- [LDDC](https://github.com/chenmozhijin/LDDC)
-- [LNPopupUI](https://github.com/LeoNatan/LNPopupUI)
-- [LRCLIB](https://lrclib.net)
-- [MusicBrainz](https://musicbrainz.org) & [Wikipedia](https://www.wikipedia.org)
+The mini player is built on [LNPopupUI](https://github.com/LeoNatan/LNPopupUI). The now playing screen and lyrics are adapted from [MeloX](https://github.com/youshen2/MeloX) and [Apple Music-like Lyrics](https://github.com/Steve-xmh/applemusic-like-lyrics).
 
 ### License
 

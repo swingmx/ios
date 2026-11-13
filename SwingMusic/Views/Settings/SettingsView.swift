@@ -10,11 +10,14 @@ struct SettingsView: View {
     @State private var audioQuality = AudioPlayer.shared.audioQuality
     @State private var crossfade = Int(AudioPlayer.shared.crossfadeDuration)
     @State private var canTranscode = API.shared.canTranscode
+    @State private var serverVersion = API.shared.serverVersion
+    @State private var confirmLogout = false
     @ObservedObject private var equalizer = Equalizer.shared
     @ObservedObject private var downloads = DownloadManager.shared
 
     var body: some View {
         @Bindable var state = state
+        ScrollViewReader { proxy in
         List {
             Section {
                 HStack(spacing: 16) {
@@ -31,6 +34,20 @@ struct SettingsView: View {
                             .lineLimit(1)
                     }
                     Spacer()
+
+                    Button { confirmLogout = true } label: {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.red)
+                            .frame(width: 44, height: 44)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Log Out")
+                    .alert("Log out of \(state.user?.username ?? "your account")?", isPresented: $confirmLogout) {
+                        Button("Cancel", role: .cancel) {}
+                        Button("Log Out", role: .destructive) { state.logout() }
+                    }
                 }
                 .padding(.vertical, 8)
             }
@@ -70,6 +87,7 @@ struct SettingsView: View {
                 .task {
                     await API.shared.loadCapabilities()
                     canTranscode = API.shared.canTranscode
+                    serverVersion = API.shared.serverVersion
                 }
 
                 Picker(selection: Binding(
@@ -162,7 +180,7 @@ struct SettingsView: View {
 
             Section(
                 header: Text("Connection"),
-                footer: Text("Only enable this if your server uses a self-signed certificate (e.g. mkcert or your own CA). It applies solely to your configured server — all other connections stay fully verified.")
+                footer: Text("Only enable this if your server uses a self-signed certificate")
             ) {
                 Toggle(isOn: $allowInsecureTLS) {
                     HStack {
@@ -173,20 +191,6 @@ struct SettingsView: View {
                     }
                 }
                 .tint(.green)
-            }
-
-            Section(header: Text("Account")) {
-                Button(action: {
-                    state.logout()
-                }) {
-                    HStack {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .foregroundStyle(.red)
-                            .frame(width: 28)
-                        Text("Log Out")
-                            .foregroundColor(.red)
-                    }
-                }
             }
 
             Section {
@@ -210,42 +214,34 @@ struct SettingsView: View {
                             .foregroundStyle(.primary)
                     }
                 }
+                .id("lastRow")
             } header: {
                 Text("Support")
             } footer: {
-                if shakeToReport {
-                    Text("Tip: shake your device anywhere in the app to report a problem.")
-                }
-            }
-
-            Section(header: Text("About")) {
-                HStack {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.blue)
-                        .frame(width: 28)
-                    Text("Version")
-                    Spacer()
-                    Text(AppInfo.versionString)
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            Section(header: Text("Thanks to")) {
-                ForEach(ThanksTo.projects, id: \.name) { project in
-                    Link(destination: project.url) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(project.name).foregroundStyle(.primary)
-                                Text(project.note).font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "arrow.up.right")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
+                VStack(alignment: .leading, spacing: 24) {
+                    if shakeToReport {
+                        Text("Tip: shake your device anywhere in the app to report a problem.")
                     }
+                    Text("Swing Music v\(serverVersion ?? "–") · \(AppInfo.versionString)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 8)
                 }
             }
+
+        }
+        #if DEBUG
+        .task {
+            if UserDefaults.standard.bool(forKey: "captureLogout") {
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                confirmLogout = true
+            }
+            guard UserDefaults.standard.bool(forKey: "captureBottom") else { return }
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            proxy.scrollTo("lastRow", anchor: .center)
+        }
+        #endif
         }
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 100) }
         .listRowBackground(Color(.secondarySystemGroupedBackground))
@@ -272,22 +268,4 @@ enum AppInfo {
         }
         return "\(shortVersion) (\(build))"
     }
-}
-
-enum ThanksTo {
-    struct Project { let name: String; let note: String; let url: URL }
-    static let projects: [Project] = [
-        Project(name: "MeloX", note: "Loose inspiration",
-                url: URL(string: "https://github.com/youshen2/MeloX")!),
-        Project(name: "Apple Music-like Lyrics (AMLL)", note: "Lyrics animation inspiration",
-                url: URL(string: "https://github.com/Steve-xmh/applemusic-like-lyrics")!),
-        Project(name: "Spicy Lyrics", note: "Lyrics font & style",
-                url: URL(string: "https://github.com/Spikerko/spicy-lyrics")!),
-        Project(name: "LDDC", note: "Word-by-word lyrics fetching",
-                url: URL(string: "https://github.com/chenmozhijin/LDDC")!),
-        Project(name: "LNPopupUI", note: "Mini player",
-                url: URL(string: "https://github.com/LeoNatan/LNPopupUI")!),
-        Project(name: "MusicBrainz & Wikipedia", note: "Songwriter credits & artist bios",
-                url: URL(string: "https://musicbrainz.org")!),
-    ]
 }
