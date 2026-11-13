@@ -342,6 +342,9 @@ enum DebugCapture {
             NotificationCenter.default.post(name: .init("debugShowWidgets"), object: nil)
         case "eq":
             NotificationCenter.default.post(name: .init("debugShowEqualizer"), object: nil)
+        case "settings":
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            NotificationCenter.default.post(name: .init("debugShowSettings"), object: nil)
         case "player" where UserDefaults.standard.string(forKey: "capturePlayerSong") != nil:
             let q = UserDefaults.standard.string(forKey: "capturePlayerSong") ?? ""
             let hits = (try? await API.shared.search(q))?.tracks ?? []

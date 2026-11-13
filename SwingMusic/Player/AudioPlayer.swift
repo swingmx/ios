@@ -158,7 +158,7 @@ final class AudioPlayer: ObservableObject {
             case .low: "Low (128 kbps)"
             case .medium: "Medium (256 kbps)"
             case .high: "High (320 kbps)"
-            case .lossless: "Lossless"
+            case .lossless: "Original"
             }
         }
 
@@ -167,18 +167,21 @@ final class AudioPlayer: ObservableObject {
             case .low: "128 kbps"
             case .medium: "256 kbps"
             case .high: "320 kbps"
-            case .lossless: "Lossless"
+            case .lossless: "Original"
             }
         }
     }
 
-    private var streamParams: (container: String, quality: String) {
-        switch audioQuality {
-        case .low:      return ("mp3", "128")
-        case .medium:   return ("mp3", "256")
-        case .high:     return ("mp3", "320")
-        case .lossless: return ("flac", "original")
+    /// The transcode bitrate to ask for, if the server transcodes and it's below the file's own.
+    private func streamBitrate(for track: Track) -> Int? {
+        let kbps: Int? = switch audioQuality {
+        case .low: 128
+        case .medium: 256
+        case .high: 320
+        case .lossless: nil
         }
+        guard let kbps, API.shared.canTranscode, (track.bitrate ?? .max) > kbps else { return nil }
+        return kbps
     }
 
     enum LoopMode { case off, all, one }
@@ -782,9 +785,9 @@ final class AudioPlayer: ObservableObject {
         }
 
         let headers = authHeaders()
-        let p = streamParams
-        let candidates = API.shared.streamURLs(track.trackhash, filepath: track.filepath, container: p.container, quality: p.quality)
-        Log.info("play", "▶︎ \(track.title) — quality=\(audioQuality.rawValue) (\(p.container)/\(p.quality)), \(candidates.count) candidates, auth=\(headers["Authorization"] != nil ? "yes" : "NO")")
+        let bitrate = streamBitrate(for: track)
+        let candidates = API.shared.streamURLs(track.trackhash, filepath: track.filepath, bitrate: bitrate)
+        Log.info("play", "▶︎ \(track.title) — quality=\(audioQuality.rawValue) (\(bitrate.map { "\($0) kbps" } ?? "original")), \(candidates.count) candidates, auth=\(headers["Authorization"] != nil ? "yes" : "NO")")
         logger.info("Trying \(candidates.count) stream candidates for \(track.trackhash, privacy: .public)")
         for (i, url) in candidates.enumerated() {
             Log.debug("play", "cand[\(i+1)] \(url.absoluteString)")
@@ -820,11 +823,12 @@ final class AudioPlayer: ObservableObject {
         var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
         comps?.scheme = "swingstream"
         let assetURL = comps?.url ?? url
-        let ext = (track.filepath as NSString).pathExtension
+        let transcode = API.isTranscode(url)
+        let ext = transcode ? "mp3" : (track.filepath as NSString).pathExtension
         // A VBR MP3 has no seek table, so a mid-track start lands seconds off without a full scan.
         let precise = (pendingStart?.time ?? 0) > 0 && ext.lowercased() == "mp3"
         let asset = AVURLAsset(url: assetURL, options: precise ? [AVURLAssetPreferPreciseDurationAndTimingKey: true] : nil)
-        let loader = AuthStreamLoader(realURL: url, headers: streamHeaders, fileExtension: ext)
+        let loader = AuthStreamLoader(realURL: url, headers: streamHeaders, fileExtension: transcode ? nil : ext)
         asset.resourceLoader.setDelegate(loader, queue: AuthStreamLoader.queue)
         assetLoader = loader
         let item = AVPlayerItem(asset: asset)
@@ -1017,13 +1021,13 @@ final class AudioPlayer: ObservableObject {
         if FileManager.default.fileExists(atPath: localURL.path) {
             return (AVPlayerItem(url: localURL), nil, [])
         }
-        let p = streamParams
-        let candidates = API.shared.streamURLs(track.trackhash, filepath: track.filepath, container: p.container, quality: p.quality)
+        let candidates = API.shared.streamURLs(track.trackhash, filepath: track.filepath, bitrate: streamBitrate(for: track))
         guard let url = candidates.first else { return nil }
         var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
         comps?.scheme = "swingstream"
         let asset = AVURLAsset(url: comps?.url ?? url)
-        let loader = AuthStreamLoader(realURL: url, headers: authHeaders(), fileExtension: (track.filepath as NSString).pathExtension)
+        let loader = AuthStreamLoader(realURL: url, headers: authHeaders(),
+                                      fileExtension: API.isTranscode(url) ? nil : (track.filepath as NSString).pathExtension)
         asset.resourceLoader.setDelegate(loader, queue: AuthStreamLoader.queue)
         return (AVPlayerItem(asset: asset), loader, candidates)
     }

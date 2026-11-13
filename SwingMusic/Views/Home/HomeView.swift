@@ -56,6 +56,9 @@ struct HomeView: View {
             .navigationDestination(isPresented: $showSettings) {
                 SettingsView()
             }
+            #if DEBUG
+            .onReceive(NotificationCenter.default.publisher(for: .init("debugShowSettings"))) { _ in showSettings = true }
+            #endif
             .navigationDestination(for: HomeRoute.self) { route in
                 switch route {
                 case .allAlbums: AlbumsGridView()

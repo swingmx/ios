@@ -115,28 +115,41 @@ final class API {
         streamURLs(hash).first
     }
 
+    /// Whether the server transcodes streams (premium with an active license).
+    private(set) var canTranscode = false
+
+    func loadCapabilities() async {
+        struct Settings: Decodable {
+            struct Info: Decodable {
+                struct License: Decodable { let status: String? }
+                let license: License?
+            }
+            let licenseInfo: Info?
+        }
+        let s: Settings? = try? await get("/notsettings")
+        canTranscode = s?.licenseInfo?.license?.status == "active"
+    }
+
+    /// A transcoded stream is MP3 whatever the source file is.
+    static func isTranscode(_ url: URL) -> Bool {
+        url.query?.contains("quality=") == true
+    }
+
     private static let queryValueAllowed: CharacterSet = {
         var s = CharacterSet.alphanumerics
         s.insert(charactersIn: "-_.!~*'()")
         return s
     }()
 
-    func streamURLs(_ hash: String, filepath: String = "", container: String = "mp3", quality: String = "original") -> [URL] {
+    /// The server's audio routes, both needing `filepath` (empty finds the file by hash): a transcode at
+    /// `bitrate` kbps when asked for, then the original file.
+    func streamURLs(_ hash: String, filepath: String = "", bitrate: Int? = nil) -> [URL] {
+        let enc = filepath.addingPercentEncoding(withAllowedCharacters: Self.queryValueAllowed) ?? ""
         var paths: [String] = []
-
-        if !filepath.isEmpty, let enc = filepath.addingPercentEncoding(withAllowedCharacters: Self.queryValueAllowed) {
-            paths.append("/file/\(hash)/legacy?filepath=\(enc)&container=\(container)&quality=\(quality)")
-            paths.append("/file/\(hash)/legacy?filepath=\(enc)&container=mp3&quality=original")
-            paths.append("/file/\(hash)/legacy?filepath=\(enc)")
-        }
-
-        paths.append("/file/\(hash)")
-        paths.append("/stream/\(hash)")
-        paths.append("/track/\(hash)")
-
-        var seen = Set<String>()
-        let unique = paths.filter { seen.insert($0).inserted }
-        return unique.compactMap { URL(string: base + $0) }
+        if let bitrate { paths.append("/file/\(hash)?filepath=\(enc)&quality=\(bitrate)") }
+        paths.append("/file/\(hash)/legacy?filepath=\(enc)")
+        paths.append("/file/\(hash)?filepath=\(enc)")
+        return paths.compactMap { URL(string: base + $0) }
     }
 
     func get<T: Decodable>(_ path: String, q: [String: String] = [:]) async throws -> T {

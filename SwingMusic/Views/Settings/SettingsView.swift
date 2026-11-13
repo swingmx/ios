@@ -6,6 +6,12 @@ struct SettingsView: View {
     @AppStorage("musixmatchWordByWord") private var musixmatchWordByWord = true
     @AppStorage(Net.allowInsecureTLSKey) private var allowInsecureTLS = false
     @AppStorage(ShakeToReport.key) private var shakeToReport = false
+    // Mirrors of the player's settings: the player itself changes 20 times a second, too often to observe here.
+    @State private var audioQuality = AudioPlayer.shared.audioQuality
+    @State private var crossfade = Int(AudioPlayer.shared.crossfadeDuration)
+    @State private var canTranscode = API.shared.canTranscode
+    @ObservedObject private var equalizer = Equalizer.shared
+    @ObservedObject private var downloads = DownloadManager.shared
 
     var body: some View {
         @Bindable var state = state
@@ -46,8 +52,8 @@ struct SettingsView: View {
 
             Section(header: Text("Playback")) {
                 Picker(selection: Binding(
-                    get: { AudioPlayer.shared.audioQuality },
-                    set: { AudioPlayer.shared.audioQuality = $0 }
+                    get: { canTranscode ? audioQuality : .lossless },
+                    set: { audioQuality = $0; AudioPlayer.shared.audioQuality = $0 }
                 )) {
                     ForEach(AudioPlayer.AudioQuality.allCases, id: \.self) { q in
                         Text(q.label).tag(q)
@@ -60,10 +66,15 @@ struct SettingsView: View {
                         Text("Audio Quality")
                     }
                 }
+                .disabled(!canTranscode)
+                .task {
+                    await API.shared.loadCapabilities()
+                    canTranscode = API.shared.canTranscode
+                }
 
                 Picker(selection: Binding(
-                    get: { Int(AudioPlayer.shared.crossfadeDuration) },
-                    set: { AudioPlayer.shared.crossfadeDuration = Double($0) }
+                    get: { crossfade },
+                    set: { crossfade = $0; AudioPlayer.shared.crossfadeDuration = Double($0) }
                 )) {
                     Text("Off").tag(0)
                     Text("2s").tag(2)
@@ -89,7 +100,7 @@ struct SettingsView: View {
                             .frame(width: 28)
                         Text("Equalizer")
                         Spacer()
-                        Text(Equalizer.shared.enabled ? "On" : "Off")
+                        Text(equalizer.enabled ? "On" : "Off")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -129,12 +140,12 @@ struct SettingsView: View {
                         .frame(width: 28)
                     Text("Downloads")
                     Spacer()
-                    Text("\(DownloadManager.shared.downloadedTracks.count) songs · \(DownloadManager.shared.totalSize)")
+                    Text("\(downloads.downloadedTracks.count) songs · \(downloads.totalSize)")
                         .foregroundStyle(.secondary)
                         .font(.system(size: 13))
                 }
 
-                if !DownloadManager.shared.downloadedTracks.isEmpty {
+                if !downloads.downloadedTracks.isEmpty {
                     Button(role: .destructive) {
                         DownloadManager.shared.removeAll()
                     } label: {

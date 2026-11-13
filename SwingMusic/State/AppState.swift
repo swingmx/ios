@@ -207,6 +207,7 @@ final class AppState {
 
     func loadUser() async {
         do { user = try await API.shared.currentUser() } catch { print("Error loaded user: \(error)") }
+        await API.shared.loadCapabilities()
     }
 
     func loadHome() async {
