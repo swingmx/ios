@@ -207,6 +207,7 @@ private final class AMLLSyllable {
     let mask = CAGradientLayer()
     var charLayers: [CALayer] = []
     var floatP = 0.0
+    var appliedY = CGFloat.nan
     var floatDur: Double { max(1, end - start) }
 
     init(text: String, start: Double, end: Double, width: CGFloat) {
@@ -442,12 +443,7 @@ private final class AMLLLineNode {
             let e = edge(at: t)
             if force || lastEdge.isNaN || abs(e - lastEdge) > 0.2 {
                 lastEdge = e
-                for s in syllables {
-                    let w = s.layer.bounds.width
-                    let local = e - s.stripOffset + pad
-                    s.mask.startPoint = CGPoint(x: (local - fadeWidth / 2) / w, y: 0.5)
-                    s.mask.endPoint = CGPoint(x: (local + fadeWidth / 2) / w, y: 0.5)
-                }
+                if masksOn { applyEdge(e) }
             }
         }
         let up = 0.05 * (isBG ? 2 : 1)
@@ -457,8 +453,8 @@ private final class AMLLLineNode {
             } else if s.floatP > 0 {
                 s.floatP = max(0, s.floatP - dt / s.floatDur)
             }
-            let y = -easeOut(s.floatP) * up * Double(em)
-            s.layer.transform = CATransform3DMakeTranslation(0, CGFloat(y), 0)
+            let y = CGFloat(-easeOut(s.floatP) * up * Double(em))
+            if y != s.appliedY { s.appliedY = y; s.layer.transform = CATransform3DMakeTranslation(0, y, 0) }
 
             if let emp = s.emphasis, !s.charLayers.isEmpty {
                 for (k, cl) in s.charLayers.enumerated() {
@@ -476,7 +472,8 @@ private final class AMLLLineNode {
                     var oy = -transX * 0.025 * emp.amount * Double(em)
                     let fx = clamp01((tt - (wordDe - 0.4)) / (emp.du * 1.4))
                     if active, fx > 0, fx < 1 { oy -= sin(fx * .pi) * 0.05 * Double(em) * (isBG ? 2 : 1) }
-                    cl.transform = CATransform3DTranslate(CATransform3DMakeScale(CGFloat(sc), CGFloat(sc), 1), CGFloat(ox), CGFloat(oy), 0)
+                    let tr = CATransform3DTranslate(CATransform3DMakeScale(CGFloat(sc), CGFloat(sc), 1), CGFloat(ox), CGFloat(oy), 0)
+                    if !CATransform3DEqualToTransform(cl.transform, tr) { cl.transform = tr }
                     let op = Float(min(1, glow))
                     if abs(cl.shadowOpacity - op) > 0.005 {
                         cl.shadowOpacity = op
@@ -530,17 +527,34 @@ private final class AMLLLineNode {
         let needsMask = gradient || abs(brightAlpha - darkAlpha) > 0.002
         if needsMask {
             let colors = [UIColor(white: 1, alpha: brightAlpha).cgColor, UIColor(white: 1, alpha: darkAlpha).cgColor]
-            for s in syllables {
-                s.mask.colors = colors
-                if !masksOn { s.mask.frame = s.layer.bounds; s.layer.mask = s.mask; s.layer.opacity = 1 }
-            }
-            if !masksOn { masksOn = true; lastEdge = .nan; updateWords(time: lastT, dt: 0, force: true) }
+            for s in syllables { s.mask.colors = colors }
+            masksOn = true
+            applyEdge(lastEdge.isNaN ? edge(at: lastT) : lastEdge)
         } else {
             for s in syllables {
-                if masksOn { s.layer.mask = nil }
+                if s.layer.mask != nil { s.layer.mask = nil }
                 s.layer.opacity = Float(darkAlpha)
             }
             masksOn = false
+        }
+    }
+
+    // Each mask is an offscreen render pass every frame, so only the words inside the fade carry one.
+    // Sung and unsung words get the same look from plain opacity.
+    private func applyEdge(_ e: CGFloat) {
+        for s in syllables {
+            let w = s.layer.bounds.width
+            let local = e - s.stripOffset + pad
+            let a = (local - fadeWidth / 2) / w, b = (local + fadeWidth / 2) / w
+            if a >= 1 || b <= 0 {
+                if s.layer.mask != nil { s.layer.mask = nil }
+                let op = Float(a >= 1 ? brightAlpha : darkAlpha)
+                if s.layer.opacity != op { s.layer.opacity = op }
+            } else {
+                if s.layer.mask == nil { s.mask.frame = s.layer.bounds; s.layer.mask = s.mask; s.layer.opacity = 1 }
+                s.mask.startPoint = CGPoint(x: a, y: 0.5)
+                s.mask.endPoint = CGPoint(x: b, y: 0.5)
+            }
         }
     }
 
@@ -681,9 +695,9 @@ private final class AMLLGroupNode {
         bgSlide.update(dt)
         let k = 1 - exp(-8 * dt)
         opacity += (targetOpacity - opacity) * k
-        blur += (targetBlur - blur) * k
+        // Snapped: an animating blur can't use the line's cached image, so every visible line was re-blurred each frame.
+        blur = targetBlur
         if abs(opacity - targetOpacity) < 0.002 { opacity = targetOpacity }
-        if abs(blur - targetBlur) < 0.01 { blur = targetBlur }
 
         let visible = isInSight(viewHeight: viewHeight, playing: playing)
         layer.isHidden = !visible
@@ -821,6 +835,12 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
     static let overflow: CGFloat = 28
 
     var bottomInset: CGFloat = 0 { didSet { if oldValue != bottomInset { needsLayout = true } } }
+    var active = true {
+        didSet {
+            guard active != oldValue else { return }
+            if active { isSeeking = true; wake() } else { link?.isPaused = true }
+        }
+    }
 
     private var source: [AMLLLine] = []
     private var credits: [String] = []
@@ -854,6 +874,7 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
     private var link: CADisplayLink?
     private var lastTick: CFTimeInterval = 0
     private var idleFrames = 0
+    private var fastRate = true
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -878,6 +899,9 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
     required init?(coder: NSCoder) { fatalError() }
 
     deinit { link?.invalidate() }
+
+    private static let fast = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+    private static let slow = CAFrameRateRange(minimum: 15, maximum: 30, preferred: 30)
 
     private var now: Double {
         if debugFakePlay { return playing ? anchorTime + (CACurrentMediaTime() - anchorHost) : anchorTime }
@@ -980,7 +1004,9 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
         if window != nil {
             if link == nil {
                 let l = CADisplayLink(target: AMLLWeakTarget(self), selector: #selector(AMLLWeakTarget.tick(_:)))
-                l.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+                l.preferredFrameRateRange = Self.fast
+                fastRate = true
+                l.isPaused = !active
                 l.add(to: .main, forMode: .common)
                 link = l
                 lastTick = 0
@@ -993,7 +1019,7 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
 
     private func wake() {
         idleFrames = 0
-        link?.isPaused = false
+        link?.isPaused = !active
     }
 
     fileprivate func tick(_ link: CADisplayLink) {
@@ -1004,7 +1030,7 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        AMLLGroupNode.rasterBudget = 1
+        AMLLGroupNode.rasterBudget = 4
         setCurrentTime(t)
         if needsLayout { needsLayout = false; calcLayout(force: false) }
         let h = bounds.height
@@ -1016,6 +1042,10 @@ final class AMLLPlayerUIView: UIView, UIScrollViewDelegate {
         creditsGroup?.update(dt: dt, time: t, viewHeight: h, playing: playing)
         dots?.update(time: t, dt: dt)
         CATransaction.commit()
+
+        // Only the word highlight moving: 30fps is enough, and halves the redraws.
+        let fast = !allSettled || isUserScrolling
+        if fast != fastRate { fastRate = fast; link.preferredFrameRateRange = fast ? Self.fast : Self.slow }
 
         if !playing, !isUserScrolling, allSettled, dots?.interlude == nil {
             idleFrames += 1
@@ -1303,15 +1333,18 @@ private struct AMLLPlayerRepresentable: UIViewRepresentable {
     let lines: [AMLLLine]
     let credits: [String]
     let bottomInset: CGFloat
+    let active: Bool
 
     func makeUIView(context: Context) -> AMLLPlayerUIView {
         let v = AMLLPlayerUIView(frame: .zero)
+        v.active = active
         v.bottomInset = bottomInset
         v.setContent(lines: lines, credits: credits)
         return v
     }
 
     func updateUIView(_ v: AMLLPlayerUIView, context: Context) {
+        v.active = active
         v.bottomInset = bottomInset
         v.setContent(lines: lines, credits: credits)
     }
@@ -1353,7 +1386,7 @@ struct NativeAMLLLyricsView: View {
             Group {
                 switch engine.state {
                 case .ready:
-                    AMLLPlayerRepresentable(lines: engine.lines, credits: creditLines, bottomInset: bottomInset)
+                    AMLLPlayerRepresentable(lines: engine.lines, credits: creditLines, bottomInset: bottomInset, active: wanted)
                         .mask(
                             LinearGradient(stops: [
                                 .init(color: .clear, location: 0),

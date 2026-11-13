@@ -2,7 +2,7 @@ import SwiftUI
 
 struct NowPlayingBottomControls: View {
     static let utilityHeight: CGFloat = 62
-    static let coreHeight: CGFloat = 279
+    static let coreHeight: CGFloat = 234
     static let overlayHeight = utilityHeight + coreHeight
 
     @Environment(\.accessibilityReduceMotion)
@@ -46,13 +46,6 @@ struct NowPlayingBottomControls: View {
 
             Color.clear
                 .frame(height: 31)
-
-            interfaceLayer(.volume) {
-                NowPlayingVolumeControl()
-            }
-
-            Color.clear
-                .frame(height: 3)
 
             interfaceLayer(.pageSelector) {
                 NowPlayingPageSelector(page: $page)

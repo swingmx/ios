@@ -43,6 +43,7 @@ struct NowPlayingArtworkPage: View {
                     proxy.size.height
                         - NowPlayingBottomControls.coreHeight
                         - 92
+                        - NowPlayingSourceHeader.height
                 )
             )
             let displayedArtworkSize =
@@ -54,6 +55,8 @@ struct NowPlayingArtworkPage: View {
                 )
 
             VStack(spacing: 0) {
+                NowPlayingSourceHeader()
+
                 Spacer(minLength: 8)
 
                 ZStack {
@@ -145,10 +148,7 @@ struct NowPlayingArtworkPage: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    NowPlayingSongActions(
-                        song: song,
-                        showsFavoriteButton: false
-                    )
+                    NowPlayingSongActions(song: song)
                 }
             }
             .padding(.bottom, NowPlayingBottomControls.coreHeight)
@@ -179,6 +179,61 @@ struct NowPlayingArtworkPage: View {
 
         withAnimation(.spring(duration: 0.42, bounce: 0.24)) {
             artworkBounceScale = 1
+        }
+    }
+}
+
+// Where the queue came from, above the artwork; opens it where there is a screen for it.
+struct NowPlayingSourceHeader: View {
+    static let height: CGFloat = 46
+
+    @Environment(AppState.self) private var state
+    @State private var source = AudioPlayer.shared.source
+    @State private var name = AudioPlayer.shared.sourceName
+
+    var body: some View {
+        Button {
+            if let target { state.navigationTarget = target }
+        } label: {
+            VStack(spacing: 2) {
+                Text(source.label)
+                    .font(.caption.weight(.semibold))
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+                    .foregroundStyle(.white.opacity(0.6))
+                HStack(spacing: 4) {
+                    Text(name)
+                        .font(.headline)
+                        .lineLimit(1)
+                    if target != nil {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                }
+                .foregroundStyle(.white)
+            }
+            .frame(maxWidth: .infinity, minHeight: Self.height)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .allowsHitTesting(target != nil)
+        .opacity(name.isEmpty ? 0 : 1)
+        .accessibilityElement(children: .combine)
+        .onReceive(AudioPlayer.shared.$source) { source = $0 }
+        .onReceive(AudioPlayer.shared.$sourceName) { name = $0 }
+    }
+
+    private var target: AppState.NavTarget? {
+        switch source {
+        case .album(let h):
+            .album(Album(stub: h, title: name, image: AudioPlayer.shared.current?.albumhash == h
+                ? AudioPlayer.shared.current?.image ?? "" : "", date: nil, albumartists: nil))
+        case .artist(let h): .artist(Artist(stub: h, name: name))
+        case .folder(let p): .folder(Folder(path: p, name: name))
+        case .playlist(let id): .playlist(Playlist(stub: id, name: name, image: nil))
+        case .mix(let id, let sourcehash): .mix(Mix(stub: id, title: name, image: "", sourcehash: sourcehash))
+        default: nil
         }
     }
 }

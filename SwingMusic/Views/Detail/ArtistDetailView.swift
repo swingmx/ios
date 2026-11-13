@@ -52,7 +52,7 @@ struct ArtistDetailView: View {
         }
         .squeezeMiniPlayer(state)
         .detailBackground(bgImage)
-        .detailScrollTitle(info.name, after: 380)
+        .detailScrollTitle(info.pageName, after: 380)
         .toolbar {
             if let d = detail {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -95,7 +95,7 @@ struct ArtistDetailView: View {
                 .frame(height: 170)
                 .padding(.top, 20)
 
-                Text(info.name)
+                Text(info.pageName)
                     .font(.largeTitle.bold())
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)

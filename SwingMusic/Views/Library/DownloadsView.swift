@@ -40,7 +40,7 @@ struct DownloadsView: View {
 
                             ForEach(Array(singles.enumerated()), id: \.element.id) { i, track in
                                 TrackRow(track: track, active: state.isCurrentTrack(track)) {
-                                    state.player.play(track, from: singles)
+                                    state.player.play(track, from: singles, source: .downloads)
                                 }
                                 .swipeActions(edge: .trailing) {
                                     Button(role: .destructive) { dm.removeDownload(track) } label: {
@@ -63,8 +63,8 @@ struct DownloadsView: View {
             if !dm.downloadedTracks.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button { state.player.playAll(dm.downloadedTracks) } label: { Label("Play All", systemImage: "play.fill") }
-                        Button { state.player.playAll(dm.downloadedTracks, shuffled: true) } label: { Label("Shuffle All", systemImage: "shuffle") }
+                        Button { state.player.playAll(dm.downloadedTracks, source: .downloads) } label: { Label("Play All", systemImage: "play.fill") }
+                        Button { state.player.playAll(dm.downloadedTracks, shuffled: true, source: .downloads) } label: { Label("Shuffle All", systemImage: "shuffle") }
                         Divider()
                         Button(role: .destructive) { dm.removeAll() } label: { Label("Remove All", systemImage: "trash") }
                     } label: {
@@ -168,14 +168,14 @@ struct DownloadedGroupView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    Button { state.player.playAll(tracks) } label: {
+                    Button { state.player.playAll(tracks, source: .downloads, name: group.name) } label: {
                         Label("Play", systemImage: "play.fill")
                             .font(.system(size: 15, weight: .semibold)).foregroundStyle(Color(.systemBackground))
                             .frame(maxWidth: .infinity).frame(height: 46)
                             .background(Color.primary, in: Capsule())
                     }
                     .buttonStyle(Pressed())
-                    Button { state.player.playAll(tracks, shuffled: true) } label: {
+                    Button { state.player.playAll(tracks, shuffled: true, source: .downloads, name: group.name) } label: {
                         Label("Shuffle", systemImage: "shuffle")
                             .font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary)
                             .frame(maxWidth: .infinity).frame(height: 46)
@@ -187,7 +187,7 @@ struct DownloadedGroupView: View {
 
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
                     TrackRow(track: t, active: state.isCurrentTrack(t)) {
-                        state.player.play(t, from: tracks)
+                        state.player.play(t, from: tracks, source: .downloads, name: group.name)
                     }
                 }
                 Color.clear.frame(height: 100)

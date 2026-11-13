@@ -1,4 +1,3 @@
-import MediaPlayer
 import SwiftUI
 
 struct NowPlayingProgressControl: View {
@@ -10,7 +9,7 @@ struct NowPlayingProgressControl: View {
     @State private var isScrubbing = false
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !player.isPlaying || isScrubbing)) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 4.0, paused: !player.isPlaying || isScrubbing)) { context in
             content(at: context.date)
         }
     }
@@ -263,90 +262,54 @@ struct NowPlayingTransportControls: View {
     }
 }
 
+// The playing device's volume: this phone's system volume, or the remote device's while controlling it.
 struct NowPlayingVolumeControl: View {
-    @Environment(PlayerStore.self) private var player
-    @Environment(AppSettings.self) private var settings
     @ObservedObject private var remote = RemoteControl.shared
-    @State private var volume = Double(AudioPlayer.shared.volume)
+    @State private var volume = SystemVolume.shared.value
+    // The system volume reports each step back a moment later; ignore those while dragging.
+    @State private var setAt = Date.distantPast
 
-    @ViewBuilder
+    private var elsewhere: Bool { remote.playingElsewhere != nil }
+
     var body: some View {
-        if settings.playerVolumeControlMode != .hidden {
-            volumeSlider
-                .foregroundStyle(.white.opacity(0.62))
-                .font(.system(size: 14))
-                .frame(height: 42)
+        ElasticSlider(
+            value: Binding(
+                get: { volume },
+                set: { v in
+                    volume = v
+                    setAt = Date()
+                    if elsewhere { remote.setVolume(v) } else { SystemVolume.shared.set(v) }
+                }
+            ),
+            in: 0...1,
+            leadingLabel: { Image(systemName: "speaker.fill").padding(.trailing, 10) },
+            trailingLabel: { Image(systemName: "speaker.wave.3.fill").padding(.leading, 10) }
+        )
+        .sliderStyle(.playerVolume)
+        .accessibilityLabel("Volume")
+        .foregroundStyle(.white.opacity(0.62))
+        .font(.system(size: 14))
+        .frame(height: 42)
+        .onAppear { volume = elsewhere ? remote.volume : SystemVolume.shared.value }
+        .onChange(of: elsewhere) { _, e in volume = e ? remote.volume : SystemVolume.shared.value }
+        .onReceive(SystemVolume.shared.$level) { v in
+            if !elsewhere { follow(v) }
+        }
+        .onReceive(remote.$volume) { v in
+            if elsewhere { follow(v) }
         }
     }
 
-    @ViewBuilder
-    private var volumeSlider: some View {
-        switch remote.playingElsewhere != nil ? .independent : settings.playerVolumeControlMode {
-        case .hidden:
-            EmptyView()
-        case .independent:
-            ElasticSlider(
-                value: Binding(
-                    get: { volume },
-                    set: { volume = $0; player.setVolume($0) }
-                ),
-                in: 0...1,
-                leadingLabel: { Image(systemName: "speaker.fill").padding(.trailing, 10) },
-                trailingLabel: { Image(systemName: "speaker.wave.3.fill").padding(.leading, 10) }
-            )
-            .sliderStyle(.playerVolume)
-            .accessibilityLabel("Player volume")
-            .onReceive(AudioPlayer.shared.$volume.removeDuplicates()) { v in
-                if abs(Double(v) - volume) > 0.001 { volume = Double(v) }
-            }
-        case .system:
-            SystemVolumeSlider()
-                .accessibilityLabel("System volume")
-        }
-    }
-}
-
-private final class AlignedSystemVolumeView: MPVolumeView {
-    override func volumeSliderRect(forBounds bounds: CGRect) -> CGRect {
-        bounds
-    }
-}
-
-private struct SystemVolumeSlider: UIViewRepresentable {
-    func makeUIView(context: Context) -> AlignedSystemVolumeView {
-        let volumeView = AlignedSystemVolumeView(
-            frame: CGRect(x: 0, y: 0, width: 200, height: 32)
-        )
-        volumeView.backgroundColor = .clear
-        volumeView.showsVolumeSlider = true
-        volumeView.showsRouteButton = false
-        volumeView.tintColor = .white
-        return volumeView
-    }
-
-    func updateUIView(
-        _ volumeView: AlignedSystemVolumeView,
-        context: Context
-    ) {
-        volumeView.showsVolumeSlider = true
-        volumeView.tintColor = .white
-    }
-
-    func sizeThatFits(
-        _ proposal: ProposedViewSize,
-        uiView: AlignedSystemVolumeView,
-        context: Context
-    ) -> CGSize? {
-        CGSize(
-            width: proposal.width ?? 200,
-            height: proposal.height ?? 32
-        )
+    private func follow(_ v: Double) {
+        guard Date().timeIntervalSince(setAt) > 0.5, abs(v - volume) > 0.001 else { return }
+        // Buttons and other devices change it in steps; glide between them instead of jumping.
+        withAnimation(.smooth(duration: 0.25)) { volume = v }
     }
 }
 
 extension RemoteControl {
     var playingElsewhere: Device? {
-        guard let device = activeDevice, activeHostID != deviceID else { return nil }
+        guard isController, let device = activeDevice else { return nil }
         return device
     }
 
@@ -457,10 +420,7 @@ struct PlayOnSheet: View {
                         }
                             .frame(width: 1, height: 1)
                     }
-                }
-
-                if remote.subscribed {
-                    Section {
+                    if remote.subscribed {
                         ForEach(others) { device in
                             deviceRow(
                                 id: device.id,
@@ -469,14 +429,20 @@ struct PlayOnSheet: View {
                                 detail: RemoteControl.detail(device)
                             )
                         }
-                    } header: {
-                        Text("Swing Music Devices")
-                    } footer: {
-                        Text("Devices signed in to your Swing Music account appear here.")
                     }
+                } header: {
+                    titleRow
+                }
 
+                Section {
+                    NowPlayingVolumeControl()
+                } header: {
+                    Text("Volume · \(remote.playingElsewhere.map { $0.type == "web" ? RemoteControl.detail($0) : RemoteControl.title($0) } ?? "This \(UIDevice.current.model)")")
+                }
+
+                if remote.subscribed {
                     Section {
-                        Button("Disconnect This \(UIDevice.current.model)") { remote.setEnabled(false) }
+                        Button("Detach This \(UIDevice.current.model)") { remote.setEnabled(false) }
                             .foregroundStyle(.tint)
                     } footer: {
                         Text("Play independently, without syncing with your other devices.")
@@ -484,7 +450,7 @@ struct PlayOnSheet: View {
                 } else {
                     Section {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Not Connected")
+                            Text("Detached")
                             Text("This \(UIDevice.current.model) plays on its own. Your other devices can't see or control it, and it won't follow them.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -495,21 +461,20 @@ struct PlayOnSheet: View {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { reconnecting = false }
                         } label: {
                             HStack {
-                                Text("Reconnect")
+                                Text("Reattach")
                                 Spacer()
                                 if reconnecting { ProgressView() }
                             }
                         }
                         .foregroundStyle(.tint)
                         .disabled(reconnecting)
-                    } header: {
-                        Text("Swing Music Devices")
                     }
                 }
             }
             // Open as tall as the content, up to full height.
             .onScrollGeometryChange(for: CGFloat.self) { geo in
-                geo.contentSize.height + geo.contentInsets.top + geo.contentInsets.bottom
+                // The sheet adds the home indicator area to a custom height itself.
+                geo.contentSize.height + geo.contentInsets.top
             } action: { _, height in
                 // Only grow: the bottom inset changes with the sheet's height and would loop.
                 let h = max(contentHeight, height.rounded(.up))
@@ -517,17 +482,13 @@ struct PlayOnSheet: View {
                 contentHeight = h
                 if detent != .large { detent = .height(h) }
             }
-            .navigationTitle("Play On")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(role: .close) { dismiss() }
-                }
-            }
+            .contentMargins(.top, 16, for: .scrollContent)
+            .toolbar(.hidden, for: .navigationBar)
         }
         // The Now Playing row's dimmed style would otherwise carry into the sheet.
         .foregroundStyle(Color.primary)
         .tint(.blue)
+        .preferredColorScheme(.dark)
         .presentationDetents(contentHeight > 0 ? [.height(contentHeight), .large] : [.medium, .large], selection: $detent)
         .onChange(of: remote.activeHostID) { _, id in
             if id == switching { switching = nil }
@@ -535,6 +496,29 @@ struct PlayOnSheet: View {
         .onChange(of: remote.subscribed) { _, on in
             if on { reconnecting = false }
         }
+    }
+
+    // A section header, so the title lines up with the row icons below it.
+    private var titleRow: some View {
+        HStack {
+            Text("Play On")
+                .font(.title3.weight(.bold))
+                .foregroundStyle(Color.primary)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            // No frame or glass around the glyph, so its right edge mirrors the title's left edge.
+            Button(role: .close) { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .font(.title3.weight(.semibold))
+                    .padding(10)
+                    .contentShape(.rect)
+                    .padding(-10)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+        }
+        .textCase(nil)
+        .padding(.bottom, 6)
     }
 
     private func isSelected(_ id: String) -> Bool {

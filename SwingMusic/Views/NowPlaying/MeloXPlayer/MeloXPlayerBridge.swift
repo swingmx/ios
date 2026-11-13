@@ -12,11 +12,6 @@ extension PlayerStore {
 
     var duration: TimeInterval { p.total }
     var isLoading: Bool { handingOff }
-    var volume: Double { Double(p.volume) }
-    func setVolume(_ value: Double) {
-        p.volume = Float(value)
-        if RemoteControl.shared.subscribed { RemoteControl.shared.setVolume(value) }
-    }
     func togglePlayback() { p.toggle() }
     func next() async { p.next() }
     func previous() async { p.prev() }
@@ -48,7 +43,7 @@ extension PlayerStore {
     func playFromQueue(at index: Int) async { p.jump(to: index) }
 
     func moveUpcomingQueueItems(fromOffsets source: IndexSet, toOffset destination: Int) {
-        if RemoteControl.shared.subscribed {
+        if p.isController {
             RemoteControl.shared.moveUpcoming(fromOffsets: source, toOffset: destination)
             return
         }
@@ -60,7 +55,7 @@ extension PlayerStore {
     }
 
     func addToPlaybackQueue(_ song: Song) {
-        if RemoteControl.shared.subscribed { p.addLast(song); return }
+        if p.isController { p.addLast(song); return }
         p.queue.append(song)
     }
 
@@ -88,7 +83,6 @@ extension AppSettings {
     var lyricsStyle: LyricsStyle { .appleMusic }
     var playerBackgroundStyle: PlayerBackgroundStyle { .flowingLight }
     var playerScreenAwakeMode: PlayerScreenAwakeMode { .lyrics }
-    var playerVolumeControlMode: PlayerVolumeControlMode { .independent }
     var shrinksPausedArtwork: Bool { true }
     var appleMusicLyricsInterfaceAutoHideDelay: Double { 5.0 }
     var beatNetDebugEnabled: Bool { false }

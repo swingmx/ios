@@ -18,6 +18,7 @@ final class AudioPlayer: ObservableObject {
     private var baseOrder: [Track] = []
 
     @Published var source: PlaySource = .none
+    @Published var sourceName = ""
 
     enum PlaySource: Equatable {
         case album(String)
@@ -28,6 +29,9 @@ final class AudioPlayer: ObservableObject {
         case favorite
         case mix(id: String, sourcehash: String)
         case work(String)
+        case downloads
+        case library
+        case home(String)
         case none
 
         var token: String {
@@ -40,6 +44,9 @@ final class AudioPlayer: ObservableObject {
             case .favorite: "favorite"
             case .mix(let id, let sh): "mix:\(id).\(sh)"
             case .work(let h): "wk:\(h)"
+            case .downloads: "downloads"
+            case .library: "library"
+            case .home(let title): "home:\(title)"
             case .none: ""
             }
         }
@@ -50,6 +57,9 @@ final class AudioPlayer: ObservableObject {
                 token.hasPrefix(prefix) ? String(token.dropFirst(prefix.count)) : nil
             }
             if token == "favorite" { self = .favorite }
+            else if token == "downloads" { self = .downloads }
+            else if token == "library" { self = .library }
+            else if let t = after("home:") { self = .home(t) }
             else if let h = after("al:") { self = .album(h) }
             else if let h = after("ar:") { self = .artist(h) }
             else if let id = after("pl:") { self = .playlist(id) }
@@ -61,6 +71,37 @@ final class AudioPlayer: ObservableObject {
                 self = .mix(id: String(m[..<dot]), sourcehash: String(m[m.index(after: dot)...]))
             } else { self = .none }
         }
+
+        /// The small caps line above the name in Now Playing.
+        var label: String {
+            switch self {
+            case .album: "Playing from Album"
+            case .artist: "Playing from Artist"
+            case .playlist: "Playing from Playlist"
+            case .folder: "Playing from Folder"
+            case .search: "Playing from Search"
+            case .mix: "Playing from Mix"
+            case .work: "Playing from Work"
+            case .favorite, .downloads, .library, .home, .none: "Playing from"
+            }
+        }
+    }
+
+    /// The source's display name when no screen supplied one, worked out from the queue where possible.
+    nonisolated static func defaultName(_ source: PlaySource, in tracks: [Track]) -> String {
+        switch source {
+        case .album(let h): tracks.first { $0.albumhash == h }?.album ?? ""
+        case .artist(let h):
+            tracks.lazy.compactMap { t in t.artists?.first { $0.artisthash == h }?.name ?? (t.artisthash == h ? t.artist : nil) }
+                .first ?? ""
+        case .folder(let p): (p as NSString).lastPathComponent
+        case .search(let q): "\u{201C}\(q)\u{201D}"
+        case .favorite: "Your Favorite Tracks"
+        case .downloads: "Downloads"
+        case .library: "Your Library"
+        case .home(let title): title
+        case .playlist, .mix, .work, .none: ""
+        }
     }
 
     @Published var playing = false
@@ -68,7 +109,7 @@ final class AudioPlayer: ObservableObject {
     @Published var switchingTarget = false
     @Published var time: Double = 0
     @Published var total: Double = 0
-    @Published var volume: Float = 0.8 {
+    @Published var volume: Float = 1 {
         didSet { player?.volume = gain }
     }
     var gain: Float { Self.gain(volume) }
@@ -154,7 +195,6 @@ final class AudioPlayer: ObservableObject {
     private var session: PlaySession?
     private var sessionSavedAt = 0.0
     private var lastActivitySecond = -1
-    private var widgetCommandPoll: AnyCancellable?
     private var lastWidgetCommandAt: TimeInterval = 0
 
     private enum WidgetPlaybackCommand: String {
@@ -175,8 +215,8 @@ final class AudioPlayer: ObservableObject {
     private var pendingStart: (time: Double, play: Bool)?
 
     private init() {
+        // Activated only when playback starts, so opening the app doesn't stop other apps' audio.
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
-        try? AVAudioSession.sharedInstance().setActive(true)
         setRemoteCommands(true)
         setupWidgetCommandPolling()
         observeInterruptions()
@@ -196,8 +236,9 @@ final class AudioPlayer: ObservableObject {
         var shuffle: Bool
         var baseOrder: [Track]
         var time: Double
-        // Optional so queues saved before it was added still load.
+        // Optional so queues saved before they were added still load.
         var source: String?
+        var sourceName: String?
     }
 
     private static let queueStateURL: URL = {
@@ -225,7 +266,7 @@ final class AudioPlayer: ObservableObject {
             return
         }
         let snap = QueueSnapshot(queue: queue, index: index, shuffle: shuffle, baseOrder: baseOrder, time: time,
-                                 source: source.token)
+                                 source: source.token, sourceName: sourceName)
         guard let data = try? JSONEncoder().encode(snap) else { return }
         try? data.write(to: Self.queueStateURL, options: .atomic)
     }
@@ -240,6 +281,7 @@ final class AudioPlayer: ObservableObject {
         baseOrder = snap.baseOrder
         // Without this, plays after a restart were credited to no source and counted as plain tracks.
         source = PlaySource(token: snap.source ?? "")
+        sourceName = snap.sourceName ?? Self.defaultName(source, in: snap.queue)
         current = snap.queue[snap.index]
         total = Double(snap.queue[snap.index].duration)
     }
@@ -289,14 +331,17 @@ final class AudioPlayer: ObservableObject {
         }
     }
 
-    func play(_ track: Track, from list: [Track]? = nil, source: PlaySource = .none) {
-        if rc.subscribed {
+    func play(_ track: Track, from list: [Track]? = nil, source: PlaySource, name: String? = nil) {
+        if isController {
             rc.replace(list ?? [track], start: list?.firstIndex(of: track) ?? 0, source: source)
             return
         }
         log()
         // A new list without a context isn't credited to the one playing before.
-        if source != .none || list != nil { self.source = source }
+        if source != .none || list != nil {
+            self.source = source
+            sourceName = name ?? Self.defaultName(source, in: list ?? [track])
+        }
         if let list {
             baseOrder = list
             shuffle = false
@@ -307,14 +352,15 @@ final class AudioPlayer: ObservableObject {
         load(track)
     }
 
-    func playAll(_ tracks: [Track], shuffled: Bool = false, source: PlaySource = .none) {
+    func playAll(_ tracks: [Track], shuffled: Bool = false, source: PlaySource, name: String? = nil) {
         guard !tracks.isEmpty else { return }
-        if rc.subscribed {
+        if isController {
             rc.replace(tracks, start: shuffled ? Int.random(in: tracks.indices) : 0, source: source, shuffled: shuffled)
             return
         }
         log()
         self.source = source
+        sourceName = name ?? Self.defaultName(source, in: tracks)
         baseOrder = tracks
         shuffle = shuffled
         queue = shuffled ? SmartShuffle.shuffle(tracks) : tracks
@@ -326,7 +372,7 @@ final class AudioPlayer: ObservableObject {
     static let queueAnim: Animation = .spring(response: 0.35, dampingFraction: 0.85)
 
     func addLast(_ track: Track) {
-        if rc.subscribed { rc.insert([track], next: false); return }
+        if isController { rc.insert([track], next: false); return }
         withAnimation(Self.queueAnim) { queue.append(track) }
         if current == nil {
             index = 0
@@ -336,7 +382,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     func addNext(_ track: Track) {
-        if rc.subscribed { rc.insert([track], next: true); return }
+        if isController { rc.insert([track], next: true); return }
         if queue.isEmpty {
             addLast(track)
         } else {
@@ -346,7 +392,7 @@ final class AudioPlayer: ObservableObject {
 
     func addNext(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
-        if rc.subscribed { rc.insert(tracks, next: true); return }
+        if isController { rc.insert(tracks, next: true); return }
         if queue.isEmpty {
             addLast(tracks)
         } else {
@@ -356,7 +402,7 @@ final class AudioPlayer: ObservableObject {
 
     func addLast(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
-        if rc.subscribed { rc.insert(tracks, next: false); return }
+        if isController { rc.insert(tracks, next: false); return }
         let start = queue.count
         withAnimation(Self.queueAnim) { queue.append(contentsOf: tracks) }
         if current == nil {
@@ -370,7 +416,7 @@ final class AudioPlayer: ObservableObject {
     // after playback began) without restarting playback. Ignored once that track is no longer playing.
     func expandQueue(around track: Track, with full: [Track]) {
         guard queue.indices.contains(index), queue[index] == track, current == track else { return }
-        if rc.subscribed {
+        if isController {
             // shortcut: the rest of the list is appended in list order, not positioned around the track.
             let queued = Set(queue.map(\.trackhash))
             rc.insert(full.filter { !queued.contains($0.trackhash) }, next: false)
@@ -414,7 +460,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     func toggleShuffle() {
-        if rc.subscribed { rc.setShuffle(!shuffle); return }
+        if isController { rc.setShuffle(!shuffle); return }
         shuffle.toggle()
         UISelectionFeedbackGenerator().selectionChanged()
         applyShuffleToUpcoming()
@@ -443,7 +489,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     private func reshuffleForNewRound() {
-        guard shuffle, !rc.subscribed, queue.count > 2 else { return }
+        guard shuffle, !isController, queue.count > 2 else { return }
         let last = queue[index]
         var next = SmartShuffle.shuffle(queue)
         if next.first == last, let i = next.indices.dropFirst().randomElement() { next.swapAt(0, i) }
@@ -451,7 +497,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     func cycleLoop() {
-        if rc.subscribed {
+        if isController {
             rc.setRepeat(loop == .off ? .all : loop == .all ? .one : .off)
             UISelectionFeedbackGenerator().selectionChanged()
             return
@@ -466,13 +512,13 @@ final class AudioPlayer: ObservableObject {
 
     func appendToQueue(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
-        if rc.subscribed { rc.insert(tracks, next: false); return }
+        if isController { rc.insert(tracks, next: false); return }
         withAnimation(Self.queueAnim) { queue.append(contentsOf: tracks) }
     }
 
     func enqueueInterleaved(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
-        if rc.subscribed { rc.insert(tracks, next: false); return }
+        if isController { rc.insert(tracks, next: false); return }
         for t in tracks {
             let lower = min(index + 1, queue.count)
             let pos = lower <= queue.count ? Int.random(in: lower...queue.count) : queue.count
@@ -566,7 +612,8 @@ final class AudioPlayer: ObservableObject {
     }
 
     func smoothTime(at date: Date = Date()) -> Double {
-        guard playing, !isController else { return time }
+        guard playing else { return time }
+        if isController { return rc.position() }
         guard let p = player, p.timeControlStatus == .playing else { return timeAnchor }
         let dt = min(max(0, date.timeIntervalSince(timeAnchorDate)), 0.5) * Double(p.rate)
         let t = timeAnchor + dt
@@ -656,7 +703,10 @@ final class AudioPlayer: ObservableObject {
         let start = pendingStart ?? (0, true)
         playing = start.play
         resetClock(to: start.time)
-        if pendingStart == nil, start.play { player?.play() }
+        if pendingStart == nil, start.play {
+            try? AVAudioSession.sharedInstance().setActive(true)
+            player?.play()
+        }
     }
 
     /// Seeks to a handed-off position, then plays.
@@ -668,7 +718,10 @@ final class AudioPlayer: ObservableObject {
             Task { @MainActor in
                 guard let self, self.player === p else { return }
                 self.handingOff = false
-                if start.play { p?.play() }
+                if start.play {
+                    try? AVAudioSession.sharedInstance().setActive(true)
+                    p?.play()
+                }
                 if self.rc.subscribed { self.rc.playheadChanged() }
             }
         }
@@ -804,13 +857,14 @@ final class AudioPlayer: ObservableObject {
                 s.time = seconds
                 s.timeAnchor = seconds
                 s.timeAnchorDate = Date()
-                if let d = s.player?.currentItem?.duration.seconds, d.isFinite { s.total = d }
+                if let d = s.player?.currentItem?.duration.seconds, d.isFinite, d != s.total { s.total = d }
                 s.tickSession()
 
                 let sec = max(0, Int(seconds))
                 if sec != s.lastActivitySecond {
                     s.lastActivitySecond = sec
                     s.updateNowPlaying()
+                    if sec % 5 == 0 { s.rc.markPlayed() }
                     s.checkPreload()
                     s.checkCrossfade()
                     let playing = s.playing, progress = s.time, duration = s.total
@@ -1138,11 +1192,11 @@ final class AudioPlayer: ObservableObject {
             lastWidgetCommandAt = d.double(forKey: "widget.commandAt")
         }
 
-        widgetCommandPoll = Timer.publish(every: 0.5, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.consumeWidgetCommandIfNeeded()
-            }
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(), nil,
+            { _, _, _, _, _ in Task { @MainActor in AudioPlayer.shared.consumeWidgetCommandIfNeeded() } },
+            WidgetPlaybackBridge.notification as CFString, nil, .deliverImmediately
+        )
     }
 
     private func consumeWidgetCommandIfNeeded() {

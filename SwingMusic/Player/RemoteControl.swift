@@ -1,5 +1,7 @@
+import AVFoundation
 import Combine
 import Foundation
+import MediaPlayer
 import UIKit
 
 @MainActor
@@ -19,10 +21,12 @@ final class RemoteControl: ObservableObject {
         let playing: Bool
         var loading: Bool? = nil
         let at: Double
+        var playedAt: Double? = nil
 
         enum CodingKeys: String, CodingKey {
             case uid, playing, loading, at
             case positionMs = "position_ms"
+            case playedAt = "played_at"
         }
     }
 
@@ -33,10 +37,18 @@ final class RemoteControl: ObservableObject {
         }
 
         struct Queue: Decodable {
+            struct SourceInfo: Decodable { let name: String? }
+
             let source: String
+            let sourceInfo: SourceInfo?
             let items: [Item]
             let order: [String]?
             let `repeat`: String
+
+            enum CodingKeys: String, CodingKey {
+                case source, items, order, `repeat`
+                case sourceInfo = "source_info"
+            }
         }
 
         let version: Int
@@ -47,24 +59,41 @@ final class RemoteControl: ObservableObject {
         let volume: Double
         let devices: [Device]
         let now: Double
+        let activeReachable: Bool?
+        let playedAt: Double?
+        let idleSeconds: Double?
 
         enum CodingKeys: String, CodingKey {
             case version, playhead, queue, volume, devices, now
             case activeDeviceID = "active_device_id"
             case activeHostID = "active_host_id"
+            case activeReachable = "active_reachable"
+            case playedAt = "played_at"
+            case idleSeconds = "idle_seconds"
         }
     }
 
     static let enabledKey = "remoteControlEnabled"
+    /// When this device last played on its own, so the newest local playback wins on reconnect.
+    static let playedAtKey = "remotePlayedAt"
 
     @Published private(set) var available = false
-    @Published private(set) var subscribed = false
+    @Published private(set) var subscribed = false {
+        didSet {
+            guard subscribed != oldValue else { return }
+            ticker = subscribed
+                ? Timer.publish(every: 0.5, on: .main, in: .common).autoconnect().sink { [weak self] _ in self?.tick() }
+                : nil
+        }
+    }
     /// True until the first launch check settles, so the Play On button can show a spinner.
     @Published private(set) var checking = true
     @Published private(set) var devices: [Device] = []
     @Published private(set) var activeDeviceID: String?
     @Published private(set) var activeHostID: String?
     @Published var offerPlayHere = false
+    /// The active device's volume; on this phone that is the system volume.
+    @Published private(set) var volume: Double = 1
 
     let deviceID: String = {
         if let id = UserDefaults.standard.string(forKey: "remoteDeviceID") { return id }
@@ -75,8 +104,16 @@ final class RemoteControl: ObservableObject {
 
     var enabled: Bool { UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true }
     var isActive: Bool { subscribed && activeDeviceID == deviceID }
-    var isController: Bool { subscribed && activeDeviceID != deviceID }
+    /// Only while another reachable device is active and hasn't sat idle; otherwise this device plays locally.
+    var isController: Bool {
+        subscribed && activeReachable && activeDeviceID != nil && activeDeviceID != deviceID && !idle
+    }
+    private var idle: Bool {
+        idleSeconds > 0 && !playhead.playing && playhead.loading != true
+            && Date().timeIntervalSince1970 + clockOffset - (playhead.playedAt ?? 0) > idleSeconds
+    }
     var activeDevice: Device? { devices.first { $0.id == activeHostID } }
+    private var watched: Bool { devices.contains { $0.id != deviceID } }
 
     private let player = AudioPlayer.shared
     private let session: URLSession
@@ -84,16 +121,21 @@ final class RemoteControl: ObservableObject {
     private var reportTask: Task<Void, Never>?
     private var volumeTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
+    private var ticker: AnyCancellable?
 
     private var version = 0
     private var uids: [String] = []
     private var playhead = Playhead(uid: nil, positionMs: 0, playing: false, at: 0) {
-        didSet { player.switchingTarget = subscribed && playhead.loading == true }
+        didSet { player.switchingTarget = isController && playhead.loading == true }
     }
+    private var activeReachable = false
+    private var idleSeconds: Double = 0
+    private var pushTask: Task<Void, Never>?
+    // Set while the server's queue is written into the player, so it isn't pushed straight back.
+    private var applying = false
     private var clockOffset: Double = 0
     private var lastReportAt = Date.distantPast
     private var lastReportedPlaying = false
-    private var keepPlayingOnActivate = false
 
     private var currentUID: String? {
         uids.indices.contains(player.index) ? uids[player.index] : nil
@@ -110,6 +152,14 @@ final class RemoteControl: ObservableObject {
             .sink { [weak self] in self?.playheadChanged() }
             .store(in: &cancellables)
 
+        Publishers.Merge3(player.$queue.map { _ in () }, player.$shuffle.map { _ in () }, player.$loop.map { _ in () })
+            .sink { [weak self] in self?.queueChanged() }
+            .store(in: &cancellables)
+
+        player.$playing.removeDuplicates()
+            .sink { [weak self] _ in self?.markPlayed() }
+            .store(in: &cancellables)
+
         player.$playing.removeDuplicates()
             .sink { [weak self] playing in
                 guard let self, subscribed, UIApplication.shared.applicationState == .background else { return }
@@ -123,9 +173,11 @@ final class RemoteControl: ObservableObject {
             MainActor.assumeIsolated { self?.leaveBeforeExit() }
         }
 
-        Timer.publish(every: 0.5, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in self?.tick() }
+        SystemVolume.shared.$level.dropFirst()
+            .sink { [weak self] v in
+                guard let self, isActive, abs(v - volume) > 0.01 else { return }
+                setVolume(v)
+            }
             .store(in: &cancellables)
     }
 
@@ -154,6 +206,8 @@ final class RemoteControl: ObservableObject {
         uids = []
         devices = []
         activeDeviceID = nil; activeHostID = nil
+        activeReachable = false
+        pushTask?.cancel(); pushTask = nil
         version = 0
         player.leaveRemote()
     }
@@ -198,23 +252,24 @@ final class RemoteControl: ObservableObject {
 
     // A server with Remote Control turned off is checked again when the app comes to the foreground.
     private func run() async {
-        if !subscribed {
-            available = await fetchState() != nil
-            guard available, enabled else { checking = false; return }
-        }
         var delay: UInt64 = 1
         while !Task.isCancelled {
+            if !subscribed {
+                let ok = await checkAvailable()
+                if let ok { available = ok }
+                guard ok != false, enabled else { checking = false; return }
+            }
             let end = await listen()
             checking = false
             switch end {
             case .fatal:
                 endSession()
-                available = await fetchState() != nil
+                available = false
                 return
             case .connected:
                 delay = 1
             case .failed:
-                delay = min(delay * 2, 30)
+                delay = min(delay * 2, 5)
             }
             if UIApplication.shared.applicationState == .background, !staysConnectedInBackground { return }
             Log.info("remote", "reconnecting in \(delay)s")
@@ -240,7 +295,7 @@ final class RemoteControl: ObservableObject {
             let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
             if code >= 400 {
                 Log.error("remote", "stream → \(code)")
-                return code >= 500 ? .failed : .fatal
+                return [401, 403, 404].contains(code) ? .fatal : .failed
             }
             bytes = b
         } catch {
@@ -251,6 +306,7 @@ final class RemoteControl: ObservableObject {
         Log.info("remote", "stream open")
         let openedAt = Date()
         subscribed = true
+        available = true
         await sync()
         checking = false
         var reason = "closed by server"
@@ -281,6 +337,14 @@ final class RemoteControl: ObservableObject {
         return try? JSONDecoder().decode(State.self, from: data)
     }
 
+    /// nil when the server could not be reached, so the check is retried.
+    private func checkAvailable() async -> Bool? {
+        guard let url = URL(string: API.shared.base + "/remote/state"),
+              let (_, resp) = try? await session.data(for: request(url)),
+              let code = (resp as? HTTPURLResponse)?.statusCode else { return nil }
+        return code == 200 ? true : [401, 403, 404].contains(code) ? false : nil
+    }
+
     private func refresh() async {
         if let s = await fetchState() { apply(s) }
     }
@@ -308,19 +372,22 @@ final class RemoteControl: ObservableObject {
         guard let s = await fetchState() else { return }
         // A controller's `playing` mirrors the active device and it has no player loaded.
         let playingHere = player.isLoaded && player.playing
+        let offset = s.now - Date().timeIntervalSince1970
+        let playedAt = UserDefaults.standard.double(forKey: Self.playedAtKey)
+        // Never over a device that is playing right now, and only against a server that reports `played_at`.
+        let newer = playedAt > 0 && !s.playhead.playing && s.playedAt.map { playedAt + offset > $0 } == true
         uids = []
         version = 0
-        if player.queue.indices.contains(player.index), playingHere || s.queue.items.isEmpty {
-            keepPlayingOnActivate = playingHere
+        idleSeconds = s.idleSeconds ?? 0
+        if player.queue.indices.contains(player.index), playingHere || s.queue.items.isEmpty || newer {
             devices = s.devices
-            activeDeviceID = playingHere ? deviceID : s.activeDeviceID
-            activeHostID = playingHere ? deviceID : s.activeHostID
-            Log.info("remote", "sync: pushing local queue (\(playingHere ? "playing" : "server empty"))")
-            var op = replaceOp(player.queue, start: player.index, source: player.source, play: playingHere)
-            op["take"] = true
-            op["position_ms"] = max(0, Int(player.time * 1000))
-            await post("/remote/player", ["action": "volume", "value": Double(player.volume)])
-            await post("/remote/queue", ["ops": [op, repeatOp(player.loop)]])
+            activeDeviceID = deviceID; activeHostID = deviceID
+            activeReachable = true
+            clockOffset = offset
+            updateMode()
+            Log.info("remote", "sync: pushing local queue (\(playingHere ? "playing" : newer ? "newer" : "server empty"))")
+            await post("/remote/player", ["action": "volume", "value": SystemVolume.shared.value])
+            await pushQueue(playedAt: playedAt > 0 ? playedAt + offset : nil)
             return
         }
         Log.info("remote", "sync: pulling server queue (v\(s.version))")
@@ -333,30 +400,56 @@ final class RemoteControl: ObservableObject {
         version = s.version
         activeDeviceID = s.activeDeviceID
         activeHostID = s.activeHostID
-        let keep = isActive && player.isLoaded
-        let keptUID = keep ? currentUID : nil
+        activeReachable = s.activeReachable ?? false
+        idleSeconds = s.idleSeconds ?? 0
         devices = s.devices
-        playhead = s.playhead
         clockOffset = s.now - Date().timeIntervalSince1970
+        playhead = s.playhead
         updateMode()
+        volume = s.volume
 
         let tracks = Dictionary(s.queue.items.map { ($0.uid, $0.track) }, uniquingKeysWith: { a, _ in a })
-        uids = (s.queue.order ?? s.queue.items.map(\.uid)).filter { tracks[$0] != nil }
-        player.queue = uids.compactMap { tracks[$0] }
-        player.source = AudioPlayer.PlaySource(token: s.queue.source)
+        let order = (s.queue.order ?? s.queue.items.map(\.uid)).filter { tracks[$0] != nil }
+        let local = !player.isController && player.isLoaded
+        if order.compactMap({ tracks[$0]?.trackhash }) == player.queue.map(\.trackhash) {
+            uids = order
+        } else if local, pushTask != nil {
+            return
+        } else {
+            let keptHash = local ? player.current?.trackhash : nil
+            uids = order
+            applying = true
+            player.queue = order.compactMap { tracks[$0] }
+            applying = false
+            if let keptHash, let i = player.queue.firstIndex(where: { $0.trackhash == keptHash }) {
+                player.index = i
+            } else if local {
+                player.index = min(player.index, max(player.queue.count - 1, 0))
+            }
+        }
+        applying = true
+        let source = AudioPlayer.PlaySource(token: s.queue.source)
+        if source != player.source || player.sourceName.isEmpty {
+            player.source = source
+            let name = s.queue.sourceInfo?.name ?? ""
+            player.sourceName = name.isEmpty ? AudioPlayer.defaultName(source, in: player.queue) : name
+        }
         player.shuffle = s.queue.order != nil
         player.loop = s.queue.repeat == "all" ? .all : s.queue.repeat == "one" ? .one : .off
-        player.volume = Float(s.volume)
+        applying = false
 
-        if keep {
-            player.index = keptUID.flatMap { uids.firstIndex(of: $0) } ?? min(player.index, max(uids.count - 1, 0))
+        if local {
+            playheadChanged()
         } else {
             showPlayhead()
         }
     }
 
     private func updateMode() {
-        if isController != player.isController { player.setController(isController) }
+        guard isController != player.isController else { return }
+        objectWillChange.send()
+        player.setController(isController)
+        player.switchingTarget = isController && playhead.loading == true
     }
 
     private func showPlayhead() {
@@ -372,7 +465,7 @@ final class RemoteControl: ObservableObject {
         player.time = position()
     }
 
-    private func position() -> Double {
+    func position() -> Double {
         var ms = Double(playhead.positionMs)
         if playhead.playing { ms += (Date().timeIntervalSince1970 + clockOffset - playhead.at) * 1000 }
         let t = max(0, ms / 1000)
@@ -390,20 +483,24 @@ final class RemoteControl: ObservableObject {
         case "playhead":
             guard let p: Playhead = decode(data) else { return }
             playhead = p
-            if !isActive { showPlayhead() }
+            if !isActive, player.isController || !player.isLoaded { showPlayhead() }
         case "devices":
-            if let d: [Device] = decode(data) { devices = d }
+            guard let d: [Device] = decode(data) else { return }
+            let was = watched
+            devices = d
+            if isActive, player.playing, !was, watched { report() }
         case "active":
             activeDeviceID = dict?["active_device_id"] as? String
             activeHostID = dict?["active_host_id"] as? String
+            activeReachable = dict?["active_reachable"] as? Bool ?? false
             updateMode()
             if dict?["active_reachable"] as? Bool == false, playhead.playing {
                 playhead = Playhead(uid: playhead.uid, positionMs: playhead.positionMs, playing: false,
                                     at: Date().timeIntervalSince1970 + clockOffset)
-                if !isActive { showPlayhead() }
+                if !isActive, player.isController || !player.isLoaded { showPlayhead() }
             }
         case "volume":
-            if let v = dict?["value"] as? Double { player.volume = Float(v) }
+            if let v = dict?["value"] as? Double { volume = v }
         case "command":
             if let dict, !player.isController { await execute(dict) }
         case "activate":
@@ -432,7 +529,11 @@ final class RemoteControl: ObservableObject {
         case "next": player.next()
         case "prev": player.prev()
         case "seek": if let ms = c["position_ms"] as? Double { player.seek(ms / 1000) }
-        case "volume": if let v = c["value"] as? Double { player.volume = Float(v) }
+        case "volume":
+            if let v = c["value"] as? Double {
+                volume = v
+                SystemVolume.shared.set(v)
+            }
         case "jump":
             guard let uid = c["uid"] as? String else {
                 if player.playing { player.toggle() }
@@ -446,12 +547,16 @@ final class RemoteControl: ObservableObject {
     }
 
     private func activate(_ p: Playhead, play: Bool) async {
-        defer { keepPlayingOnActivate = false }
         activeDeviceID = deviceID; activeHostID = deviceID
+        activeReachable = true
         playhead = p
         updateMode()
+        setVolume(SystemVolume.shared.value)
         if let uid = p.uid, !uids.contains(uid) { await refresh() }
-        if keepPlayingOnActivate, player.isLoaded, currentUID == p.uid {
+        if player.isLoaded, currentUID == p.uid {
+            let t = Double(p.positionMs) / 1000
+            if abs(player.time - t) > 1 { player.seek(t) }
+            if play != player.playing { player.toggle() }
             playheadChanged()
             return
         }
@@ -470,7 +575,9 @@ final class RemoteControl: ObservableObject {
     }
 
     private func report() {
-        guard isActive, !player.isController, !player.isStarting else { return }
+        // A device playing while no other is active reports too; the server makes it active.
+        guard isActive || player.playing, !player.isController, !player.isStarting,
+              currentUID != nil || player.queue.isEmpty else { return }
         lastReportAt = Date()
         lastReportedPlaying = player.playing && player.isAudible
         let body: [String: Any] = [
@@ -483,10 +590,11 @@ final class RemoteControl: ObservableObject {
 
     private func tick() {
         guard subscribed else { return }
+        updateMode()
         if player.isController {
             if playhead.playing { player.time = position() }
-        } else if isActive, player.playing,
-                  Date().timeIntervalSince(lastReportAt) >= 5 || player.isAudible != lastReportedPlaying {
+        } else if player.playing,
+                  watched && Date().timeIntervalSince(lastReportAt) >= 5 || player.isAudible != lastReportedPlaying {
             report()
         }
     }
@@ -495,6 +603,34 @@ final class RemoteControl: ObservableObject {
     private func replaceOp(_ tracks: [Track], start: Int, source: AudioPlayer.PlaySource, play: Bool) -> [String: Any] {
         ["type": "replace", "source": source.token, "trackhashes": tracks.map(\.trackhash),
          "start_index": start, "play": play]
+    }
+
+    // The device playing changed its own queue: it already plays it, so the server just takes a copy.
+    private func queueChanged() {
+        guard subscribed, !applying, !player.isController else { return }
+        uids = []
+        pushTask?.cancel()
+        pushTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard let self, !Task.isCancelled else { return }
+            await pushQueue()
+            if !Task.isCancelled { pushTask = nil }
+        }
+    }
+
+    private func pushQueue(playedAt: Double? = nil) async {
+        var op = replaceOp(player.queue, start: player.index, source: player.source,
+                           play: player.isLoaded && player.playing)
+        op["take"] = true
+        op["shuffled"] = player.shuffle
+        op["position_ms"] = max(0, Int(player.time * 1000))
+        if let playedAt { op["played_at"] = playedAt }
+        await post("/remote/queue", ["ops": [op, repeatOp(player.loop)]])
+    }
+
+    func markPlayed() {
+        guard !player.isController, player.isLoaded else { return }
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.playedAtKey)
     }
 
     private func edit(_ ops: [[String: Any]]) {
@@ -561,6 +697,7 @@ final class RemoteControl: ObservableObject {
     }
 
     func setVolume(_ value: Double) {
+        volume = value
         volumeTask?.cancel()
         volumeTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 200_000_000)
@@ -571,5 +708,42 @@ final class RemoteControl: ObservableObject {
 
     func transfer(to id: String) {
         Task { await post("/remote/transfer", ["device_id": id, "play": true]) }
+    }
+}
+
+// iOS has no API to set the system volume; moving a hidden MPVolumeView's slider is the known workaround.
+@MainActor
+final class SystemVolume: ObservableObject {
+    static let shared = SystemVolume()
+
+    @Published private(set) var level = Double(AVAudioSession.sharedInstance().outputVolume)
+    private let view = MPVolumeView(frame: CGRect(x: -100, y: -100, width: 1, height: 1))
+    private var observation: NSKeyValueObservation?
+
+    var value: Double { Double(AVAudioSession.sharedInstance().outputVolume) }
+
+    private init() {
+        observation = AVAudioSession.sharedInstance().observe(\.outputVolume) { s, _ in
+            let v = Double(s.outputVolume)
+            Task { @MainActor in SystemVolume.shared.level = v }
+        }
+    }
+
+    func set(_ v: Double) {
+        attach()
+        // A freshly added view only has its slider after a layout pass.
+        Task { @MainActor in
+            self.view.subviews.compactMap { $0 as? UISlider }.first?.value = Float(min(max(v, 0), 1))
+        }
+    }
+
+    // In a window, the slider moves the volume without showing the system volume HUD.
+    private func attach() {
+        guard view.window == nil,
+              let window = UIApplication.shared.connectedScenes
+                .compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return }
+        view.alpha = 0.01
+        view.isUserInteractionEnabled = false
+        window.addSubview(view)
     }
 }

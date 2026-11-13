@@ -19,7 +19,7 @@ struct MixDetailView: View {
                 } else {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
                         TrackRow(track: t, active: state.isCurrentTrack(t)) {
-                            state.player.play(t, from: tracks, source: source)
+                            state.player.play(t, from: tracks, source: source, name: mix.title)
                         }
                     }
                 }
@@ -91,8 +91,8 @@ struct MixDetailView: View {
 
             HStack(spacing: 12) {
                 DetailPlayButtons(
-                    play: { state.player.playAll(tracks, source: source) },
-                    shuffle: { state.player.playAll(tracks, shuffled: true, source: source) }
+                    play: { state.player.playAll(tracks, source: source, name: mix.title) },
+                    shuffle: { state.player.playAll(tracks, shuffled: true, source: source, name: mix.title) }
                 )
                 .disabled(tracks.isEmpty)
             }

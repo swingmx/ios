@@ -185,11 +185,17 @@ struct Artist: Codable, Identifiable, Hashable {
     let color: String?
     // Sent with an artist's own page; absent on cards.
     var isFavorite: Bool? = nil
+    // The stylized name shown on the artist's own page; absent on cards.
+    var displayName: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case artisthash, name, image, trackcount, albumcount, duration, genres, color
         case isFavorite = "is_favorite"
+        case displayName = "display_name"
     }
+
+    // The name to show on the artist's own page.
+    var pageName: String { displayName ?? name }
 
     var id: String { artisthash }
     static func == (lhs: Artist, rhs: Artist) -> Bool { lhs.artisthash == rhs.artisthash }
@@ -552,10 +558,10 @@ extension Playlist {
 }
 
 extension Mix {
-    init(stub id: String, title: String, image: String) {
+    init(stub id: String, title: String, image: String, sourcehash: String = "") {
         self.id = id
         self.title = title
-        self.sourcehash = ""
+        self.sourcehash = sourcehash
         self.trackcount = nil
         self.extra = Extra(type: nil, og_sourcehash: nil,
                            image: MixImageRef(image: image, color: nil), images: nil)

@@ -4,7 +4,6 @@ enum NowPlayingInterfaceTransition {
     enum ControlLayer {
         case progress
         case transport
-        case volume
         case pageSelector
     }
 
@@ -48,8 +47,6 @@ enum NowPlayingInterfaceTransition {
             180
         case .transport:
             165
-        case .volume:
-            148
         case .pageSelector:
             128
         }
@@ -78,8 +75,6 @@ enum NowPlayingInterfaceTransition {
             0.025
         case .transport:
             0.05
-        case .volume:
-            0.075
         case .pageSelector:
             0.1
         }
@@ -93,8 +88,6 @@ enum NowPlayingInterfaceTransition {
             0.075
         case .transport:
             0.05
-        case .volume:
-            0.025
         case .pageSelector:
             0
         }

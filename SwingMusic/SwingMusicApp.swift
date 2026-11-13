@@ -5,6 +5,9 @@ struct SwingMusicApp: App {
     @State private var state = AppState()
     @AppStorage(ShakeToReport.key) private var shakeToReport = false
     @Environment(\.scenePhase) private var scenePhase
+    #if DEBUG
+    @State private var debugPlayOn = false
+    #endif
 
     @MainActor
     private func reloadAfterServerSwitch() async {
@@ -61,6 +64,8 @@ struct SwingMusicApp: App {
                         DebugCapture.runIfRequested(state: state)
                     }
             )
+            .sheet(isPresented: $debugPlayOn) { PlayOnSheet() }
+            .onReceive(NotificationCenter.default.publisher(for: DebugCapture.showPlayOn)) { _ in debugPlayOn = true }
             #endif
         }
     }

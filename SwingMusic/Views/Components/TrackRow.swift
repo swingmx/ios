@@ -223,14 +223,17 @@ struct TrackRow: View {
 // Only the active row creates one, so only that row follows the player's state.
 struct NowPlayingIndicator: View {
     var color: Color = .accentColor
-    @ObservedObject private var player = AudioPlayer.shared
+    @State private var playing = AudioPlayer.shared.playing
+    @Environment(AppState.self) private var state
 
     var body: some View {
         Image(systemName: "waveform")
             .font(.body.weight(.semibold))
             .foregroundStyle(color)
-            .symbolEffect(.variableColor.iterative.dimInactiveLayers, options: .repeating, isActive: player.playing)
-            .accessibilityLabel(player.playing ? "Now playing" : "Paused")
+            // Covered by the full player it still redraws every frame, so it rests while the player is open.
+            .symbolEffect(.variableColor.iterative.dimInactiveLayers, options: .repeating, isActive: playing && !state.showPlayer)
+            .accessibilityLabel(playing ? "Now playing" : "Paused")
+            .onReceive(AudioPlayer.shared.$playing.removeDuplicates()) { playing = $0 }
     }
 }
 

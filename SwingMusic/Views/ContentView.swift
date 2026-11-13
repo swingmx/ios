@@ -88,32 +88,20 @@ struct ContentView: View {
 
     private func navigateToTarget(_ target: AppState.NavTarget) {
         state.navigationTarget = nil
+        let value: any Hashable = switch target {
+        case .album(let a): a
+        case .artist(let a): a
+        case .folder(let f): f
+        case .playlist(let p): p
+        case .mix(let m): m
+        }
         switch state.tab {
-        case .home:
-            switch target {
-            case .album(let a): state.homePath.append(a)
-            case .artist(let a): state.homePath.append(a)
-            case .folder(let f): state.homePath.append(f)
-            }
-        case .library:
-            switch target {
-            case .album(let a): state.libraryPath.append(a)
-            case .artist(let a): state.libraryPath.append(a)
-            case .folder(let f): state.libraryPath.append(f)
-            }
-        case .favorites:
-            switch target {
-            case .album(let a): state.favoritesPath.append(a)
-            case .artist(let a): state.favoritesPath.append(a)
-            case .folder(let f): state.favoritesPath.append(f)
-            }
+        case .home: state.homePath.append(value)
+        case .library: state.libraryPath.append(value)
+        case .favorites: state.favoritesPath.append(value)
         default:
             state.tab = .home
-            switch target {
-            case .album(let a): state.homePath.append(a)
-            case .artist(let a): state.homePath.append(a)
-            case .folder(let f): state.homePath.append(f)
-            }
+            state.homePath.append(value)
         }
     }
 }

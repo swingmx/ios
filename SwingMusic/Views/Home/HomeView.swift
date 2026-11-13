@@ -77,13 +77,13 @@ struct HomeView: View {
         Task {
             guard let tracks = try? await API.shared.albumTracks(album.albumhash),
                   !tracks.isEmpty else { return }
-            state.player.playAll(tracks, shuffled: shuffled)
+            state.player.playAll(tracks, shuffled: shuffled, source: .album(album.albumhash), name: album.title)
         }
     }
 
-    private func playTrack(_ track: Track, from queue: [Track]) {
+    private func playTrack(_ track: Track, from queue: [Track], section: String) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        state.player.play(track, from: queue)
+        state.player.play(track, from: queue, source: .home(section))
     }
 
     private var heroCarousel: some View {
@@ -184,7 +184,7 @@ struct HomeView: View {
     private func chartRow(rank: Int, track: Track, queue: [Track]) -> some View {
         let active = state.isCurrentTrack(track)
         return Button {
-            playTrack(track, from: queue)
+            playTrack(track, from: queue, section: "Top Songs")
         } label: {
             HStack(spacing: 14) {
                 Text("\(rank)")
@@ -236,7 +236,7 @@ struct HomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(Array(s.items.enumerated()), id: \.offset) { _, item in
-                        homeItemCard(item)
+                        homeItemCard(item, section: s.title)
                     }
                 }
                 .scrollTargetLayout()
@@ -247,7 +247,7 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private func homeItemCard(_ item: HomeItem) -> some View {
+    private func homeItemCard(_ item: HomeItem, section: String) -> some View {
         switch item {
         case .album(let a):
             NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
@@ -277,7 +277,7 @@ struct HomeView: View {
             }
             .buttonStyle(PressableCardStyle())
         case .track(let t):
-            Button { playTrack(t, from: [t]) } label: {
+            Button { playTrack(t, from: [t], section: section) } label: {
                 VStack(alignment: .leading, spacing: 8) {
                     AlbumArt(track: t, size: 150)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))

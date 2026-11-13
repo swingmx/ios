@@ -4,7 +4,6 @@ struct NowPlayingSongActions: View {
     @Environment(AppState.self) private var state
 
     let song: Song
-    var showsFavoriteButton = true
 
     @State private var isFavorite = false
     @State private var showSleepTimer = false
@@ -14,10 +13,7 @@ struct NowPlayingSongActions: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            if showsFavoriteButton {
-                favoriteButton
-            }
-
+            favoriteButton
             songMenu
         }
         .task(id: song.trackhash) { await refreshFavorite() }

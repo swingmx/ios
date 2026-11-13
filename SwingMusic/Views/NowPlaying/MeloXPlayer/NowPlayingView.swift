@@ -676,11 +676,11 @@ struct NowPlayingView: View {
         let inner = size.width - portraitHorizontalPadding * 2
         let artworkSize = max(
             170,
-            min(inner + 16, size.height - NowPlayingBottomControls.coreHeight - 92)
+            min(inner + 16, size.height - NowPlayingBottomControls.coreHeight - 92 - NowPlayingSourceHeader.height)
         )
         return CGRect(
             x: (inner - artworkSize) / 2,
-            y: 8,
+            y: 8 + NowPlayingSourceHeader.height,
             width: artworkSize,
             height: artworkSize
         )

@@ -92,10 +92,7 @@ struct NowPlayingSongHeader: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            NowPlayingSongActions(
-                song: song,
-                showsFavoriteButton: !usesReferenceLayout
-            )
+            NowPlayingSongActions(song: song)
         }
     }
 

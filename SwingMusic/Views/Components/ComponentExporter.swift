@@ -269,6 +269,8 @@ import SwiftUI
 
 @MainActor
 enum DebugCapture {
+    static let showPlayOn = Notification.Name("debugShowPlayOn")
+
     static func runIfRequested(state: AppState) {
         guard let route = UserDefaults.standard.string(forKey: "captureRoute"), !route.isEmpty else { return }
         UserDefaults.standard.removeObject(forKey: "captureRoute")
@@ -277,6 +279,12 @@ enum DebugCapture {
     }
 
     private static func go(route: String, state: AppState) async {
+        // The Play On sheet with the server's real devices, without starting playback here.
+        if route == "playon" {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            NotificationCenter.default.post(name: showPlayOn, object: nil)
+            return
+        }
         if state.recentAdded.isEmpty { await state.loadHome() }
         try? await Task.sleep(nanoseconds: 1_200_000_000)
 
@@ -307,7 +315,7 @@ enum DebugCapture {
             let q = UserDefaults.standard.string(forKey: "captureSong") ?? "Boylife"
             let hits = (try? await API.shared.search(q))?.tracks ?? []
             if let t = hits.first(where: { $0.title.localizedCaseInsensitiveContains(q) }) ?? hits.first {
-                state.player.play(t, from: hits)
+                state.player.play(t, from: hits, source: .search(q))
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 state.player.seek(UserDefaults.standard.double(forKey: "captureSeek"))
             }
@@ -319,7 +327,7 @@ enum DebugCapture {
         case "queue":
             let hits = (try? await API.shared.search("a"))?.tracks ?? []
             if let first = hits.first {
-                state.player.play(first, from: hits)
+                state.player.play(first, from: hits, source: .search("a"))
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
                 state.player.next()
                 try? await Task.sleep(nanoseconds: 800_000_000)
@@ -338,7 +346,7 @@ enum DebugCapture {
             let q = UserDefaults.standard.string(forKey: "capturePlayerSong") ?? ""
             let hits = (try? await API.shared.search(q))?.tracks ?? []
             if let t = hits.first(where: { $0.title.localizedCaseInsensitiveContains(q) }) ?? hits.first {
-                state.player.play(t, from: hits)
+                state.player.play(t, from: hits, source: .search(q))
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 state.player.seek(UserDefaults.standard.double(forKey: "capturePlayerSeek"))
             }
@@ -350,7 +358,7 @@ enum DebugCapture {
             if let album { tracks = (try? await API.shared.albumTracks(album.albumhash)) ?? [] }
             if tracks.isEmpty { tracks = state.topTracks }
             if let first = tracks.first {
-                state.player.play(first, from: tracks)
+                state.player.play(first, from: tracks, source: album.map { .album($0.albumhash) } ?? .library)
             }
             if route == "player" {
                 try? await Task.sleep(nanoseconds: 1_500_000_000)

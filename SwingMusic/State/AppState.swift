@@ -121,6 +121,8 @@ final class AppState {
         case album(Album)
         case artist(Artist)
         case folder(Folder)
+        case playlist(Playlist)
+        case mix(Mix)
     }
 
     var navigationTarget: NavTarget?
@@ -246,7 +248,7 @@ final class AppState {
         shufflingLibrary = false
         guard !initial.isEmpty else { return }
 
-        player.playAll(initial, source: .none)
+        player.playAll(initial, source: .library)
         player.shuffle = true
 
         let rest = Array(albums.dropFirst(batchN))

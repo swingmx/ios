@@ -43,7 +43,7 @@ final class SleepTimer: ObservableObject {
         active = false
         remaining = 0
         fadeStarted = false
-        AudioPlayer.shared.volume = max(AudioPlayer.shared.volume, 0.8)
+        AudioPlayer.shared.volume = 1
     }
 
     private func startFade() {

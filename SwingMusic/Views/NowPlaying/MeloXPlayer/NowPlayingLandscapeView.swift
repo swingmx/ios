@@ -84,8 +84,6 @@ struct NowPlayingLandscapeView: View {
             transportRow
                 .padding(.top, 14)
 
-            NowPlayingVolumeControl()
-                .padding(.top, 18)
         }
     }
 

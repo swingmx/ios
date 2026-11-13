@@ -9,8 +9,8 @@ final class ActivityManager {
     private var activity: Activity<MusicAttributes>?
     private let appGroup = "group.swingmusic"
     private let widgetKind = "SwingMusicNowPlaying"
-    private var lastWidgetReload = Date.distantPast
     private var lastPersisted: MusicAttributes.ContentState?
+    private var lastProgressAt = Date.distantPast
     private init() {}
 
     func start(track: Track, accentHex: String) async {
@@ -39,7 +39,7 @@ final class ActivityManager {
             return
         }
 
-        var fallback = currentWidgetState()
+        var fallback = lastPersisted ?? currentWidgetState()
         fallback.playing = playing
         fallback.progress = progress
         if let duration { fallback.duration = duration }
@@ -127,20 +127,31 @@ final class ActivityManager {
         guard let d = UserDefaults(suiteName: appGroup) else { return }
 
         let previous = lastPersisted
+        // The widget draws progress from w.progressAt itself, so progress is only written when it jumps.
+        let now = Date()
+        let expected = previous.map { $0.playing ? $0.progress + now.timeIntervalSince(lastProgressAt) : $0.progress }
+        let moved = expected.map { abs($0 - state.progress) > 2 } ?? true
+        var routine = state
+        routine.progress = previous?.progress ?? state.progress
+        guard forceReload || moved || routine != previous else { return }
+
         if previous?.title != state.title { d.set(state.title, forKey: "w.title") }
         if previous?.artist != state.artist { d.set(state.artist, forKey: "w.artist") }
         if previous?.album != state.album { d.set(state.album, forKey: "w.album") }
         if previous?.playing != state.playing { d.set(state.playing, forKey: "w.playing") }
-        if previous == nil || Int(previous!.progress) != Int(state.progress) || previous?.playing != state.playing {
+        var saved = state
+        if moved || previous?.playing != state.playing {
             d.set(state.progress, forKey: "w.progress")
-            d.set(Date().timeIntervalSince1970, forKey: "w.progressAt")
+            d.set(now.timeIntervalSince1970, forKey: "w.progressAt")
+            lastProgressAt = now
+        } else if let previous {
+            saved.progress = previous.progress
         }
         if previous?.duration != state.duration { d.set(state.duration, forKey: "w.duration") }
         if previous?.imageData != state.imageData { d.set(state.imageData, forKey: "w.image") }
         if previous?.accentHex != state.accentHex { d.set(state.accentHex, forKey: "w.accent") }
-        lastPersisted = state
-
-        reloadWidgetsIfNeeded(force: forceReload)
+        lastPersisted = saved
+        WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
     }
 
     private func currentWidgetState() -> MusicAttributes.ContentState {
@@ -169,14 +180,6 @@ final class ActivityManager {
             accentHex: "#FF375F"
         )
         persistWidget(state, forceReload: true)
-    }
-
-    private func reloadWidgetsIfNeeded(force: Bool) {
-        let now = Date()
-        if force || now.timeIntervalSince(lastWidgetReload) >= 4 {
-            WidgetCenter.shared.reloadTimelines(ofKind: widgetKind)
-            lastWidgetReload = now
-        }
     }
 
     private func addToHistory(_ state: MusicAttributes.ContentState) {

@@ -21,7 +21,7 @@ struct PlaylistDetailView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(tracks.enumerated()), id: \.element.id) { i, t in
                         TrackRow(track: t, active: state.isCurrentTrack(t)) {
-                            state.player.play(t, from: tracks, source: .playlist(id))
+                            state.player.play(t, from: tracks, source: .playlist(id), name: name)
                         }
                     }
                 }
@@ -70,8 +70,8 @@ struct PlaylistDetailView: View {
                 .foregroundStyle(.secondary)
 
             DetailPlayButtons(
-                play: { state.player.playAll(tracks, source: .playlist(id)) },
-                shuffle: { state.player.playAll(tracks, shuffled: true, source: .playlist(id)) }
+                play: { state.player.playAll(tracks, source: .playlist(id), name: name) },
+                shuffle: { state.player.playAll(tracks, shuffled: true, source: .playlist(id), name: name) }
             )
             .padding(.horizontal, 24)
             .padding(.bottom, 8)
