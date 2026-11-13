@@ -98,9 +98,10 @@ struct PullActions: ViewModifier {
         }
     }
 
-    // Distance the row has to travel, after resistance, before releasing performs the action.
+    // Distance the row has to travel, after resistance, before releasing performs the action. The same on
+    // both sides, so a longer label doesn't make one pull heavier than the other.
     private func armDistance(_ side: Side) -> CGFloat {
-        Self.contentInset + (side == .leading ? leadingWidth : trailingWidth) + Self.contentInset
+        Self.contentInset + max(leadingWidth, trailingWidth) + Self.contentInset
     }
 
     // Rubber-band curve: close to the finger at first, then increasingly stiff the further it is pulled.

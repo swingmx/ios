@@ -12,7 +12,6 @@ struct SettingsView: View {
     @State private var canTranscode = API.shared.canTranscode
     @State private var serverVersion = API.shared.serverVersion
     @State private var confirmLogout = false
-    @ObservedObject private var equalizer = Equalizer.shared
     @ObservedObject private var downloads = DownloadManager.shared
 
     var body: some View {
@@ -106,20 +105,6 @@ struct SettingsView: View {
                             .foregroundStyle(.blue)
                             .frame(width: 28)
                         Text("Crossfade")
-                    }
-                }
-
-                NavigationLink {
-                    EqualizerView()
-                } label: {
-                    HStack {
-                        Image(systemName: "slider.vertical.3")
-                            .foregroundStyle(.blue)
-                            .frame(width: 28)
-                        Text("Equalizer")
-                        Spacer()
-                        Text(equalizer.enabled ? "On" : "Off")
-                            .foregroundStyle(.secondary)
                     }
                 }
 

@@ -125,7 +125,8 @@ struct NowPlayingArtworkPage: View {
                     )
                 }
 
-                Spacer(minLength: 22)
+                // fixed, so extra height goes above the controls instead of between the image and the title
+                Color.clear.frame(height: 18)
 
                 HStack(spacing: 14) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -150,6 +151,8 @@ struct NowPlayingArtworkPage: View {
 
                     NowPlayingSongActions(song: song)
                 }
+
+                Spacer(minLength: 0)
             }
             .padding(.bottom, NowPlayingBottomControls.coreHeight)
             .frame(width: proxy.size.width, height: proxy.size.height)

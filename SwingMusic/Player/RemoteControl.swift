@@ -490,10 +490,13 @@ final class RemoteControl: ObservableObject {
             devices = d
             if isActive, player.playing, !was, watched { report() }
         case "active":
+            let wasActive = isActive
             activeDeviceID = dict?["active_device_id"] as? String
             activeHostID = dict?["active_host_id"] as? String
             activeReachable = dict?["active_reachable"] as? Bool ?? false
             updateMode()
+            // playback moved here: this phone plays at its own volume and tells the others
+            if isActive, !wasActive { setVolume(SystemVolume.shared.value) }
             if dict?["active_reachable"] as? Bool == false, playhead.playing {
                 playhead = Playhead(uid: playhead.uid, positionMs: playhead.positionMs, playing: false,
                                     at: Date().timeIntervalSince1970 + clockOffset)

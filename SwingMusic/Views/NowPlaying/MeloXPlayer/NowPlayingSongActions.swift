@@ -7,7 +7,6 @@ struct NowPlayingSongActions: View {
 
     @State private var isFavorite = false
     @State private var showSleepTimer = false
-    @State private var showEqualizer = false
     @State private var showPlaylistSheet = false
     @ObservedObject private var sleepTimer = SleepTimer.shared
 
@@ -20,11 +19,6 @@ struct NowPlayingSongActions: View {
         .sheet(isPresented: $showSleepTimer) {
             SleepTimerSheet()
                 .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showEqualizer) {
-            EqualizerSheet()
-                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showPlaylistSheet) {
@@ -49,7 +43,7 @@ struct NowPlayingSongActions: View {
         } label: {
             Image(systemName: isFavorite ? "heart.fill" : "heart")
                 .font(.title3.weight(.medium))
-                .foregroundStyle(isFavorite ? Color.pink : .white)
+                .foregroundStyle(.white)
                 .symbolEffect(.bounce, value: isFavorite)
                 .frame(width: 40, height: 40)
                 .background(.white.opacity(0.13), in: .circle)
@@ -61,35 +55,7 @@ struct NowPlayingSongActions: View {
 
     private var songMenu: some View {
         Menu {
-            Button {
-                showPlaylistSheet = true
-            } label: {
-                Label("Add to Playlist…", systemImage: "music.note.list")
-            }
-
-            Button {
-                state.navigationTarget = .album(
-                    Album(
-                        stub: song.albumhash,
-                        title: song.album,
-                        image: song.image,
-                        date: song.date,
-                        albumartists: song.albumartists
-                    )
-                )
-            } label: {
-                Label("Go to Album", systemImage: "square.stack")
-            }
-
-            if !song.artisthash.isEmpty {
-                Button {
-                    state.navigationTarget = .artist(
-                        Artist(stub: song.artisthash, name: song.artist)
-                    )
-                } label: {
-                    Label("Go to Artist", systemImage: "music.mic")
-                }
-            }
+            TrackMenuItems(track: song, showsPlayNext: false) { showPlaylistSheet = true }
 
             Divider()
 
@@ -101,12 +67,6 @@ struct NowPlayingSongActions: View {
                     systemImage: "moon"
                 )
             }
-
-            Button {
-                showEqualizer = true
-            } label: {
-                Label("Equalizer", systemImage: "slider.vertical.3")
-            }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.title3.weight(.medium))
@@ -116,6 +76,10 @@ struct NowPlayingSongActions: View {
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
+        // opening upward, iOS would otherwise list the items bottom to top
+        .menuOrder(.fixed)
+        // the player sits outside the app's tint, so menu icons would turn system blue
+        .tint(.primary)
         .accessibilityLabel("More")
     }
 

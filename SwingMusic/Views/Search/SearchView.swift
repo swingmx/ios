@@ -63,6 +63,11 @@ struct SearchView: View {
                 .onSubmit(of: .search) { runSearch(query, delay: 0) }
                 .onChange(of: query) { _, v in runSearch(v, delay: 300_000_000) }
                 .appDestinations(zoom: nil)
+                #if DEBUG
+                .task {
+                    if let q = UserDefaults.standard.string(forKey: "captureSearch") { query = q }
+                }
+                #endif
         }
     }
 
@@ -154,14 +159,29 @@ struct SearchView: View {
             if scope == .all || scope == .songs, !tracks.isEmpty {
                 Section {
                     ForEach(tracks.prefix(limit)) { t in
-                        Button {
-                            record(RecentSearchItem(kind: .track, hash: t.trackhash, title: t.title, subtitle: t.artist, image: t.image, track: t))
-                            state.player.play(t, from: tracks, source: .search(query))
-                        } label: {
-                            row(image: API.shared.img(t.image, size: "small"), round: false,
-                                title: t.title, subtitle: t.artist,
-                                playing: state.isCurrentTrack(t), explicit: t.isExplicit)
+                        HStack(spacing: 0) {
+                            Button {
+                                record(RecentSearchItem(kind: .track, hash: t.trackhash, title: t.title, subtitle: t.artist, image: t.image, track: t))
+                                state.player.play(t, from: tracks, source: .search(query))
+                            } label: {
+                                row(image: API.shared.img(t.image, size: "small"), round: false,
+                                    title: t.title, subtitle: t.artist,
+                                    playing: state.isCurrentTrack(t), explicit: t.isExplicit)
+                            }
+                            .buttonStyle(.plain)
+                            Menu {
+                                TrackMenuItems(track: t)
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(.secondary.opacity(0.5))
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .menuOrder(.fixed)
                         }
+                        .contextMenu { TrackMenuItems(track: t) }
                         .tint(.primary)
                         .swipeActions(edge: .trailing) {
                             Button { state.player.addNext(t) } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }

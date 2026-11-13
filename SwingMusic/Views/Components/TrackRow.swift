@@ -62,7 +62,6 @@ enum TrackMenuRules {
 
 struct TrackRow: View {
     let track: Track
-    @Environment(\.trackListContext) private var listContext
     @ObservedObject var downloadManager = DownloadManager.shared
     var num: Int? = nil
     var active: Bool = false
@@ -126,40 +125,7 @@ struct TrackRow: View {
             .buttonStyle(.plain)
 
             Menu {
-                Button { AudioPlayer.shared.addNext(track) } label: {
-                    Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
-                }
-                Divider()
-                if TrackMenuRules.showsViewAlbum(track, in: listContext) {
-                    Button { state.navigationTarget = .album(Album(stub: track.albumhash, title: track.album, image: track.image, date: track.date, albumartists: track.albumartists)) } label: { Label("View Album", systemImage: "square.stack") }
-                }
-                switch TrackMenuRules.artistEntry(track, in: listContext) {
-                case .hidden:
-                    EmptyView()
-                case .single(let a):
-                    Button { viewArtist(a) } label: { Label("View Artist", systemImage: "music.mic") }
-                case .list(let artists, let current):
-                    Menu {
-                        ForEach(artists, id: \.artisthash) { a in
-                            Button(a.name) { viewArtist(a) }
-                                .disabled(a.artisthash == current)
-                        }
-                    } label: { Label("View Artist", systemImage: "music.mic") }
-                }
-                Button { state.requestedTrackForPlaylist = track } label: { Label("Add to Playlist", systemImage: "text.badge.plus") }
-                if TrackMenuRules.showsGoToFolder(track, in: listContext) {
-                    let parent = TrackMenuRules.folder(of: track)
-                    Button {
-                        let name = (parent as NSString).lastPathComponent
-                        state.navigationTarget = .folder(Folder(path: parent, name: name.isEmpty ? parent : name))
-                    } label: { Label("Go to Folder", systemImage: "folder") }
-                }
-                Divider()
-                if DownloadManager.shared.isDownloaded(track) {
-                    Button(role: .destructive) { DownloadManager.shared.removeDownload(track) } label: { Label("Remove Download", systemImage: "trash") }
-                } else {
-                    Button { DownloadManager.shared.download(track) } label: { Label("Download", systemImage: "arrow.down.circle") }
-                }
+                TrackMenuItems(track: track)
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 16, weight: .bold))
@@ -167,6 +133,8 @@ struct TrackRow: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
+            // rows low on screen open upward, and iOS would list the items bottom to top
+            .menuOrder(.fixed)
         }
         .padding(.horizontal, DetailLayout.inset).padding(.vertical, 8)
         .pullActions(
@@ -178,10 +146,6 @@ struct TrackRow: View {
     }
 
     @Environment(AppState.self) var state
-
-    private func viewArtist(_ a: TrackArtist) {
-        state.navigationTarget = .artist(Artist(stub: a.artisthash, name: a.name))
-    }
 
     private var favoritePullAction: PullAction {
         let isFavorite = state.isTrackFavorite(track)
@@ -216,6 +180,61 @@ struct TrackRow: View {
                     .foregroundStyle(.blue)
             }
         }
+    }
+}
+
+// A track's menu, shared by track rows, search results and the now playing screen.
+struct TrackMenuItems: View {
+    let track: Track
+    var showsPlayNext = true
+    // the now playing screen shows its own playlist sheet; elsewhere the app's one opens
+    var onAddToPlaylist: (() -> Void)? = nil
+    @Environment(\.trackListContext) private var listContext
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        if showsPlayNext {
+            Button { AudioPlayer.shared.addNext(track) } label: {
+                Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+            }
+            Divider()
+        }
+        if TrackMenuRules.showsViewAlbum(track, in: listContext) {
+            Button { state.navigationTarget = .album(Album(stub: track.albumhash, title: track.album, image: track.image, date: track.date, albumartists: track.albumartists)) } label: { Label("View Album", systemImage: "square.stack") }
+        }
+        switch TrackMenuRules.artistEntry(track, in: listContext) {
+        case .hidden:
+            EmptyView()
+        case .single(let a):
+            Button { viewArtist(a) } label: { Label("View Artist", systemImage: "music.mic") }
+        case .list(let artists, let current):
+            Menu {
+                ForEach(artists, id: \.artisthash) { a in
+                    Button(a.name) { viewArtist(a) }
+                        .disabled(a.artisthash == current)
+                }
+            } label: { Label("View Artist", systemImage: "music.mic") }
+        }
+        Button {
+            if let onAddToPlaylist { onAddToPlaylist() } else { state.requestedTrackForPlaylist = track }
+        } label: { Label("Add to Playlist", systemImage: "text.badge.plus") }
+        if TrackMenuRules.showsGoToFolder(track, in: listContext) {
+            let parent = TrackMenuRules.folder(of: track)
+            Button {
+                let name = (parent as NSString).lastPathComponent
+                state.navigationTarget = .folder(Folder(path: parent, name: name.isEmpty ? parent : name))
+            } label: { Label("Go to Folder", systemImage: "folder") }
+        }
+        Divider()
+        if DownloadManager.shared.isDownloaded(track) {
+            Button(role: .destructive) { DownloadManager.shared.removeDownload(track) } label: { Label("Remove Download", systemImage: "trash") }
+        } else {
+            Button { DownloadManager.shared.download(track) } label: { Label("Download", systemImage: "arrow.down.circle") }
+        }
+    }
+
+    private func viewArtist(_ a: TrackArtist) {
+        state.navigationTarget = .artist(Artist(stub: a.artisthash, name: a.name))
     }
 }
 
