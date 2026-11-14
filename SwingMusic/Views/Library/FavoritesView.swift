@@ -35,7 +35,7 @@ struct FavoritesView: View {
         .squeezeMiniPlayer(state)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { AmbientBackground() }
-        .navigationTitle("Favorites")
+        .detailScrollTitle("Favorites", after: 40)
         .navigationDestination(for: FavRoute.self) { route in
             switch route {
             case .albums: FavoriteAlbumsGridView()
@@ -51,12 +51,21 @@ struct FavoritesView: View {
 
     // MARK: Header
 
+    // Drawn in the page rather than as the navigation title, so it shares the sections' left edge.
     private var header: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(summary)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Favorites")
+                    .font(.largeTitle.bold())
+                    .foregroundStyle(.primary)
+                Text(summary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, DetailLayout.inset)
+
             if !state.favTracks.isEmpty {
+                // pads itself by the same inset
                 DetailPlayButtons(
                     play: { playAll(shuffled: false) },
                     shuffle: { playAll(shuffled: true) }
@@ -64,7 +73,7 @@ struct FavoritesView: View {
                 .disabled(startingPlayback)
             }
         }
-        .padding(.horizontal, DetailLayout.inset)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var summary: String {
@@ -107,9 +116,9 @@ struct FavoritesView: View {
                     ForEach(state.favRecents) { item in
                         switch item {
                         case .album(let a):
-                            NavigationLink(value: a) { AlbumCard(album: a, size: 150) }.buttonStyle(.plain)
+                            NavigationLink(value: a) { AlbumCard(album: a, size: 150, kind: .album) }.buttonStyle(.plain)
                         case .artist(let a):
-                            NavigationLink(value: a) { ArtistCard(artist: a, size: 150) }.buttonStyle(.plain)
+                            NavigationLink(value: a) { ArtistCard(artist: a, size: 150, kind: .artist) }.buttonStyle(.plain)
                         case .track(let t):
                             Button { state.playFavorite(t) } label: { trackCard(t) }.buttonStyle(.plain)
                         }
@@ -126,8 +135,9 @@ struct FavoritesView: View {
             AlbumArt(track: t, size: 150)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text(t.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
-                Text(t.artist).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
+                CardKind.track
+                Text(t.title).font(.system(size: 13, weight: .medium)).foregroundStyle(.primary).lineLimit(1)
+                Text(t.artist).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
             }
         }
         .frame(width: 150)

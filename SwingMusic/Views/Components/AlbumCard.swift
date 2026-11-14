@@ -58,6 +58,8 @@ struct AlbumCard: View {
     var comparedTo: Album? = nil
     // The artist whose page the card is on, if any: the second line then shows the year and any other artist.
     var onArtistPage: String? = nil
+    // what kind of item this is, where a row mixes kinds
+    var kind: CardKind? = nil
     @Environment(\.colorScheme) private var scheme
 
     private var versionLabel: String? { AlbumVersions.cardLabel(album, comparedTo: comparedTo) }
@@ -68,6 +70,7 @@ struct AlbumCard: View {
                 .shadow(color: .black.opacity(scheme == .dark ? 0.6 : 0.14), radius: scheme == .dark ? 8 : 5, y: scheme == .dark ? 4 : 2)
                 .zoomSource("album-\(album.albumhash)")
             VStack(alignment: .leading, spacing: 2) {
+                if let kind { kind }
                 Text(album.title)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.primary)
@@ -129,6 +132,7 @@ struct AlbumMenuItems: View {
 struct ArtistCard: View {
     let artist: Artist
     var size: CGFloat = 110
+    var kind: CardKind? = nil
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -136,12 +140,29 @@ struct ArtistCard: View {
             ArtistAvatar(artist: artist, size: size)
                 .shadow(color: .black.opacity(scheme == .dark ? 0.4 : 0.12), radius: scheme == .dark ? 6 : 4, y: scheme == .dark ? 3 : 2)
                 .zoomSource("artist-\(artist.artisthash)")
+            if let kind { kind.padding(.bottom, -8) }
             Text(artist.name)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .frame(width: size)
         }
+    }
+}
+
+struct CardKind: View {
+    let text: String
+    let color: Color
+
+    static let album = CardKind(text: "Album", color: .orange)
+    static let artist = CardKind(text: "Artist", color: .purple)
+    static let track = CardKind(text: "Track", color: .pink)
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(color)
+            .lineLimit(1)
     }
 }
 
