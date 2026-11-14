@@ -6,6 +6,11 @@ extension API {
         return try await (get("/getall/albums", q: ["limit": "\(limit)", "sortby": "created_date", "reverse": "1"]) as R).items
     }
 
+    func randomTracks(_ limit: Int = 1000) async throws -> [Track] {
+        struct R: Decodable { let tracks: [Track] }
+        return try await (get("/track/random", q: ["limit": "\(limit)"]) as R).tracks
+    }
+
     func recentlyPlayed(_ limit: Int = 20) async throws -> [Album] {
         struct R: Decodable { let items: [Album] }
         return try await (get("/getall/albums", q: ["limit": "\(limit)", "sortby": "lastplayed", "reverse": "1"]) as R).items

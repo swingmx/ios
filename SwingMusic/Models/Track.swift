@@ -682,6 +682,10 @@ struct FavoritesItem: Codable, Hashable {
     let count: Int?
 }
 
+struct LibraryItem: Codable, Hashable {
+    let count: Int?
+}
+
 enum HomeItem: Identifiable, Hashable {
     case album(Album)
     case artist(Artist)
@@ -689,6 +693,7 @@ enum HomeItem: Identifiable, Hashable {
     case playlist(Playlist)
     case mix(Mix)
     case favorites(FavoritesItem)
+    case library(LibraryItem)
     case folder(Folder)
 
     var id: String {
@@ -699,6 +704,7 @@ enum HomeItem: Identifiable, Hashable {
         case .playlist(let p): "pl:\(p.id)"
         case .mix(let m): "mix:\(m.id)"
         case .favorites: "favorites"
+        case .library: "library"
         case .folder(let f): "fo:\(f.path)"
         }
     }
@@ -713,6 +719,7 @@ enum HomeItem: Identifiable, Hashable {
         case "playlist": return (try? d.decode(Playlist.self, from: json)).map(HomeItem.playlist)
         case "mix": return (try? d.decode(Mix.self, from: json)).map(HomeItem.mix)
         case "favorite": return (try? d.decode(FavoritesItem.self, from: json)).map(HomeItem.favorites)
+        case "library": return (try? d.decode(LibraryItem.self, from: json)).map(HomeItem.library)
         case "folder":
             // Sent as {path, count}: the name is the path's last component.
             guard let f = try? d.decode(Folder.self, from: json), !f.path.isEmpty else { return nil }

@@ -235,31 +235,9 @@ final class AppState {
     func shuffleLibrary() async {
         guard !shufflingLibrary else { return }
         shufflingLibrary = true
-        let albums = ((try? await API.shared.albums(limit: 5000))?.items ?? allAlbums).shuffled()
-        guard !albums.isEmpty else { shufflingLibrary = false; return }
-
-        let batchN = min(8, albums.count)
-        var initial: [Track] = []
-        await withTaskGroup(of: [Track].self) { group in
-            for a in albums.prefix(batchN) {
-                group.addTask { (try? await API.shared.album(a.albumhash))?.tracks ?? [] }
-            }
-            for await ts in group { initial.append(contentsOf: ts) }
-        }
-        initial.shuffle()
+        let tracks = (try? await API.shared.randomTracks()) ?? []
         shufflingLibrary = false
-        guard !initial.isEmpty else { return }
-
-        player.playAll(initial, source: .library)
-        player.shuffle = true
-
-        let rest = Array(albums.dropFirst(batchN))
-        Task { [weak self] in
-            for a in rest {
-                let ts = (try? await API.shared.album(a.albumhash))?.tracks ?? []
-                if !ts.isEmpty { self?.player.enqueueInterleaved(ts) }
-            }
-        }
+        player.playAll(tracks, shuffled: true, source: .library)
     }
 
     var homeSections: [HomeSection] = []

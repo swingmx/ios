@@ -519,16 +519,6 @@ final class AudioPlayer: ObservableObject {
         withAnimation(Self.queueAnim) { queue.append(contentsOf: tracks) }
     }
 
-    func enqueueInterleaved(_ tracks: [Track]) {
-        guard !tracks.isEmpty else { return }
-        if isController { rc.insert(tracks, next: false); return }
-        for t in tracks {
-            let lower = min(index + 1, queue.count)
-            let pos = lower <= queue.count ? Int.random(in: lower...queue.count) : queue.count
-            queue.insert(t, at: pos)
-        }
-    }
-
     func next() {
         if isController { rc.command("next"); return }
         guard !queue.isEmpty else { return }

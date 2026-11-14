@@ -292,13 +292,24 @@ struct HomeView: View {
         case .favorites(let f):
             NavigationLink(value: HomeRoute.favoriteSongs) {
                 VStack(alignment: .leading, spacing: 8) {
-                    FavoritesArtwork(image: f.image)
+                    SymbolArtwork(image: f.image, symbol: "heart.fill")
                         .frame(width: 150, height: 150)
                     CardCaption(kind: kind, title: "Favorite Songs", subtitle: kind == nil ? "Playlist" : nil)
                         .frame(width: 150)
                 }
             }
             .buttonStyle(PressableCardStyle())
+        case .library:
+            Button { Task { await state.shuffleLibrary() } } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    SymbolArtwork(image: nil, symbol: "music.note.list")
+                        .frame(width: 150, height: 150)
+                    CardCaption(kind: kind, title: "Your Library", subtitle: kind == nil ? "Playlist" : nil)
+                        .frame(width: 150)
+                }
+            }
+            .buttonStyle(PressableCardStyle())
+            .disabled(state.shufflingLibrary)
         case .mix(let m):
             NavigationLink(value: m) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -493,8 +504,9 @@ struct PressableCardStyle: ButtonStyle {
 }
 
 // The favorites card's cover: the last favorited song's artwork, blurred, under a heart.
-private struct FavoritesArtwork: View {
+private struct SymbolArtwork: View {
     let image: String?
+    let symbol: String
 
     var body: some View {
         ZStack {
@@ -505,7 +517,7 @@ private struct FavoritesArtwork: View {
             } else {
                 Color.primary.opacity(0.08)
             }
-            Image(systemName: "heart.fill")
+            Image(systemName: symbol)
                 .font(.system(size: 52, weight: .semibold))
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.25), radius: 8, y: 2)

@@ -209,7 +209,7 @@ struct CardKind: View, Equatable {
         case .album: .orange
         case .track: .pink
         case .folder: .teal
-        case .playlist, .favorites: .green
+        case .playlist, .favorites, .library: .green
         case .mix: .brown
         case .artist: .purple
         }
