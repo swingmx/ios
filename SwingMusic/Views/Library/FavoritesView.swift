@@ -120,7 +120,7 @@ struct FavoritesView: View {
                         case .artist(let a):
                             NavigationLink(value: a) { ArtistCard(artist: a, size: 150, kind: .artist) }.buttonStyle(.plain)
                         case .track(let t):
-                            Button { state.playFavorite(t) } label: { trackCard(t) }.buttonStyle(.plain)
+                            Button { state.playFavorite(t) } label: { TrackCard(track: t, kind: .track) }.buttonStyle(.plain)
                         }
                     }
                 }
@@ -128,19 +128,6 @@ struct FavoritesView: View {
             .contentMargins(.horizontal, DetailLayout.inset, for: .scrollContent)
             .scrollClipDisabled()
         }
-    }
-
-    private func trackCard(_ t: Track) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            AlbumArt(track: t, size: 150)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                CardKind.track
-                Text(t.title).font(.system(size: 13, weight: .medium)).foregroundStyle(.primary).lineLimit(1)
-                Text(t.artist).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
-            }
-        }
-        .frame(width: 150)
     }
 
     private var albumsSection: some View {

@@ -277,13 +277,16 @@ final class AppState {
             let rawItems = (sec["items"] as? [[String: Any]]) ?? []
 
             var items: [HomeItem] = []
+            var labels: [String: String] = [:]
             for raw in rawItems {
                 guard let type = raw["type"] as? String,
                       let itemObj = raw["item"],
                       let itemData = try? JSONSerialization.data(withJSONObject: itemObj) else { continue }
-                if let item = HomeItem.decode(type: type, json: itemData) { items.append(item) }
+                guard let item = HomeItem.decode(type: type, json: itemData) else { continue }
+                items.append(item)
+                if let help = (itemObj as? [String: Any])?["help_text"] as? String, !help.isEmpty { labels[item.id] = help }
             }
-            if !items.isEmpty { result.append(HomeSection(id: key, title: title, description: description, items: items)) }
+            if !items.isEmpty { result.append(HomeSection(id: key, title: title, description: description, items: items, labels: labels)) }
         }
         homeSections = result
     }

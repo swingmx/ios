@@ -728,4 +728,5 @@ struct HomeSection: Identifiable, Hashable {
     let title: String
     let description: String?
     let items: [HomeItem]
+    var labels: [String: String] = [:]
 }

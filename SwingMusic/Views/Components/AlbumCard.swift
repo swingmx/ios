@@ -70,15 +70,7 @@ struct AlbumCard: View {
                 .shadow(color: .black.opacity(scheme == .dark ? 0.6 : 0.14), radius: scheme == .dark ? 8 : 5, y: scheme == .dark ? 4 : 2)
                 .zoomSource("album-\(album.albumhash)")
             VStack(alignment: .leading, spacing: 2) {
-                if let kind { kind }
-                Text(album.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(album.cardSubtitle(onArtistPage: onArtistPage))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                CardCaption(kind: kind, title: album.title, subtitle: album.cardSubtitle(onArtistPage: onArtistPage))
                 if let v = versionLabel {
                     AlbumVersionTag(text: v, size: 9)
                         .padding(.top, 3)
@@ -133,24 +125,78 @@ struct ArtistCard: View {
     let artist: Artist
     var size: CGFloat = 110
     var kind: CardKind? = nil
+    var subtitle: String? = nil
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             ArtistAvatar(artist: artist, size: size)
                 .shadow(color: .black.opacity(scheme == .dark ? 0.4 : 0.12), radius: scheme == .dark ? 6 : 4, y: scheme == .dark ? 3 : 2)
                 .zoomSource("artist-\(artist.artisthash)")
-            if let kind { kind.padding(.bottom, -8) }
-            Text(artist.name)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .frame(width: size)
+            CardCaption(kind: kind, title: artist.name, subtitle: subtitle, titleLines: 2, centered: true)
         }
+        .frame(width: size)
     }
 }
 
-struct CardKind: View {
+struct TrackCard: View {
+    let track: Track
+    var size: CGFloat = 150
+    var kind: CardKind? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            AlbumArt(track: track, size: size)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            CardCaption(kind: kind, title: track.title, subtitle: track.artist, explicit: track.isExplicit)
+        }
+        .frame(width: size, alignment: .leading)
+    }
+}
+
+struct PlaylistCard: View {
+    let playlist: Playlist
+    var size: CGFloat = 150
+    var kind: CardKind? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            PlaylistImageGrid(playlist: playlist, size: size)
+            CardCaption(kind: kind, title: playlist.name, subtitle: "\(playlist.trackcount) songs")
+        }
+        .frame(width: size, alignment: .leading)
+    }
+}
+
+struct CardCaption: View {
+    var kind: CardKind? = nil
+    let title: String
+    var subtitle: String? = nil
+    var titleLines = 1
+    var centered = false
+    var explicit = false
+
+    var body: some View {
+        VStack(alignment: centered ? .center : .leading, spacing: 2) {
+            if let kind { kind }
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineLimit(titleLines)
+                .multilineTextAlignment(centered ? .center : .leading)
+                .explicitBadge(explicit)
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+    }
+}
+
+struct CardKind: View, Equatable {
     let text: String
     let color: Color
 
@@ -158,9 +204,20 @@ struct CardKind: View {
     static let artist = CardKind(text: "Artist", color: .purple)
     static let track = CardKind(text: "Track", color: .pink)
 
+    static func color(for item: HomeItem) -> Color {
+        switch item {
+        case .album: .orange
+        case .track: .pink
+        case .folder: .teal
+        case .playlist, .favorites: .green
+        case .mix: .brown
+        case .artist: .purple
+        }
+    }
+
     var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 11, weight: .bold))
+            .font(.system(size: 9, weight: .bold))
             .foregroundStyle(color)
             .lineLimit(1)
     }

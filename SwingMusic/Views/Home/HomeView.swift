@@ -239,7 +239,7 @@ struct HomeView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(Array(s.items.enumerated()), id: \.offset) { _, item in
-                        homeItemCard(item, section: s.title)
+                        homeItemCard(item, section: s.title, kind: s.labels[item.id].map { CardKind(text: cardLabel(item, $0), color: CardKind.color(for: item)) })
                     }
                 }
                 .scrollTargetLayout()
@@ -249,49 +249,28 @@ struct HomeView: View {
         }
     }
 
+    private func cardLabel(_ item: HomeItem, _ serverLabel: String) -> String {
+        switch item {
+        case .mix(let m): m.typeLabel
+        case .favorites: "Playlist"
+        default: serverLabel
+        }
+    }
+
     @ViewBuilder
-    private func homeItemCard(_ item: HomeItem, section: String) -> some View {
+    private func homeItemCard(_ item: HomeItem, section: String, kind: CardKind?) -> some View {
         switch item {
         case .album(let a):
-            NavigationLink(value: a) { AlbumCard(album: a, size: 150) }
+            NavigationLink(value: a) { AlbumCard(album: a, size: 150, kind: kind) }
                 .buttonStyle(PressableCardStyle())
         case .artist(let a):
-            NavigationLink(value: a) {
-                VStack(spacing: 8) {
-                    ArtistAvatar(artist: a, size: 150)
-                    VStack(spacing: 2) {
-                        Text(a.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
-                        Text("Artist").font(.system(size: 13)).foregroundStyle(.secondary)
-                    }
-                    .frame(width: 150)
-                }
-            }
-            .buttonStyle(PressableCardStyle())
+            NavigationLink(value: a) { ArtistCard(artist: a, size: 150, kind: kind, subtitle: kind == nil ? "Artist" : nil) }
+                .buttonStyle(PressableCardStyle())
         case .playlist(let pl):
-            NavigationLink(value: pl) {
-                VStack(alignment: .leading, spacing: 10) {
-                    PlaylistImageGrid(playlist: pl, size: 150)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(pl.name).font(.system(size: 15, weight: .bold)).foregroundStyle(.primary).lineLimit(1)
-                        Text("\(pl.trackcount) songs").font(.system(size: 13)).foregroundStyle(.secondary)
-                    }
-                }
-                .frame(width: 150)
-            }
-            .buttonStyle(PressableCardStyle())
+            NavigationLink(value: pl) { PlaylistCard(playlist: pl, kind: kind) }
+                .buttonStyle(PressableCardStyle())
         case .track(let t):
-            Button { playTrack(t, from: [t], section: section) } label: {
-                VStack(alignment: .leading, spacing: 8) {
-                    AlbumArt(track: t, size: 150)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(t.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
-                            .explicitBadge(t.isExplicit)
-                        Text(t.artist).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    .frame(width: 150, alignment: .leading)
-                }
-            }
+            Button { playTrack(t, from: [t], section: section) } label: { TrackCard(track: t, kind: kind) }
             .buttonStyle(PressableCardStyle())
             .contextMenu { trackMenuItems(t) }
         case .folder(let folder):
@@ -305,11 +284,8 @@ struct HomeView: View {
                     }
                     .frame(width: 150, height: 150)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(folder.name).font(.system(size: 15, weight: .bold)).foregroundStyle(.primary).lineLimit(1)
-                        Text("Folder").font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    .frame(width: 150, alignment: .leading)
+                    CardCaption(kind: kind, title: folder.name, subtitle: kind == nil ? "Folder" : nil)
+                        .frame(width: 150)
                 }
             }
             .buttonStyle(PressableCardStyle())
@@ -318,11 +294,8 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     FavoritesArtwork(image: f.image)
                         .frame(width: 150, height: 150)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Favorite Songs").font(.system(size: 15, weight: .bold)).foregroundStyle(.primary).lineLimit(1)
-                        Text("Playlist").font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    .frame(width: 150, alignment: .leading)
+                    CardCaption(kind: kind, title: "Favorite Songs", subtitle: kind == nil ? "Playlist" : nil)
+                        .frame(width: 150)
                 }
             }
             .buttonStyle(PressableCardStyle())
@@ -333,13 +306,14 @@ struct HomeView: View {
                         .frame(width: 150, height: 150)
                         .zoomSource("mix-\(m.id)")
                     VStack(alignment: .leading, spacing: 2) {
+                        if let kind { kind }
                         Text(m.tagline?.isEmpty == false ? m.tagline! : m.title)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                         // Only recently played mixes carry a play time; the type label takes its place there.
-                        if let time = m.time, !time.isEmpty {
+                        if case .none = kind, let time = m.time, !time.isEmpty {
                             Text(m.typeLabel).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
@@ -384,22 +358,8 @@ struct HomeView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 14) {
                 ForEach(state.allPlaylists) { pl in
-                    NavigationLink(value: pl) {
-                        VStack(alignment: .leading, spacing: 10) {
-                            PlaylistImageGrid(playlist: pl, size: 150)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(pl.name)
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
-                                Text("\(pl.trackcount) songs")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .frame(width: 150)
-                    }
-                    .buttonStyle(PressableCardStyle())
+                    NavigationLink(value: pl) { PlaylistCard(playlist: pl) }
+                        .buttonStyle(PressableCardStyle())
                 }
             }
             .scrollTargetLayout()
