@@ -344,6 +344,8 @@ enum DebugCapture {
             NotificationCenter.default.post(name: .init("debugShowEqualizer"), object: nil)
         case "search":
             state.tab = .search
+        case "favorites":
+            state.tab = .favorites
         case "settings":
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             NotificationCenter.default.post(name: .init("debugShowSettings"), object: nil)

@@ -23,7 +23,8 @@ struct FavoritesView: View {
                 .frame(minHeight: 460)
             } else {
                 VStack(alignment: .leading, spacing: 34) {
-                    if !state.favTracks.isEmpty { header }
+                    header
+                    if !state.favRecents.isEmpty { recentsSection }
                     if !state.favTracks.isEmpty { tracksSection }
                     if !state.favAlbums.isEmpty { albumsSection }
                     if !state.favArtists.isEmpty { artistsSection }
@@ -34,7 +35,7 @@ struct FavoritesView: View {
         .squeezeMiniPlayer(state)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { AmbientBackground() }
-        .detailScrollTitle("Favorite Songs", after: 330)
+        .navigationTitle("Favorites")
         .navigationDestination(for: FavRoute.self) { route in
             switch route {
             case .albums: FavoriteAlbumsGridView()
@@ -48,44 +49,22 @@ struct FavoritesView: View {
         }
     }
 
-    // MARK: Header, laid out like an album's
+    // MARK: Header
 
     private var header: some View {
-        VStack(spacing: 16) {
-            GeometryReader { geo in
-                let minY = geo.frame(in: .scrollView).minY
-                FavoritesCollage(tracks: state.favTracks, size: coverSize)
-                    .shadow(color: .black.opacity(0.6), radius: 30, y: 10)
-                    .scaleEffect(minY > 0 ? 1 + minY / 600 : 1 + minY / 2400, anchor: .bottom)
-                    .offset(y: minY > 0 ? -minY * 0.3 : -minY * 0.2)
-                    .opacity(minY < 0 ? max(0.25, 1 + minY / 500) : 1)
-                    .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 16) {
+            Text(summary)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            if !state.favTracks.isEmpty {
+                DetailPlayButtons(
+                    play: { playAll(shuffled: false) },
+                    shuffle: { playAll(shuffled: true) }
+                )
+                .disabled(startingPlayback)
             }
-            .frame(height: coverSize)
-            .padding(.top, 16)
-
-            VStack(spacing: 6) {
-                Text("Favorite Songs")
-                    .font(.title2.bold())
-                    .foregroundStyle(.primary)
-                Text(summary)
-                    .font(.caption.weight(.semibold))
-                    .textCase(.uppercase)
-                    .foregroundStyle(.secondary)
-            }
-
-            DetailPlayButtons(
-                play: { playAll(shuffled: false) },
-                shuffle: { playAll(shuffled: true) }
-            )
-            .disabled(startingPlayback)
-            .padding(.top, 4)
         }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var coverSize: CGFloat {
-        UIDevice.current.userInterfaceIdiom == .pad ? 320 : 270
+        .padding(.horizontal, DetailLayout.inset)
     }
 
     private var summary: String {
@@ -118,6 +97,40 @@ struct FavoritesView: View {
                 }
             }
         }
+    }
+
+    private var recentsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader("Recently Favorited", route: nil)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 14) {
+                    ForEach(state.favRecents) { item in
+                        switch item {
+                        case .album(let a):
+                            NavigationLink(value: a) { AlbumCard(album: a, size: 150) }.buttonStyle(.plain)
+                        case .artist(let a):
+                            NavigationLink(value: a) { ArtistCard(artist: a, size: 150) }.buttonStyle(.plain)
+                        case .track(let t):
+                            Button { state.playFavorite(t) } label: { trackCard(t) }.buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .contentMargins(.horizontal, DetailLayout.inset, for: .scrollContent)
+            .scrollClipDisabled()
+        }
+    }
+
+    private func trackCard(_ t: Track) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            AlbumArt(track: t, size: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(t.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
+                Text(t.artist).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .frame(width: 150)
     }
 
     private var albumsSection: some View {
@@ -169,45 +182,6 @@ struct FavoritesView: View {
             }
         }
         .padding(.horizontal, DetailLayout.inset)
-    }
-}
-
-// The favorites' cover: the artwork of the first four songs (one per album), like a playlist's.
-// With fewer than four different covers, the newest one fills it.
-struct FavoritesCollage: View {
-    let tracks: [Track]
-    var size: CGFloat
-
-    private var images: [String] {
-        var seen = Set<String>()
-        return tracks.map(\.image).filter { !$0.isEmpty && seen.insert($0).inserted }
-    }
-
-    var body: some View {
-        let imgs = images
-        Group {
-            if imgs.count >= 4 {
-                Grid(horizontalSpacing: 0, verticalSpacing: 0) {
-                    GridRow { tile(imgs[0]); tile(imgs[1]) }
-                    GridRow { tile(imgs[2]); tile(imgs[3]) }
-                }
-            } else if let first = imgs.first {
-                tile(first, full: true)
-            } else {
-                Color.white.opacity(0.05)
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(.rect(cornerRadius: 12, style: .continuous))
-        .accessibilityHidden(true)
-    }
-
-    private func tile(_ image: String, full: Bool = false) -> some View {
-        let side = full ? size : size / 2
-        let sizes = full || side > 200 ? ["original", "", "medium"] : ["", "medium"]
-        return Img(urls: sizes.compactMap { API.shared.img(image, size: $0) }, radius: 0)
-            .frame(width: side, height: side)
-            .clipped()
     }
 }
 

@@ -181,7 +181,8 @@ extension API {
     }
 
     func favoritesSummary() async throws -> FavoritesSummary {
-        try await get("/favorites", q: ["track_limit": "1", "album_limit": "1", "artist_limit": "1"])
+        // the recents come only from within these limits
+        try await get("/favorites", q: ["track_limit": "15", "album_limit": "15", "artist_limit": "15"])
     }
 
     func favoriteTracks(start: Int = 0, limit: Int = 50) async throws -> FavoriteTracksPage {

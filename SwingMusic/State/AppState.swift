@@ -69,6 +69,7 @@ final class AppState {
     var allArtists: [Artist] = []
     var allPlaylists: [Playlist] = []
     var favTracks: [Track] = []
+    var favRecents: [RecentFavorite] = []
     var favAlbums: [Album] = []
     var favArtists: [Artist] = []
 
@@ -316,6 +317,7 @@ final class AppState {
         favArtists = (await artistsPage)?.artists ?? []
 
         if let s = await summary {
+            favRecents = s.recents ?? []
             favTracksTotal = s.count.tracks
             favAlbumsTotal = s.count.albums
             favArtistsTotal = s.count.artists

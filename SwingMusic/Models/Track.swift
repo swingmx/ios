@@ -425,6 +425,48 @@ struct FavoritesSummary: Decodable {
         let artists: Int
     }
     let count: Count
+    // newest favorites of every kind; kinds the app can't show (such as works) are left out
+    let recents: [RecentFavorite]?
+
+    enum CodingKeys: String, CodingKey { case count, recents }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        count = try c.decode(Count.self, forKey: .count)
+        recents = (try? c.decode([Lenient<RecentFavorite>].self, forKey: .recents))?.compactMap(\.value)
+    }
+}
+
+enum RecentFavorite: Decodable, Identifiable {
+    case album(Album)
+    case artist(Artist)
+    case track(Track)
+
+    var id: String {
+        switch self {
+        case .album(let a): "al:\(a.albumhash)"
+        case .artist(let a): "ar:\(a.artisthash)"
+        case .track(let t): "tr:\(t.trackhash)"
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case type, item }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        switch try c.decode(String.self, forKey: .type) {
+        case "album": self = .album(try c.decode(Album.self, forKey: .item))
+        case "artist": self = .artist(try c.decode(Artist.self, forKey: .item))
+        case "track": self = .track(try c.decode(Track.self, forKey: .item))
+        default: throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: "unsupported recent")
+        }
+    }
+}
+
+// Decodes to nil instead of failing the whole list.
+struct Lenient<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws { value = try? T(from: decoder) }
 }
 
 struct FavoriteTracksPage: Decodable {
