@@ -69,6 +69,8 @@ struct PullActions: ViewModifier {
 
     private func dragChanged(_ dx: CGFloat) {
         if !decided {
+            // the pan can begin before the finger has moved, which isn't a direction yet
+            guard dx != 0 else { return }
             decided = true
             side = dx > 0 ? (leading == nil ? nil : .leading) : (trailing == nil ? nil : .trailing)
             if side != nil { UIImpactFeedbackGenerator(style: .light).impactOccurred() }

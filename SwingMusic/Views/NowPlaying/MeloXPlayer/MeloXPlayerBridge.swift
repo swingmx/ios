@@ -42,16 +42,35 @@ extension PlayerStore {
 
     func playFromQueue(at index: Int) async { p.jump(to: index) }
 
-    func moveUpcomingQueueItems(fromOffsets source: IndexSet, toOffset destination: Int) {
-        if p.isController {
-            RemoteControl.shared.moveUpcoming(fromOffsets: source, toOffset: destination)
-            return
-        }
-        let base = p.index + 1
-        guard base < p.queue.count else { return }
-        var upcoming = Array(p.queue[base...])
-        upcoming.move(fromOffsets: source, toOffset: destination)
-        p.queue.replaceSubrange(base..., with: upcoming)
+    // `to` as in Array.move; a track can pass the current one, which keeps playing.
+    func moveQueueItem(from: Int, to: Int) {
+        let c = p.index
+        guard p.queue.indices.contains(from), from != c, (0 ... p.queue.count).contains(to) else { return }
+        if p.isController { RemoteControl.shared.move(from: from, to: to) }
+        var q = p.queue
+        q.move(fromOffsets: [from], toOffset: to)
+        setQueue(q, index: Self.indexAfterMove(current: c, from: from, to: to))
+    }
+
+    nonisolated static func indexAfterMove(current c: Int, from: Int, to: Int) -> Int {
+        c - (from < c ? 1 : 0) + (to <= c ? 1 : 0)
+    }
+
+    func removeQueueItem(at i: Int) {
+        let c = p.index
+        guard p.queue.indices.contains(i), i != c else { return }
+        if p.isController { RemoteControl.shared.remove(at: i) }
+        var q = p.queue
+        q.remove(at: i)
+        setQueue(q, index: i < c ? c - 1 : c)
+    }
+
+    // The list's copy updates now, not on the next run loop pass: a late update after a drop crashed the list.
+    private func setQueue(_ q: [Track], index: Int) {
+        p.queue = q
+        p.index = index
+        queueTracks = q
+        queueIndex = index
     }
 
     func addToPlaybackQueue(_ song: Song) {

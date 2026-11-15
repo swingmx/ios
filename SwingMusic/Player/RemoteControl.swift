@@ -653,19 +653,25 @@ final class RemoteControl: ObservableObject {
         edit([["type": "insert", "trackhashes": tracks.map(\.trackhash), "at": next ? "next" : "end"]])
     }
 
-    func moveUpcoming(fromOffsets source: IndexSet, toOffset destination: Int) {
-        let ops = Self.moveOps(uids: uids, index: player.index, fromOffsets: source, toOffset: destination)
+    func move(from: Int, to: Int) {
+        let ops = Self.moveOps(uids: uids, range: 0 ..< uids.count, fromOffsets: [from], toOffset: to)
         if !ops.isEmpty { edit(ops) }
     }
 
-    nonisolated static func moveOps(uids: [String], index: Int, fromOffsets source: IndexSet,
+    func remove(at i: Int) {
+        guard uids.indices.contains(i) else { return }
+        edit([["type": "remove", "uids": [uids[i]]]])
+    }
+
+    // offsets are within `range` of the queue
+    nonisolated static func moveOps(uids: [String], range: Range<Int>, fromOffsets source: IndexSet,
                                     toOffset destination: Int) -> [[String: Any]] {
-        let base = index + 1
-        guard base < uids.count else { return [] }
-        var upcoming = Array(uids[base...])
-        let moved = source.map { upcoming[$0] }
-        upcoming.move(fromOffsets: source, toOffset: destination)
-        let order = Array(uids[..<base]) + upcoming
+        guard !range.isEmpty else { return [] }
+        var part = Array(uids[range])
+        let moved = source.map { part[$0] }
+        part.move(fromOffsets: source, toOffset: destination)
+        var order = uids
+        order.replaceSubrange(range, with: part)
         return moved.compactMap { uid in
             guard let i = order.firstIndex(of: uid) else { return nil }
             return ["type": "move", "uid": uid, "after": i > 0 ? order[i - 1] : NSNull()]

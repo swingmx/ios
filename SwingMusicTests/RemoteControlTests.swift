@@ -26,11 +26,27 @@ struct RemoteControlTests {
 
 extension RemoteControlTests {
     @Test func movesTwoUpcomingItemsToTheEnd() {
-        let ops = RemoteControl.moveOps(uids: ["q1", "q2", "q3", "q4", "q5"], index: 0,
+        let ops = RemoteControl.moveOps(uids: ["q1", "q2", "q3", "q4", "q5"], range: 1 ..< 5,
                                         fromOffsets: [0, 1], toOffset: 4)
         #expect(ops.map { $0["uid"] as? String } == ["q2", "q3"])
         #expect(ops.map { $0["after"] as? String } == ["q5", "q2"])
         #expect(ops.allSatisfy { $0["type"] as? String == "move" })
+    }
+
+    @Test func movesAPreviousItemWithoutPassingTheCurrentOne() {
+        let ops = RemoteControl.moveOps(uids: ["p1", "p2", "p3", "cur", "n1"], range: 0 ..< 3,
+                                        fromOffsets: [0], toOffset: 3)
+        #expect(ops.map { $0["uid"] as? String } == ["p1"])
+        #expect(ops.map { $0["after"] as? String } == ["p3"])
+    }
+
+    @Test func currentIndexFollowsTracksMovedPastIt() {
+        // queue [p0, p1, cur, u3, u4], current at 2
+        #expect(PlayerStore.indexAfterMove(current: 2, from: 3, to: 0) == 3)
+        #expect(PlayerStore.indexAfterMove(current: 2, from: 3, to: 2) == 3)
+        #expect(PlayerStore.indexAfterMove(current: 2, from: 0, to: 4) == 1)
+        #expect(PlayerStore.indexAfterMove(current: 2, from: 0, to: 2) == 2)
+        #expect(PlayerStore.indexAfterMove(current: 2, from: 4, to: 3) == 2)
     }
 
     @Test func gainFollowsDecibelTaper() {

@@ -27,6 +27,7 @@ struct NowPlayingView: View {
     @State private var artworkPageFrame = CGRect.zero
     @State private var entersPageFromHiddenQueue = false
     @State private var transitionSourcePage: NowPlayingPage
+    @Environment(AppState.self) private var appState
     @State private var transitionDestinationPage: NowPlayingPage
     @State private var pageTransitionResetGeneration = 0
     @State private var lyricsEntranceState:
@@ -216,6 +217,15 @@ struct NowPlayingView: View {
         }
         .onChange(of: player.currentSong?.id) {
             resetPodcastPageIfNeeded()
+        }
+        // the popup keeps this view alive, so a closed player would reopen on the last page
+        .task(id: appState.showPlayer) {
+            guard !appState.showPlayer, page != .artwork else { return }
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            page = .artwork
+            transitionSourcePage = .artwork
+            transitionDestinationPage = .artwork
         }
     }
 
@@ -447,8 +457,9 @@ struct NowPlayingView: View {
 
             if page != .artwork {
                 sharedPortraitSongHeader(for: song)
+                    .frame(maxHeight: .infinity, alignment: .top)
                     .offset(y: sharedPortraitSongHeaderOffset)
-                    .clipped()
+                    .clipShape(QueueListClip(active: true))
                     .transition(
                         NowPlayingPageTransition.songHeader(
                             reducesMotion: accessibilityReduceMotion
@@ -497,6 +508,7 @@ struct NowPlayingView: View {
                         value: isPortraitArtworkExpanded
                     )
                     .allowsHitTesting(page != .artwork)
+                    .clipShape(QueueListClip(active: page == .queue))
                 }
             }
             .clipShape(VerticalOnlyClip())
@@ -1033,5 +1045,15 @@ private enum NowPlayingLyricsEntranceState: Hashable {
 private struct VerticalOnlyClip: Shape {
     func path(in rect: CGRect) -> Path {
         Path(rect.insetBy(dx: -1_000, dy: 0))
+    }
+}
+
+// The queue list's area, above the bottom controls: the song header and its artwork follow the list but stay inside it.
+private struct QueueListClip: Shape {
+    let active: Bool
+
+    func path(in rect: CGRect) -> Path {
+        guard active else { return Path(rect.insetBy(dx: -10_000, dy: -10_000)) }
+        return Path(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - NowPlayingBottomControls.coreHeight))
     }
 }
