@@ -88,17 +88,15 @@ struct MixDetailView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
+            .padding(.horizontal, 20)
 
-            HStack(spacing: 12) {
-                DetailPlayButtons(
-                    play: { state.player.playAll(tracks, source: source, name: mix.title) },
-                    shuffle: { state.player.playAll(tracks, shuffled: true, source: source, name: mix.title) }
-                )
-                .disabled(tracks.isEmpty)
-            }
+            DetailPlayButtons(
+                play: { state.player.playAll(tracks, source: source, name: mix.title) },
+                shuffle: { state.player.playAll(tracks, shuffled: true, source: source, name: mix.title) }
+            )
+            .disabled(tracks.isEmpty)
             .padding(.top, 4).padding(.bottom, 8)
         }
-        .padding(.horizontal, 20)
     }
 
     private func loadBg() async {
