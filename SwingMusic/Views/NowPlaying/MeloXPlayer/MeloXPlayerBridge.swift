@@ -78,15 +78,6 @@ extension PlayerStore {
         p.queue.append(song)
     }
 
-    var isAutoplayEnabled: Bool { autoplayOn }
-    func toggleAutoplay() { p.autoplay.toggle() }
-    var isAutoMixEnabled: Bool { autoMixOn }
-    func toggleAutoMix() {
-        p.crossfadeDuration = p.crossfadeDuration > 0 ? 0 : 6
-    }
-    var isAutoMixTransitioning: Bool { false }
-    var autoMixTransitionProgress: Double? { nil }
-    var autoMixIncomingSongName: String? { nil }
     var isHeartModeActive: Bool { false }
     func disableHeartMode() {}
     var isListenTogetherSessionActive: Bool { false }

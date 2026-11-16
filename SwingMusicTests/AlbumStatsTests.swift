@@ -66,7 +66,7 @@ struct AlbumStatsTests {
         #expect(AlbumMenuItems.albumOrdered(tracks).map(\.trackhash) == ["d1t1", "d1t2", "d2t1"])
     }
 
-    // The album card menu, Home's hero play button and autoplay all fetch tracks this way.
+    // The album card menu and Home's hero play button fetch tracks this way.
     @Test func albumTracksDecodeFromThePlainArrayTheServerSends() throws {
         let data = Data(#"[{"trackhash": "t1", "title": "Help!"}, {"trackhash": "t2", "title": "The Night Before"}]"#.utf8)
 

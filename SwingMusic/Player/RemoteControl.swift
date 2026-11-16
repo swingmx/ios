@@ -731,6 +731,16 @@ final class SystemVolume: ObservableObject {
 
     var value: Double { Double(AVAudioSession.sharedInstance().outputVolume) }
 
+    // The volume only reads and reports changes while the audio session is active, and the player
+    // leaves it inactive until playback so opening the app doesn't stop other apps' audio.
+    // shortcut: stays stale while another app plays audio; activating then would stop that app.
+    func wake() {
+        let session = AVAudioSession.sharedInstance()
+        guard !session.isOtherAudioPlaying else { return }
+        try? session.setActive(true)
+        level = Double(session.outputVolume)
+    }
+
     private init() {
         observation = AVAudioSession.sharedInstance().observe(\.outputVolume) { s, _ in
             let v = Double(s.outputVolume)

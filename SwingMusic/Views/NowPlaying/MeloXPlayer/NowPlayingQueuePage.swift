@@ -536,26 +536,6 @@ private struct NowPlayingQueueModeControls: View {
                     player.repeatMode.accessibilityTitle,
                 action: cycleRepeatMode
             )
-
-            modeButton(
-                systemImage: "infinity",
-                isSelected: player.isAutoplayEnabled,
-                accessibilityLabel:
-                    player.isAutoplayEnabled
-                        ? "Turn off autoplay"
-                        : "Turn on autoplay",
-                action: toggleAutoplay
-            )
-
-            modeButton(
-                systemImage: "circle.circle.fill",
-                isSelected: player.isAutoMixEnabled,
-                accessibilityLabel:
-                    player.isAutoMixEnabled
-                        ? "Turn off auto mix"
-                        : "Turn on auto mix",
-                action: toggleAutoMix
-            )
         }
         .disabled(player.isListenTogetherSessionActive)
         .accessibilityHint(
@@ -604,18 +584,6 @@ private struct NowPlayingQueueModeControls: View {
     private func cycleRepeatMode() {
         withAnimation(.smooth(duration: 0.34)) {
             player.cycleRepeatMode()
-        }
-    }
-
-    private func toggleAutoplay() {
-        withAnimation(.smooth(duration: 0.34)) {
-            player.toggleAutoplay()
-        }
-    }
-
-    private func toggleAutoMix() {
-        withAnimation(.smooth(duration: 0.34)) {
-            player.toggleAutoMix()
         }
     }
 }

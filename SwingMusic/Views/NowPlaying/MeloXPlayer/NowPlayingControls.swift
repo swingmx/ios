@@ -61,69 +61,6 @@ struct NowPlayingProgressControl: View {
     }
 }
 
-private struct NowPlayingAutoMixStatus: View {
-    @Environment(\.accessibilityReduceMotion)
-    private var accessibilityReduceMotion
-    @Environment(PlayerStore.self) private var player
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "waveform")
-                .font(.system(size: 9, weight: .semibold))
-                .symbolEffect(
-                    .variableColor.iterative,
-                    options: .repeating.speed(1.2),
-                    isActive:
-                        !accessibilityReduceMotion
-                            && player.isAutoMixTransitioning
-                )
-
-            Text("Mixing")
-                .fontWeight(.medium)
-
-            ProgressView(
-                value:
-                    player.autoMixTransitionProgress
-                        ?? 0
-            )
-            .progressViewStyle(.linear)
-            .tint(.white)
-            .frame(width: 30)
-
-            Text("\(progressPercent)%")
-                .monospacedDigit()
-                .frame(minWidth: 24, alignment: .trailing)
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .background(
-            .white.opacity(0.16),
-            in: .rect(cornerRadius: 7)
-        )
-        .foregroundStyle(.white.opacity(0.86))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Auto mix in progress")
-        .accessibilityValue(accessibilityValue)
-    }
-
-    private var accessibilityValue: String {
-        if let songName =
-            player.autoMixIncomingSongName {
-            return "Transitioning to \(songName)，\(progressPercent)%"
-        }
-        return "\(progressPercent)%"
-    }
-
-    private var progressPercent: Int {
-        Int(
-            (
-                player.autoMixTransitionProgress
-                    ?? 0
-            ) * 100
-        )
-    }
-}
-
 private struct NowPlayingQualityMenu: View {
     @Environment(PlayerStore.self) private var player
     @Environment(AppSettings.self) private var settings
@@ -290,7 +227,10 @@ struct NowPlayingVolumeControl: View {
         .foregroundStyle(.white.opacity(0.62))
         .font(.system(size: 14))
         .frame(height: 42)
-        .onAppear { volume = elsewhere ? remote.volume : SystemVolume.shared.value }
+        .onAppear {
+            SystemVolume.shared.wake()
+            volume = elsewhere ? remote.volume : SystemVolume.shared.value
+        }
         .onChange(of: elsewhere) { _, e in volume = e ? remote.volume : SystemVolume.shared.value }
         .onReceive(SystemVolume.shared.$level) { v in
             if !elsewhere { follow(v) }

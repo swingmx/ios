@@ -14,10 +14,8 @@ final class PlayerStore {
     var seekRevision: Int = 0
     var shuffleOn: Bool = false
     var loopMode: AudioPlayer.LoopMode = .off
-    var autoplayOn: Bool = false
     var queueTracks: [Track] = []
     var queueIndex: Int = 0
-    var autoMixOn: Bool = false
 
     @ObservationIgnored private var cancellables: Set<AnyCancellable> = []
     @ObservationIgnored private let player = AudioPlayer.shared
@@ -52,16 +50,6 @@ final class PlayerStore {
         player.$index
             .receive(on: RunLoop.main)
             .sink { [weak self] in self?.queueIndex = $0 }
-            .store(in: &cancellables)
-
-        player.$autoplay
-            .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.autoplayOn = $0 }
-            .store(in: &cancellables)
-
-        player.$crossfadeDuration
-            .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.autoMixOn = $0 > 0 }
             .store(in: &cancellables)
 
         player.$playing
