@@ -70,7 +70,8 @@ struct NowPlayingQueuePage: View {
                                 usesReferenceLayout: true,
                                 usesArtworkTransition:
                                     usesArtworkTransition
-                                    && isSongHeaderAtRest
+                                    && isSongHeaderAtRest,
+                                compact: true
                             )
                         } else {
                             Color.clear

@@ -127,6 +127,8 @@ struct CollectionActionsMenu: View {
     var group: DownloadManager.DownloadGroup?
     var queueTracks: (() async -> [Track])?
     var download: (() async -> Void)?
+    var saved: Bool? = nil
+    var toggleSaved: (() -> Void)? = nil
     @ObservedObject private var dm = DownloadManager.shared
     @Environment(\.displayScale) private var displayScale
     @Environment(\.leavesAfterDownloadRemoval) private var leavesAfterRemoval
@@ -189,6 +191,13 @@ struct CollectionActionsMenu: View {
             }
             Button { enqueue { AudioPlayer.shared.addLast($0) } } label: {
                 Label("Add to Queue", systemImage: "text.line.last.and.arrowtriangle.forward")
+            }
+            if let toggleSaved {
+                Button(action: toggleSaved) {
+                    saved == true
+                        ? Label("Remove from Saved Mixes", systemImage: "bookmark.slash")
+                        : Label("Save Mix", systemImage: "bookmark")
+                }
             }
             Divider()
             if let group {

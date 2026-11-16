@@ -47,19 +47,24 @@ struct NowPlayingSongHeader: View {
     let usesReferenceLayout: Bool
     let usesArtworkTransition: Bool
     let showsArtwork: Bool
+    let compact: Bool
+    @ScaledMetric(relativeTo: .body) private var compactTitleSize: CGFloat = 18
+    @ScaledMetric(relativeTo: .subheadline) private var compactDetailSize: CGFloat = 16
 
     init(
         song: Song,
         artworkNamespace: Namespace.ID,
         usesReferenceLayout: Bool,
         usesArtworkTransition: Bool = true,
-        showsArtwork: Bool = true
+        showsArtwork: Bool = true,
+        compact: Bool = false
     ) {
         self.song = song
         self.artworkNamespace = artworkNamespace
         self.usesReferenceLayout = usesReferenceLayout
         self.usesArtworkTransition = usesArtworkTransition
         self.showsArtwork = showsArtwork
+        self.compact = compact
     }
 
     var body: some View {
@@ -71,7 +76,9 @@ struct NowPlayingSongHeader: View {
                 HStack(spacing: 8) {
                     Text(song.name)
                         .font(
-                            usesReferenceLayout
+                            compact
+                                ? .system(size: compactTitleSize, weight: .semibold)
+                                : usesReferenceLayout
                                 ? .title3.weight(.semibold)
                                 : .headline
                         )
@@ -85,7 +92,7 @@ struct NowPlayingSongHeader: View {
 
                 NowPlayingArtistLine(song: song) {
                     Text(artistText)
-                        .font(usesReferenceLayout ? .title3 : .subheadline)
+                        .font(compact ? .system(size: compactDetailSize) : usesReferenceLayout ? .title3 : .subheadline)
                         .foregroundStyle(.white.opacity(0.64))
                         .lineLimit(1)
                 }
@@ -101,7 +108,7 @@ struct NowPlayingSongHeader: View {
         if showsArtwork {
             ArtworkImage(
                 url: song.artworkURL,
-                cornerRadius: usesReferenceLayout ? 12 : 10
+                cornerRadius: usesReferenceLayout ? 9 : 10
             )
             .nowPlayingArtworkTransition(
                 id: song.id,

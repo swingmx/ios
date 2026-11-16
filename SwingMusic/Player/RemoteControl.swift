@@ -130,9 +130,8 @@ final class RemoteControl: ObservableObject {
     }
     private var activeReachable = false
     private var idleSeconds: Double = 0
-    private var pushTask: Task<Void, Never>?
-    // Set while the server's queue is written into the player, so it isn't pushed straight back.
-    private var applying = false
+    private var pending: [String: Bool] = [:]
+    private var heldCatchUp = false
     private var clockOffset: Double = 0
     private var lastReportAt = Date.distantPast
     private var lastReportedPlaying = false
@@ -150,10 +149,6 @@ final class RemoteControl: ObservableObject {
         Publishers.Merge(player.$playing.removeDuplicates().map { _ in () },
                          player.$index.removeDuplicates().map { _ in () })
             .sink { [weak self] in self?.playheadChanged() }
-            .store(in: &cancellables)
-
-        Publishers.Merge3(player.$queue.map { _ in () }, player.$shuffle.map { _ in () }, player.$loop.map { _ in () })
-            .sink { [weak self] in self?.queueChanged() }
             .store(in: &cancellables)
 
         player.$playing.removeDuplicates()
@@ -207,7 +202,8 @@ final class RemoteControl: ObservableObject {
         devices = []
         activeDeviceID = nil; activeHostID = nil
         activeReachable = false
-        pushTask?.cancel(); pushTask = nil
+        pending = [:]
+        heldCatchUp = false
         version = 0
         player.leaveRemote()
     }
@@ -345,8 +341,17 @@ final class RemoteControl: ObservableObject {
         return code == 200 ? true : [401, 403, 404].contains(code) ? false : nil
     }
 
-    private func refresh() async {
-        if let s = await fetchState() { apply(s) }
+    private func catchUp(_ v: Int) async {
+        guard pending.isEmpty else { heldCatchUp = true; return }
+        guard let url = URL(string: API.shared.base + "/remote/queue?version=\(v)"),
+              let (data, resp) = try? await session.data(for: request(url)),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let q = try? JSONDecoder().decode(State.Queue.self, from: data),
+              let newVersion = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["version"] as? Int
+        else { return }
+        guard pending.isEmpty else { heldCatchUp = true; return }
+        version = newVersion
+        renderQueue(q)
     }
 
     @discardableResult
@@ -378,6 +383,8 @@ final class RemoteControl: ObservableObject {
         let newer = playedAt > 0 && !s.playhead.playing && s.playedAt.map { playedAt + offset > $0 } == true
         uids = []
         version = 0
+        pending = [:]
+        heldCatchUp = false
         idleSeconds = s.idleSeconds ?? 0
         if player.queue.indices.contains(player.index), playingHere || s.queue.items.isEmpty || newer {
             devices = s.devices
@@ -407,36 +414,33 @@ final class RemoteControl: ObservableObject {
         playhead = s.playhead
         updateMode()
         volume = s.volume
+        renderQueue(s.queue)
+    }
 
-        let tracks = Dictionary(s.queue.items.map { ($0.uid, $0.track) }, uniquingKeysWith: { a, _ in a })
-        let order = (s.queue.order ?? s.queue.items.map(\.uid)).filter { tracks[$0] != nil }
+    private func renderQueue(_ q: State.Queue) {
+        let tracks = Dictionary(q.items.map { ($0.uid, $0.track) }, uniquingKeysWith: { a, _ in a })
+        let order = (q.order ?? q.items.map(\.uid)).filter { tracks[$0] != nil }
         let local = !player.isController && player.isLoaded
         if order.compactMap({ tracks[$0]?.trackhash }) == player.queue.map(\.trackhash) {
             uids = order
-        } else if local, pushTask != nil {
-            return
         } else {
             let keptHash = local ? player.current?.trackhash : nil
             uids = order
-            applying = true
             player.queue = order.compactMap { tracks[$0] }
-            applying = false
             if let keptHash, let i = player.queue.firstIndex(where: { $0.trackhash == keptHash }) {
                 player.index = i
             } else if local {
                 player.index = min(player.index, max(player.queue.count - 1, 0))
             }
         }
-        applying = true
-        let source = AudioPlayer.PlaySource(token: s.queue.source)
+        let source = AudioPlayer.PlaySource(token: q.source)
         if source != player.source || player.sourceName.isEmpty {
             player.source = source
-            let name = s.queue.sourceInfo?.name ?? ""
+            let name = q.sourceInfo?.name ?? ""
             player.sourceName = name.isEmpty ? AudioPlayer.defaultName(source, in: player.queue) : name
         }
-        player.shuffle = s.queue.order != nil
-        player.loop = s.queue.repeat == "all" ? .all : s.queue.repeat == "one" ? .one : .off
-        applying = false
+        player.shuffle = q.order != nil
+        player.loop = Self.loopMode(q.repeat)
 
         if local {
             playheadChanged()
@@ -479,13 +483,13 @@ final class RemoteControl: ObservableObject {
         case "heartbeat":
             if dict?["ack"] as? Bool != false { await post("/remote/alive", [:]) }
         case "queue":
-            if let v = dict?["version"] as? Int, v > version { await refresh() }
+            if let dict { await queueEvent(dict) }
         case "playhead":
-            guard let p: Playhead = decode(data) else { return }
+            guard let p: Playhead = Self.decode(data) else { return }
             playhead = p
             if !isActive, player.isController || !player.isLoaded { showPlayhead() }
         case "devices":
-            guard let d: [Device] = decode(data) else { return }
+            guard let d: [Device] = Self.decode(data) else { return }
             let was = watched
             devices = d
             if isActive, player.playing, !was, watched { report() }
@@ -507,7 +511,7 @@ final class RemoteControl: ObservableObject {
         case "command":
             if let dict, !player.isController { await execute(dict) }
         case "activate":
-            guard let dict, let p: Playhead = decode(dict["playhead"]) else { return }
+            guard let dict, let p: Playhead = Self.decode(dict["playhead"]) else { return }
             await activate(p, play: dict["play"] as? Bool ?? true)
         case "release":
             Log.info("remote", "released: playback moved to another device")
@@ -518,7 +522,102 @@ final class RemoteControl: ObservableObject {
         }
     }
 
-    private func decode<T: Decodable>(_ value: Any?) -> T? {
+    private func queueEvent(_ e: [String: Any]) async {
+        guard let v = e["version"] as? Int else { return }
+        let base = e["base"] as? Int ?? -1
+        let ops = e["ops"] as? [[String: Any]] ?? []
+        let resets = (e["batch"] as? String).flatMap { pending.removeValue(forKey: $0) }
+        var stale = false
+        if e["by"] as? String == deviceID, let resets, resets || base == version {
+            version = v
+        } else if base != version || ops.contains(where: { $0["type"] as? String == "replace" }) {
+            stale = true
+        } else if let next = Self.applying(ops, to: uids, player.queue) {
+            let currentID = player.isController ? nil : currentUID
+            uids = next.uids
+            if next.queue.map(\.trackhash) != player.queue.map(\.trackhash) { player.queue = next.queue }
+            if let currentID, let i = uids.firstIndex(of: currentID) {
+                player.index = i
+            } else if !player.isController {
+                player.index = min(player.index, max(player.queue.count - 1, 0))
+            }
+            for op in ops {
+                if op["type"] as? String == "order" { player.shuffle = op["shuffled"] as? Bool ?? false }
+                if op["type"] as? String == "repeat", let mode = op["mode"] as? String { player.loop = Self.loopMode(mode) }
+            }
+            version = v
+            if player.isController { showPlayhead() }
+        } else {
+            stale = true
+        }
+        if stale {
+            await catchUp(version)
+        } else if pending.isEmpty, let sum = e["sum"] as? Int, UInt32(sum) != Self.orderSum(uids) {
+            await catchUp(-1)
+        }
+        await drained()
+    }
+
+    private func drained() async {
+        guard pending.isEmpty, heldCatchUp else { return }
+        heldCatchUp = false
+        await catchUp(-1)
+    }
+
+    static func applying(_ ops: [[String: Any]], to uids: [String], _ queue: [Track]) -> (uids: [String], queue: [Track])? {
+        var u = uids, q = queue
+        func position(after value: Any?) -> Int? {
+            guard let after = value as? String else { return 0 }
+            return u.firstIndex(of: after).map { $0 + 1 }
+        }
+        for op in ops {
+            switch op["type"] as? String {
+            case "insert":
+                guard let new = op["uids"] as? [String], let tracks: [Track] = decode(op["tracks"]),
+                      tracks.count == new.count, let at = position(after: op["after"]) else { return nil }
+                u.insert(contentsOf: new, at: at)
+                q.insert(contentsOf: tracks, at: at)
+            case "remove":
+                let gone = Set(op["uids"] as? [String] ?? [])
+                let keep = u.indices.filter { !gone.contains(u[$0]) }
+                u = keep.map { u[$0] }
+                q = keep.map { q[$0] }
+            case "move":
+                guard let uid = op["uid"] as? String, let from = u.firstIndex(of: uid) else { return nil }
+                u.remove(at: from)
+                let t = q.remove(at: from)
+                guard let at = position(after: op["after"]) else { return nil }
+                u.insert(uid, at: at)
+                q.insert(t, at: at)
+            case "order":
+                let byUID = Dictionary(zip(u, q), uniquingKeysWith: { a, _ in a })
+                guard let order = op["uids"] as? [String], order.count == u.count else { return nil }
+                let tracks = order.compactMap { byUID[$0] }
+                guard tracks.count == order.count else { return nil }
+                u = order
+                q = tracks
+            default:
+                break
+            }
+        }
+        return (u, q)
+    }
+
+    nonisolated static func orderSum(_ uids: [String]) -> UInt32 {
+        var h: UInt32 = 0x811C9DC5
+        for b in uids.joined(separator: ",").utf8 { h = (h ^ UInt32(b)) &* 0x01000193 }
+        return h
+    }
+
+    nonisolated static func newUIDs(_ n: Int) -> [String] {
+        (0 ..< n).map { _ in String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(12)) }
+    }
+
+    private static func loopMode(_ mode: String) -> AudioPlayer.LoopMode {
+        mode == "all" ? .all : mode == "one" ? .one : .off
+    }
+
+    private static func decode<T: Decodable>(_ value: Any?) -> T? {
         guard let value, JSONSerialization.isValidJSONObject(value),
               let data = try? JSONSerialization.data(withJSONObject: value) else { return nil }
         return try? JSONDecoder().decode(T.self, from: data)
@@ -542,7 +641,7 @@ final class RemoteControl: ObservableObject {
                 if player.playing { player.toggle() }
                 return
             }
-            if !uids.contains(uid) { await refresh() }
+            if !uids.contains(uid) { await catchUp(-1) }
             if let i = uids.firstIndex(of: uid) { player.remoteLoad(i, at: 0, play: c["play"] as? Bool ?? true) }
         default:
             break
@@ -555,7 +654,7 @@ final class RemoteControl: ObservableObject {
         playhead = p
         updateMode()
         setVolume(SystemVolume.shared.value)
-        if let uid = p.uid, !uids.contains(uid) { await refresh() }
+        if let uid = p.uid, !uids.contains(uid) { await catchUp(-1) }
         if player.isLoaded, currentUID == p.uid {
             let t = Double(p.positionMs) / 1000
             if abs(player.time - t) > 1 { player.seek(t) }
@@ -603,32 +702,25 @@ final class RemoteControl: ObservableObject {
     }
 
 
-    private func replaceOp(_ tracks: [Track], start: Int, source: AudioPlayer.PlaySource, play: Bool) -> [String: Any] {
-        ["type": "replace", "source": source.token, "trackhashes": tracks.map(\.trackhash),
-         "start_index": start, "play": play]
-    }
-
     // The device playing changed its own queue: it already plays it, so the server just takes a copy.
-    private func queueChanged() {
-        guard subscribed, !applying, !player.isController else { return }
-        uids = []
-        pushTask?.cancel()
-        pushTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard let self, !Task.isCancelled else { return }
-            await pushQueue()
-            if !Task.isCancelled { pushTask = nil }
-        }
+    private func pushQueue(playedAt: Double? = nil) async {
+        uids = Self.newUIDs(player.queue.count)
+        var op = replaceOp(take: true)
+        if let playedAt { op["played_at"] = playedAt }
+        send([op, repeatOp(player.loop)], resets: true)
     }
 
-    private func pushQueue(playedAt: Double? = nil) async {
-        var op = replaceOp(player.queue, start: player.index, source: player.source,
-                           play: player.isLoaded && player.playing)
-        op["take"] = true
-        op["shuffled"] = player.shuffle
-        op["position_ms"] = max(0, Int(player.time * 1000))
-        if let playedAt { op["played_at"] = playedAt }
-        await post("/remote/queue", ["ops": [op, repeatOp(player.loop)]])
+    private func replaceOp(take: Bool) -> [String: Any] {
+        var op: [String: Any] = ["type": "replace", "source": player.source.token, "trackhashes": player.queue.map(\.trackhash),
+                                 "uids": uids, "start_index": player.index, "shuffled": player.shuffle]
+        if take {
+            op["take"] = true
+            op["play"] = player.isLoaded && player.playing
+            op["position_ms"] = max(0, Int(player.time * 1000))
+        } else {
+            op["play"] = true
+        }
+        return op
     }
 
     func markPlayed() {
@@ -636,31 +728,69 @@ final class RemoteControl: ObservableObject {
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.playedAtKey)
     }
 
-    private func edit(_ ops: [[String: Any]]) {
+    private func send(_ ops: [[String: Any]], resets: Bool = false, tracked: Bool = true) {
+        let batch = UUID().uuidString
+        if tracked { pending[batch] = resets }
         Task {
-            if await post("/remote/queue", ["ops": ops]) == "unknown_uid" { await refresh() }
+            guard await post("/remote/queue", ["ops": ops, "batch": batch]) != nil else { return }
+            pending.removeValue(forKey: batch)
+            await catchUp(-1)
+            await drained()
         }
     }
 
-    func replace(_ tracks: [Track], start: Int, source: AudioPlayer.PlaySource, shuffled: Bool = false) {
-        var op = replaceOp(tracks, start: start, source: source, play: true)
-        op["shuffle"] = shuffled
-        edit([op])
+    func queueReplaced() {
+        guard subscribed else { return }
+        if player.isController {
+            uids = Self.newUIDs(player.queue.count)
+            send([replaceOp(take: false)], resets: true)
+        } else {
+            Task { await pushQueue() }
+        }
     }
 
-    func insert(_ tracks: [Track], next: Bool) {
-        guard !tracks.isEmpty else { return }
-        edit([["type": "insert", "trackhashes": tracks.map(\.trackhash), "at": next ? "next" : "end"]])
+    func inserted(at i: Int, count: Int) {
+        guard subscribed, count > 0, i <= uids.count else { return }
+        let new = Self.newUIDs(count)
+        uids.insert(contentsOf: new, at: i)
+        send([["type": "insert", "trackhashes": player.queue[i ..< i + count].map(\.trackhash), "uids": new,
+               "at": ["after": i > 0 ? uids[i - 1] as Any : NSNull()]]])
     }
 
     func move(from: Int, to: Int) {
+        guard subscribed, uids.indices.contains(from) else { return }
         let ops = Self.moveOps(uids: uids, range: 0 ..< uids.count, fromOffsets: [from], toOffset: to)
-        if !ops.isEmpty { edit(ops) }
+        uids.move(fromOffsets: [from], toOffset: to)
+        if !ops.isEmpty { send(ops) }
     }
 
     func remove(at i: Int) {
-        guard uids.indices.contains(i) else { return }
-        edit([["type": "remove", "uids": [uids[i]]]])
+        guard subscribed, uids.indices.contains(i) else { return }
+        send([["type": "remove", "uids": [uids.remove(at: i)]]])
+    }
+
+    func reordered(from old: [Track]) {
+        guard subscribed else { return }
+        var pool = [String: [String]]()
+        for (t, u) in zip(old, uids) { pool[t.trackhash, default: []].append(u) }
+        var order: [String] = []
+        for t in player.queue {
+            guard let u = pool[t.trackhash]?.first else { return queueReplaced() }
+            pool[t.trackhash]?.removeFirst()
+            order.append(u)
+        }
+        uids = order
+        send([["type": "order", "uids": order, "shuffled": player.shuffle]])
+    }
+
+    func unshuffle() {
+        guard subscribed else { return }
+        send([["type": "shuffle", "on": false]], tracked: false)
+    }
+
+    func repeatChanged() {
+        guard subscribed else { return }
+        send([repeatOp(player.loop)])
     }
 
     // offsets are within `range` of the queue
@@ -678,14 +808,6 @@ final class RemoteControl: ObservableObject {
         }
     }
 
-    func setShuffle(_ on: Bool) {
-        edit([["type": "shuffle", "on": on]])
-    }
-
-    func setRepeat(_ mode: AudioPlayer.LoopMode) {
-        edit([repeatOp(mode)])
-    }
-
     private func repeatOp(_ mode: AudioPlayer.LoopMode) -> [String: Any] {
         ["type": "repeat", "mode": mode == .all ? "all" : mode == .one ? "one" : "none"]
     }
@@ -694,7 +816,7 @@ final class RemoteControl: ObservableObject {
         Task {
             switch await post("/remote/player", args.merging(["action": action]) { a, _ in a }) {
             case "no_active_device", "active_unreachable": offerPlayHere = true
-            case "unknown_uid": await refresh()
+            case "unknown_uid": await catchUp(-1)
             default: break
             }
         }

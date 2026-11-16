@@ -46,23 +46,23 @@ struct PullActions: ViewModifier {
 
     private func revealed(_ item: PullAction, width: CGFloat, alignment: Alignment,
                           measured: @escaping (CGFloat) -> Void) -> some View {
-        ZStack(alignment: alignment) {
-            armed ? item.armedColor : Self.idleColor
-            Group {
-                if let label = item.label {
-                    Label(label, systemImage: item.icon)
-                } else {
-                    Image(systemName: item.icon)
+        (armed ? item.armedColor : Self.idleColor)
+            .overlay(alignment: alignment) {
+                Group {
+                    if let label = item.label {
+                        Label(label, systemImage: item.icon)
+                    } else {
+                        Image(systemName: item.icon)
+                    }
                 }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .fixedSize()
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { measured($0) }
+                .padding(alignment == .leading ? .leading : .trailing, Self.contentInset)
+                .opacity(min(1, width / 40))
             }
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.white)
-            .fixedSize()
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { measured($0) }
-            .padding(alignment == .leading ? .leading : .trailing, Self.contentInset)
-            .opacity(min(1, width / 40))
-        }
-        .frame(width: width)
+            .frame(width: width)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .animation(.easeOut(duration: 0.15), value: armed)
     }
@@ -103,7 +103,7 @@ struct PullActions: ViewModifier {
     // Distance the row has to travel, after resistance, before releasing performs the action. The same on
     // both sides, so a longer label doesn't make one pull heavier than the other.
     private func armDistance(_ side: Side) -> CGFloat {
-        Self.contentInset + max(leadingWidth, trailingWidth) + Self.contentInset
+        Self.contentInset + max(leading == nil ? 0 : leadingWidth, trailing == nil ? 0 : trailingWidth) + Self.contentInset
     }
 
     // Rubber-band curve: close to the finger at first, then increasingly stiff the further it is pulled.

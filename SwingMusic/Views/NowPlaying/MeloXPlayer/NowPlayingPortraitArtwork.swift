@@ -12,13 +12,14 @@ struct NowPlayingPortraitArtwork: View {
 
     let song: Song
     let isArtworkPage: Bool
+    var cornerRadius: CGFloat = 12
 
     @State private var bounceScale: CGFloat = 1
 
     var body: some View {
         ArtworkImage(
             url: song.largeArtworkURL,
-            cornerRadius: 12,
+            cornerRadius: cornerRadius,
             isPopupTransitionTarget: true
         )
         .scaleEffect(bounceScale)

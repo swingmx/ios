@@ -55,3 +55,37 @@ extension RemoteControlTests {
         #expect(abs(AudioPlayer.gain(0.5) - 0.0562) < 0.001)
     }
 }
+
+@MainActor
+struct RemoteQueueOpsTests {
+    let queue = ["a", "b", "c", "d"].map { Fixtures.track($0) }
+    let uids = ["u1", "u2", "u3", "u4"]
+
+    @Test func checksumMatchesTheServer() {
+        #expect(RemoteControl.orderSum(["q1", "ab3f9c", "x"]) == 201217107)
+        #expect(RemoteControl.orderSum([]) == 2166136261)
+    }
+
+    @Test func appliesInsertRemoveAndMove() throws {
+        let ops: [[String: Any]] = [
+            ["type": "insert", "uids": ["n1"], "tracks": [["trackhash": "x"]], "after": "u2"],
+            ["type": "remove", "uids": ["u3"]],
+            ["type": "move", "uid": "u1", "after": "u4"],
+            ["type": "insert", "uids": ["n2"], "tracks": [["trackhash": "y"]], "after": NSNull()],
+        ]
+        let r = try #require(RemoteControl.applying(ops, to: uids, queue))
+        #expect(r.uids == ["n2", "u2", "n1", "u4", "u1"])
+        #expect(r.queue.map(\.trackhash) == ["y", "b", "x", "d", "a"])
+    }
+
+    @Test func appliesAnOrder() throws {
+        let r = try #require(RemoteControl.applying([["type": "order", "uids": ["u4", "u1", "u3", "u2"], "shuffled": true]],
+                                                    to: uids, queue))
+        #expect(r.queue.map(\.trackhash) == ["d", "a", "c", "b"])
+    }
+
+    @Test func unknownUidsFailSoTheQueueIsFetched() {
+        #expect(RemoteControl.applying([["type": "move", "uid": "zz", "after": NSNull()]], to: uids, queue) == nil)
+        #expect(RemoteControl.applying([["type": "order", "uids": ["u1"], "shuffled": true]], to: uids, queue) == nil)
+    }
+}

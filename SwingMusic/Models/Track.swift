@@ -626,6 +626,7 @@ struct Mix: Codable, Identifiable, Hashable {
     let extra: Extra
     let tagline: String?
     let time: String?
+    var saved: Bool? = nil
 
     struct Extra: Codable, Hashable {
         let type: String?
@@ -644,7 +645,7 @@ struct Mix: Codable, Identifiable, Hashable {
     var ogSourcehash: String { extra.og_sourcehash ?? sourcehash }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, sourcehash, trackcount, extra, time
+        case id, title, sourcehash, trackcount, extra, time, saved
         case tagline = "description"
     }
 
@@ -658,6 +659,7 @@ struct Mix: Codable, Identifiable, Hashable {
         extra = (try? c.decode(Extra.self, forKey: .extra)) ?? Extra(type: nil, og_sourcehash: nil, image: nil, images: nil)
         tagline = try? c.decode(String.self, forKey: .tagline)
         time = try? c.decode(String.self, forKey: .time)
+        saved = try? c.decode(Bool.self, forKey: .saved)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -669,6 +671,7 @@ struct Mix: Codable, Identifiable, Hashable {
         try c.encode(extra, forKey: .extra)
         try c.encodeIfPresent(tagline, forKey: .tagline)
         try c.encodeIfPresent(time, forKey: .time)
+        try c.encodeIfPresent(saved, forKey: .saved)
     }
 
     static func == (lhs: Mix, rhs: Mix) -> Bool { lhs.id == rhs.id }

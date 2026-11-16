@@ -217,11 +217,27 @@ extension API {
         return try await (get("/folder/tracks/all", q: ["path": path]) as R).tracks
     }
 
-    func mixTracks(id: String, sourcehash: String, ogSourcehash: String) async throws -> [Track] {
-        struct R: Decodable { let tracks: [Track] }
-        return try await (get("/plugins/mixes/", q: [
+    struct MixContent: Decodable {
+        let tracks: [Track]
+        let saved: Bool?
+    }
+
+    func mixContent(id: String, sourcehash: String, ogSourcehash: String) async throws -> MixContent {
+        try await get("/plugins/mixes/", q: [
             "mixid": id, "sourcehash": sourcehash, "og_sourcehash": ogSourcehash
-        ]) as R).tracks
+        ])
+    }
+
+    func savedMixes() async throws -> [Mix] {
+        try await get("/plugins/mixes/saved")
+    }
+
+    func toggleSavedMix(_ mix: Mix) async throws {
+        struct B: Encodable { let type: String; let mixid: String; let sourcehash: String }
+        struct R: Decodable {}
+        let type = mix.extra.type ?? "artist"
+        let _: R = try await post("/plugins/mixes/save", body: B(
+            type: type, mixid: mix.id, sourcehash: type == "artist" ? mix.sourcehash : mix.ogSourcehash))
     }
 
     func homeData(limit: Int = 12) async throws -> Data {

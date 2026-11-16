@@ -46,7 +46,7 @@ extension PlayerStore {
     func moveQueueItem(from: Int, to: Int) {
         let c = p.index
         guard p.queue.indices.contains(from), from != c, (0 ... p.queue.count).contains(to) else { return }
-        if p.isController { RemoteControl.shared.move(from: from, to: to) }
+        RemoteControl.shared.move(from: from, to: to)
         var q = p.queue
         q.move(fromOffsets: [from], toOffset: to)
         setQueue(q, index: Self.indexAfterMove(current: c, from: from, to: to))
@@ -59,7 +59,7 @@ extension PlayerStore {
     func removeQueueItem(at i: Int) {
         let c = p.index
         guard p.queue.indices.contains(i), i != c else { return }
-        if p.isController { RemoteControl.shared.remove(at: i) }
+        RemoteControl.shared.remove(at: i)
         var q = p.queue
         q.remove(at: i)
         setQueue(q, index: i < c ? c - 1 : c)
@@ -74,8 +74,7 @@ extension PlayerStore {
     }
 
     func addToPlaybackQueue(_ song: Song) {
-        if p.isController { p.addLast(song); return }
-        p.queue.append(song)
+        p.addLast(song)
     }
 
     var isHeartModeActive: Bool { false }

@@ -475,7 +475,8 @@ struct NowPlayingView: View {
                 if frame.width > 0 {
                     NowPlayingPortraitArtwork(
                         song: song,
-                        isArtworkPage: page == .artwork
+                        isArtworkPage: page == .artwork,
+                        cornerRadius: page == .artwork ? 12 : 9
                     )
                     .frame(
                         width: frame.width,
@@ -679,7 +680,8 @@ struct NowPlayingView: View {
             artworkNamespace: pageArtworkNamespace,
             usesReferenceLayout: true,
             usesArtworkTransition: false,
-            showsArtwork: false
+            showsArtwork: false,
+            compact: page == .queue
         )
     }
 

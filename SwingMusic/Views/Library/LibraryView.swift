@@ -7,7 +7,7 @@ struct LibraryView: View {
     @State private var showSettings = false
     @Namespace private var zoomNS
 
-    private let menu: [LibItem] = [.folders, .artists, .albums, .playlists, .downloads]
+    private let menu: [LibItem] = [.folders, .artists, .albums, .playlists, .savedMixes, .downloads]
 
     var body: some View {
         @Bindable var state = state
@@ -136,6 +136,7 @@ struct LibraryView: View {
                 case .favoriteAlbums: AlbumsGridView()
                 case .albums: AlbumsGridView()
                 case .playlists: PlaylistsListView()
+                case .savedMixes: SavedMixesView()
                 case .newestAlbums: RecentlyAddedView()
                 case .recentlyPlayed: AlbumsGridView()
                 case .songs: FavoriteTracksView()
@@ -175,6 +176,47 @@ struct LibraryView: View {
                 }
             }
         }
+    }
+}
+
+struct SavedMixesView: View {
+    @Environment(AppState.self) var state
+    @State private var mixes: [Mix]?
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                if let mixes, mixes.isEmpty {
+                    ContentUnavailableView("No Saved Mixes", systemImage: "bookmark",
+                                           description: Text("Mixes you save show up here."))
+                        .padding(.top, 80)
+                } else if mixes == nil {
+                    ProgressView().tint(.secondary).frame(maxWidth: .infinity, minHeight: 200)
+                }
+                ForEach(mixes ?? []) { mix in
+                    NavigationLink(value: mix) {
+                        HStack(spacing: 14) {
+                            MixArtwork(mix: mix, cornerRadius: 6)
+                                .frame(width: 48, height: 48)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(mix.title).font(.system(size: 16)).foregroundStyle(.primary).lineLimit(1)
+                                Text(mix.typeLabel).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.bottom, 100)
+        }
+        .squeezeMiniPlayer(state)
+        .background { AmbientBackground() }
+        .navigationTitle("Saved Mixes")
+        .task { mixes = (try? await API.shared.savedMixes()) ?? mixes ?? [] }
     }
 }
 
@@ -242,6 +284,7 @@ enum LibItem: String, CaseIterable, Identifiable, Hashable {
     case favoriteAlbums = "Favorite Albums"
     case albums = "Albums"
     case playlists = "Playlists"
+    case savedMixes = "Saved Mixes"
     case newestAlbums = "Newest Albums"
     case recentlyPlayed = "Recently Played"
     case songs = "Songs"
@@ -258,6 +301,7 @@ enum LibItem: String, CaseIterable, Identifiable, Hashable {
         case .favoriteAlbums: "heart.fill"
         case .albums: "square.stack"
         case .playlists: "music.note.list"
+        case .savedMixes: "bookmark.fill"
         case .newestAlbums: "sparkles"
         case .recentlyPlayed: "clock.arrow.circlepath"
         case .songs: "music.note"
@@ -273,6 +317,7 @@ enum LibItem: String, CaseIterable, Identifiable, Hashable {
         case .artists: .blue
         case .albums: .blue
         case .playlists: .purple
+        case .savedMixes: .indigo
         case .newestAlbums: .orange
         case .recentlyPlayed: .green
         case .songs: .blue

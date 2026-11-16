@@ -7,6 +7,7 @@ struct MixDetailView: View {
     @State private var loading = true
     @State private var bgImage: UIImage?
     @State private var isOfflineCopy = false
+    @State private var saved: Bool?
 
     private var source: AudioPlayer.PlaySource { .mix(id: mix.id, sourcehash: mix.sourcehash) }
 
@@ -37,20 +38,37 @@ struct MixDetailView: View {
                         group: DownloadManager.DownloadGroup(
                             id: DownloadManager.mixGroupID(mix.id), kind: .mix, name: mix.title,
                             image: mix.imageFile ?? "", trackHashes: tracks.map { $0.trackhash }),
-                        download: { await DownloadManager.shared.downloadMix(mix, tracks: tracks) }
+                        download: { await DownloadManager.shared.downloadMix(mix, tracks: tracks) },
+                        saved: saved ?? mix.saved,
+                        toggleSaved: isOfflineCopy ? nil : toggleSaved
                     )
                 }
             }
         }
         .environment(\.leavesAfterDownloadRemoval, isOfflineCopy)
         .task {
-            tracks = (try? await API.shared.mixTracks(id: mix.id, sourcehash: mix.sourcehash, ogSourcehash: mix.ogSourcehash)) ?? []
+            let content = try? await API.shared.mixContent(id: mix.id, sourcehash: mix.sourcehash, ogSourcehash: mix.ogSourcehash)
+            tracks = content?.tracks ?? []
+            if let s = content?.saved { saved = s }
             if tracks.isEmpty, let group = DownloadManager.shared.downloadGroups.first(where: { $0.id == DownloadManager.mixGroupID(mix.id) }) {
                 tracks = DownloadManager.shared.tracks(in: group)
                 isOfflineCopy = !tracks.isEmpty
             }
             loading = false
             await loadBg()
+        }
+    }
+
+    private func toggleSaved() {
+        let was = saved ?? mix.saved ?? false
+        saved = !was
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            do {
+                try await API.shared.toggleSavedMix(mix)
+            } catch {
+                saved = was
+            }
         }
     }
 

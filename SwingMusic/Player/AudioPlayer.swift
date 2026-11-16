@@ -326,11 +326,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     func play(_ track: Track, from list: [Track]? = nil, source: PlaySource, name: String? = nil) {
-        if isController {
-            rc.replace(list ?? [track], start: list?.firstIndex(of: track) ?? 0, source: source)
-            return
-        }
-        log()
+        if !isController { log() }
         // A new list without a context isn't credited to the one playing before.
         if source != .none || list != nil {
             self.source = source
@@ -341,65 +337,59 @@ final class AudioPlayer: ObservableObject {
             shuffle = false
             queue = list
             index = list.firstIndex(of: track) ?? 0
+        } else if isController {
+            baseOrder = [track]
+            shuffle = false
+            queue = [track]
+            index = 0
         }
+        if isController { return rc.queueReplaced() }
         current = track
         load(track)
+        if list != nil { rc.queueReplaced() }
     }
 
     func playAll(_ tracks: [Track], shuffled: Bool = false, source: PlaySource, name: String? = nil) {
         guard !tracks.isEmpty else { return }
-        if isController {
-            rc.replace(tracks, start: shuffled ? Int.random(in: tracks.indices) : 0, source: source, shuffled: shuffled)
-            return
-        }
-        log()
+        if !isController { log() }
         self.source = source
         sourceName = name ?? Self.defaultName(source, in: tracks)
         baseOrder = tracks
         shuffle = shuffled
         queue = shuffled ? SmartShuffle.shuffle(tracks) : tracks
         index = 0
+        if isController { return rc.queueReplaced() }
         current = queue[0]
         load(queue[0])
+        rc.queueReplaced()
     }
 
     static let queueAnim: Animation = .spring(response: 0.35, dampingFraction: 0.85)
 
     func addLast(_ track: Track) {
-        if isController { rc.insert([track], next: false); return }
-        withAnimation(Self.queueAnim) { queue.append(track) }
-        if current == nil {
-            index = 0
-            current = track
-            load(track)
-        }
+        addLast([track])
     }
 
     func addNext(_ track: Track) {
-        if isController { rc.insert([track], next: true); return }
-        if queue.isEmpty {
-            addLast(track)
-        } else {
-            withAnimation(Self.queueAnim) { queue.insert(track, at: index + 1) }
-        }
+        addNext([track])
     }
 
     func addNext(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
-        if isController { rc.insert(tracks, next: true); return }
         if queue.isEmpty {
             addLast(tracks)
         } else {
             withAnimation(Self.queueAnim) { queue.insert(contentsOf: tracks, at: index + 1) }
+            rc.inserted(at: index + 1, count: tracks.count)
         }
     }
 
     func addLast(_ tracks: [Track]) {
         guard !tracks.isEmpty else { return }
-        if isController { rc.insert(tracks, next: false); return }
         let start = queue.count
         withAnimation(Self.queueAnim) { queue.append(contentsOf: tracks) }
-        if current == nil {
+        rc.inserted(at: start, count: tracks.count)
+        if current == nil, !isController {
             index = start
             current = queue[start]
             load(queue[start])
@@ -413,13 +403,14 @@ final class AudioPlayer: ObservableObject {
         if isController {
             // shortcut: the rest of the list is appended in list order, not positioned around the track.
             let queued = Set(queue.map(\.trackhash))
-            rc.insert(full.filter { !queued.contains($0.trackhash) }, next: false)
+            addLast(full.filter { !queued.contains($0.trackhash) })
             return
         }
         let expanded = Self.expandedQueue(queue: queue, index: index, full: full, shuffled: shuffle)
         baseOrder = full
         withAnimation(Self.queueAnim) { queue = expanded.queue }
         index = expanded.index
+        rc.queueReplaced()
     }
 
     // The queue around the playing track once its full list is known. Tracks queued while the list
@@ -454,10 +445,12 @@ final class AudioPlayer: ObservableObject {
     }
 
     func toggleShuffle() {
-        if isController { rc.setShuffle(!shuffle); return }
+        let old = queue
         shuffle.toggle()
         UISelectionFeedbackGenerator().selectionChanged()
+        if isController, !shuffle { return rc.unshuffle() }
         applyShuffleToUpcoming()
+        rc.reordered(from: old)
     }
 
     private func applyShuffleToUpcoming() {
@@ -477,24 +470,22 @@ final class AudioPlayer: ObservableObject {
 
     private func reshuffleForNewRound() {
         guard shuffle, !isController, queue.count > 2 else { return }
+        let old = queue
         let last = queue[index]
         var next = SmartShuffle.shuffle(queue)
         if next.first == last, let i = next.indices.dropFirst().randomElement() { next.swapAt(0, i) }
         queue = next
+        rc.reordered(from: old)
     }
 
     func cycleLoop() {
-        if isController {
-            rc.setRepeat(loop == .off ? .all : loop == .all ? .one : .off)
-            UISelectionFeedbackGenerator().selectionChanged()
-            return
-        }
         switch loop {
         case .off: loop = .all
         case .all: loop = .one
         case .one: loop = .off
         }
         UISelectionFeedbackGenerator().selectionChanged()
+        rc.repeatChanged()
     }
 
     func next() {
@@ -678,6 +669,9 @@ final class AudioPlayer: ObservableObject {
         player = nil
         assetLoader = nil
         fadingLoader = nil
+        pendingStart = nil
+        handingOff = false
+        streamCandidates = []
         playing = false
         nowPlayingInfo = [:]
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -690,6 +684,7 @@ final class AudioPlayer: ObservableObject {
     }
 
     private func startPlayback(_ track: Track) async {
+        guard !isController else { return }
         let localURL = DownloadManager.shared.localURL(for: track)
         if FileManager.default.fileExists(atPath: localURL.path) {
             streamCandidates = []
@@ -739,6 +734,7 @@ final class AudioPlayer: ObservableObject {
     private var streamHeaders: [String: String] = [:]
 
     private func playCurrentCandidate(for track: Track) {
+        guard !isController else { return }
         guard streamCandidateIndex < streamCandidates.count else {
             Log.error("play", "❌ All \(self.streamCandidates.count) candidates failed for \(track.title) — skipping")
             logger.error("❌ All \(self.streamCandidates.count) candidates failed for \(track.title, privacy: .public) — skipping")
